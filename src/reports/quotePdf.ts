@@ -45,7 +45,8 @@ export async function buildQuotePdf(q: QuotePdfInput) {
       ['*', 'auto', 'auto', 'auto'],
       [th('Description'), th('Qty', true), th('Price each', true), th('Amount', true)],
       [
-        [td(`${q.project}${q.category ? ` (${q.category})` : ''}`), td(q.qty, true), td(peso(r.pricePerPc), true), td(peso(r.totalPrice), true)],
+        // Quotes saved before add-ons were folded into the price have no base fields; their price was the base.
+        [td(`${q.project}${q.category ? ` (${q.category})` : ''}`), td(q.qty, true), td(peso(r.basePricePerPc ?? r.pricePerPc), true), td(peso(r.baseTotal ?? r.totalPrice), true)],
         ...r.addons.map((a) => [td(a.label), td(''), td(''), td(peso(a.amount), true)]),
       ],
     ),

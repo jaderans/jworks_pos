@@ -203,6 +203,46 @@ describe('service quote (matches the old CALCULATOR tab)', () => {
     expect(r.ewt).toBe(P(193.2));
     expect(r.health).toBe('healthy');
   });
+  it('counts add-ons in the price, profit and margin', () => {
+    const input = {
+      qty: 1, materials: [], outsourced: [], other: [],
+      // The San Ag guidebook: 40 hours across four people.
+      labor: [
+        { role: 'CD', hours: 10, rate: P(500) }, { role: 'Illustrator', hours: 10, rate: P(350) },
+        { role: 'Junior', hours: 10, rate: P(180) }, { role: 'Junior', hours: 10, rate: P(180) },
+      ],
+      overheadPct: 25, method: 'margin' as const, markupPct: 60, marginPct: 45, manualPrice: null, roundTo: 5,
+      addons: { rush: false, revision: 0, sourceFiles: false, ipBuyout: false },
+      addonPcts: { rush: 25, revision: 15, sourceFiles: 20, ipBuyout: 60 },
+      vatRegistered: true, vatPct: 12, ewt: false, ewtPct: 2, minMarginPct: 30,
+    };
+    const plain = computeServiceQuote(input);
+    expect(plain.totalCost).toBe(P(15125));
+    expect(plain.totalPrice).toBe(P(27500));
+    expect(plain.profit).toBe(P(12375));
+
+    // Source files and full IP buy-out: fees on the base, all of it profit.
+    const r = computeServiceQuote({ ...input, addons: { ...input.addons, sourceFiles: true, ipBuyout: true } });
+    expect(r.baseTotal).toBe(P(27500));
+    expect(r.addons.map((x) => x.amount)).toEqual([P(5500), P(16500)]);
+    expect(r.totalPrice).toBe(P(49500));
+    expect(r.pricePerPc).toBe(P(49500));
+    expect(r.profit).toBe(P(34375));
+    expect(r.marginPct).toBeCloseTo(69.44, 1);
+    expect(r.vat).toBe(P(5940));
+    expect(r.invoice).toBe(P(55440));
+    expect(r.ladder.find((l) => l.factor === 1)!.price).toBe(P(49500));
+
+    // A rush job plus two extra revision rounds: 25% + 2 × 15% of the base.
+    const rush = computeServiceQuote({ ...input, addons: { ...input.addons, rush: true, revision: 2 } });
+    expect(rush.totalPrice).toBe(P(27500 + 6875 + 8250));
+    expect(rush.profit).toBe(rush.totalPrice - P(15125));
+
+    // Fees round up to the same ₱5 step as the price: 25% of ₱2,275 is ₱568.75, charged as ₱570.
+    const small = computeServiceQuote({ ...input, labor: [{ role: 'CD', hours: 2, rate: P(500) }], addons: { ...input.addons, rush: true } });
+    expect(small.baseTotal).toBe(P(2275));
+    expect(small.addons[0].amount).toBe(P(570));
+  });
   it('judges a client-named price', () => {
     expect(reverseCheck(P(250), P(150), 30).verdict).toBe('ok');
     expect(reverseCheck(P(160), P(150), 30).verdict).toBe('thin');

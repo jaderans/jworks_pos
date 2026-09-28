@@ -58,6 +58,10 @@ export interface ServiceQuoteResult {
   overhead: number;
   totalCost: number;
   costPerPc: number;
+  /** Price from cost and the pricing method, before add-ons. */
+  basePricePerPc: Cents;
+  baseTotal: Cents;
+  /** What the client pays before VAT: the base price plus add-ons. Profit and margin use this. */
   pricePerPc: Cents;
   totalPrice: Cents;
   profitPerPc: number;
@@ -91,22 +95,26 @@ export function computeServiceQuote(q: ServiceQuoteInput): ServiceQuoteResult {
   if (q.method === 'manual') raw = q.manualPrice ?? 0;
   else if (q.method === 'markup') raw = costPerPc * (1 + q.markupPct / 100);
   else raw = q.marginPct >= 100 ? 0 : costPerPc / (1 - q.marginPct / 100);
-  const pricePerPc = q.method === 'manual' ? Math.round(raw) : roundUpTo(Math.round(raw), q.roundTo);
-  const totalPrice = pricePerPc * qty;
-  const profit = totalPrice - totalCost;
+  const basePricePerPc = q.method === 'manual' ? Math.round(raw) : roundUpTo(Math.round(raw), q.roundTo);
+  const baseTotal = basePricePerPc * qty;
 
+  // Add-ons are fees on top of the base price, rounded up like the price. They add no cost, so every peso is profit.
   const addons: { label: string; pct: number; amount: Cents }[] = [];
-  if (q.addons.rush) addons.push({ label: 'Rush job', pct: q.addonPcts.rush, amount: Math.round((totalPrice * q.addonPcts.rush) / 100) });
+  const fee = (pct: number) => roundUpTo(Math.round((baseTotal * pct) / 100), q.roundTo || 1);
+  if (q.addons.rush) addons.push({ label: 'Rush job', pct: q.addonPcts.rush, amount: fee(q.addonPcts.rush) });
   if (q.addons.revision > 0)
     addons.push({
       label: q.addons.revision > 1 ? `Extra revision rounds ×${q.addons.revision}` : 'Extra revision round',
       pct: q.addonPcts.revision * q.addons.revision,
-      amount: Math.round((totalPrice * q.addonPcts.revision * q.addons.revision) / 100),
+      amount: fee(q.addonPcts.revision * q.addons.revision),
     });
-  if (q.addons.sourceFiles) addons.push({ label: 'Source files', pct: q.addonPcts.sourceFiles, amount: Math.round((totalPrice * q.addonPcts.sourceFiles) / 100) });
-  if (q.addons.ipBuyout) addons.push({ label: 'Full IP buy-out', pct: q.addonPcts.ipBuyout, amount: Math.round((totalPrice * q.addonPcts.ipBuyout) / 100) });
+  if (q.addons.sourceFiles) addons.push({ label: 'Source files', pct: q.addonPcts.sourceFiles, amount: fee(q.addonPcts.sourceFiles) });
+  if (q.addons.ipBuyout) addons.push({ label: 'Full IP buy-out', pct: q.addonPcts.ipBuyout, amount: fee(q.addonPcts.ipBuyout) });
   const addonsTotal = sum(addons.map((a) => a.amount));
-  const subtotal = totalPrice + addonsTotal;
+  const totalPrice = baseTotal + addonsTotal;
+  const pricePerPc = Math.round(totalPrice / qty);
+  const profit = totalPrice - totalCost;
+  const subtotal = totalPrice;
   const vat = q.vatRegistered ? Math.round((subtotal * q.vatPct) / 100) : 0;
   const invoice = subtotal + vat;
   const ewt = q.ewt ? Math.round((subtotal * q.ewtPct) / 100) : 0;
@@ -129,6 +137,8 @@ export function computeServiceQuote(q: ServiceQuoteInput): ServiceQuoteResult {
     overhead,
     totalCost,
     costPerPc,
+    basePricePerPc,
+    baseTotal,
     pricePerPc,
     totalPrice,
     profitPerPc: pricePerPc - costPerPc,

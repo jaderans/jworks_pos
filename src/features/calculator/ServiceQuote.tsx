@@ -267,6 +267,7 @@ export function ServiceQuote() {
             )}
           </div>
           <h3>Add-ons</h3>
+          <p className="sub">Charged on top of the base price. They add no cost, so all of it is profit.</p>
           <div className="row wrap" style={{ gap: 18 }}>
             <Toggle id="ad-rush" checked={addons.rush} onChange={(v) => setAddons({ ...addons, rush: v })} label={`Rush job (+${calc.addons.rush}%)`} />
             <Toggle id="ad-src" checked={addons.sourceFiles} onChange={(v) => setAddons({ ...addons, sourceFiles: v })} label={`Source files (+${calc.addons.sourceFiles}%)`} />
@@ -302,16 +303,26 @@ export function ServiceQuote() {
               <span className="num">{peso(Math.round(r.costPerPc))}</span>
             </div>
             <hr className="divider" />
+            {r.addons.length ? (
+              <>
+                <div className="row between small">
+                  <span>Base price</span>
+                  <span className="num">{peso(r.baseTotal)}</span>
+                </div>
+                {r.addons.map((a) => (
+                  <div key={a.label} className="row between small">
+                    <span>
+                      + {a.label} ({formatPct(a.pct)})
+                    </span>
+                    <span className="num">{peso(a.amount)}</span>
+                  </div>
+                ))}
+              </>
+            ) : null}
             <div className="row between">
-              <span>Total price</span>
+              <span>{r.vat ? 'Price before VAT' : 'Total price'}</span>
               <b className="num">{peso(r.totalPrice)}</b>
             </div>
-            {r.addons.map((a) => (
-              <div key={a.label} className="row between small">
-                <span>+ {a.label}</span>
-                <span className="num">{peso(a.amount)}</span>
-              </div>
-            ))}
             {r.vat ? (
               <div className="row between small">
                 <span>+ VAT</span>

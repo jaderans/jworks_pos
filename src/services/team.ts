@@ -20,11 +20,25 @@ export const ROLE_HINT: Record<AppRole, string> = {
   partner: 'Sees their co-branded items and their share only.',
 };
 
+const LAST_OWNER =
+  'JoshWorks needs at least one owner. To add someone new, close this and use Add person. To hand over, make the other person an owner first.';
+
+const isActiveOwner = (m: Member) => m.deleted !== 1 && m.active === 1 && m.appRole === 'owner';
+
+/** Would this change leave the team with no active owner? Then the owner screens could never be reached again. */
+async function wouldRemoveLastOwner(id: string, after: Member | null): Promise<boolean> {
+  const before = await db.members.get(id);
+  if (!before || !isActiveOwner(before) || (after && isActiveOwner(after))) return false;
+  const owners = (await db.members.toArray()).filter(isActiveOwner);
+  return owners.every((o) => o.id === id);
+}
+
 export async function saveMember(m: Partial<Member> & { name: string }): Promise<Member> {
   if (m.id) {
     const existing = await db.members.get(m.id);
     if (existing) {
       const next = { ...existing, ...m, email: (m.email ?? existing.email).trim().toLowerCase() } as Member;
+      if (await wouldRemoveLastOwner(existing.id, next)) throw new Error(LAST_OWNER);
       await save(db.members, next);
       if (existing.appRole !== next.appRole) await audit('role', 'member', next.id, `${next.name} is now ${ROLE_LABEL[next.appRole]}`);
       return next;
@@ -46,10 +60,37 @@ export async function saveMember(m: Partial<Member> & { name: string }): Promise
 }
 
 export async function deactivateMember(id: string, active: boolean) {
+  const m = await db.members.get(id);
+  if (m && !active && (await wouldRemoveLastOwner(id, { ...m, active: 0 }))) throw new Error(LAST_OWNER);
   await patch(db.members, id, { active: active ? 1 : 0 });
 }
 
+/** Recovery when no one is the owner any more (e.g. the owner's entry was edited into someone else). */
+export async function restoreOwner(name: string): Promise<Member> {
+  const created = await create<Member>(db.members, {
+    name: name.trim() || 'Owner',
+    email: '',
+    appRole: 'owner',
+    roleLabel: 'Creative Director',
+    weight: 3,
+    active: 1,
+    phone: '',
+    payoutInfo: '',
+    notes: '',
+  });
+  await audit('security', 'member', created.id, `Restored the owner: ${created.name}`);
+  return created;
+}
+
+export async function makeOwner(id: string): Promise<void> {
+  const m = await db.members.get(id);
+  if (!m) return;
+  await patch(db.members, id, { appRole: 'owner', active: 1 });
+  await audit('role', 'member', id, `${m.name} is now Owner`);
+}
+
 export async function deleteMember(id: string) {
+  if (await wouldRemoveLastOwner(id, null)) throw new Error(LAST_OWNER);
   const inUse = (await db.roster.where('memberId').equals(id).count()) + (await db.payouts.where('memberId').equals(id).count());
   if (inUse > 0) throw new Error('This person is on an event roster or has payouts. Mark them inactive instead.');
   await remove(db.members, id);

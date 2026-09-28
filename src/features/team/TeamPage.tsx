@@ -183,7 +183,7 @@ function MemberDialog({ member, onClose, cloudOwner, onAccessChanged }: { member
     <Dialog
       open={!!member}
       onClose={onClose}
-      title={isNew ? 'Add a person' : f.name || 'Person'}
+      title={isNew ? 'Add a person' : `Edit ${member.name}`}
       size="wide"
       footer={
         <>
@@ -221,6 +221,9 @@ function MemberDialog({ member, onClose, cloudOwner, onAccessChanged }: { member
         </>
       }
     >
+      {!isNew && member.id === app.member?.id ? (
+        <Callout tone="info">This is you. To add someone new, close this and use Add person.</Callout>
+      ) : null}
       <div className="form-grid">
         <Field label="Name" htmlFor="mb-name">
           <TextInput id="mb-name" value={f.name ?? ''} onChange={(e) => setF({ ...f, name: e.target.value })} autoFocus />

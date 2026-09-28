@@ -6,18 +6,21 @@ import {
 } from 'lucide-react';
 import logo from '../assets/brand/logo-128.png';
 import { useApp, type Permission } from './AppContext';
-import { useAudit, useEvents, useMembers, usePendingCount } from '../hooks/data';
+import { useAudit, useEvents, useMembers, usePendingCount, useSettingRows } from '../hooks/data';
+import { setLocal } from '../db/local';
+import { settingValue } from '../db/settings';
 import { Dialog } from '../components/Dialog';
 import { Popover } from '../components/Popover';
-import { Badge, Button, Initials } from '../components/ui';
+import { Badge, Button, Callout, Initials } from '../components/ui';
+import { Field, TextInput } from '../components/form';
 import { EVENT_STATUS_LABEL } from '../services/events';
-import { ROLE_LABEL } from '../services/team';
+import { ROLE_LABEL, makeOwner, restoreOwner } from '../services/team';
 import { fmtDateRange, relativeTime } from '../lib/time';
 import { applyTheme, getTheme, setTheme, type ThemeMode } from '../lib/theme';
 import { useSyncStatus } from '../sync/useSync';
 import { ACTIVITY_LABELS, activityTone } from '../features/activity/labels';
 import { ErrorBoundary } from './ErrorBoundary';
-import type { AppRole } from '../db/types';
+import type { AppRole, SecuritySettings } from '../db/types';
 
 interface NavItem {
   to: string;
@@ -457,13 +460,20 @@ function EventPicker({ open, onClose }: { open: boolean; onClose: () => void }) 
 function UserPicker({ open, onClose }: { open: boolean; onClose: () => void }) {
   const app = useApp();
   const members = useMembers();
+  const hasPin = !!settingValue<SecuritySettings>(useSettingRows(), 'security').pinHash;
   const active = (members ?? []).filter((m) => m.active === 1 && (!app.locked || m.id === app.member?.id));
+  const noOwner = !app.locked && !!members && !members.some((m) => m.active === 1 && m.appRole === 'owner');
   return (
     <Dialog open={open} onClose={onClose} title="Who's using this device?">
       {app.locked ? (
         <p className="muted small">This device is signed in to the team as {app.member?.name ?? 'you'}. To use another account, sign out in Settings → Cloud sync.</p>
+      ) : noOwner ? (
+        <RestoreOwner onDone={onClose} />
       ) : (
-        <p className="muted small">Switching to a cashier hides costs and payouts on this device. Switching back to the owner needs the owner PIN.</p>
+        <p className="muted small">
+          Switching to a cashier hides costs and payouts on this device.{' '}
+          {hasPin ? 'Switching back to the owner needs the owner PIN.' : 'You haven’t set an owner PIN, so anyone can switch back to the owner. Set one in Settings.'}
+        </p>
       )}
       <div className="card flush">
         <div className="list">
@@ -492,5 +502,54 @@ function UserPicker({ open, onClose }: { open: boolean; onClose: () => void }) {
         </div>
       </div>
     </Dialog>
+  );
+}
+
+/** Shown when no one on the device is the owner, so the owner screens can always be reached again. */
+function RestoreOwner({ onDone }: { onDone: () => void }) {
+  const app = useApp();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const run = async (getOwnerId: () => Promise<string>) => {
+    if (!(await app.askOwner('Restore the owner'))) return;
+    setBusy(true);
+    try {
+      await setLocal('currentMemberId', await getOwnerId());
+      app.toast('You’re the owner again. Check Team to tidy up names and roles.', { tone: 'good' });
+      onDone();
+    } catch (e) {
+      app.toast(e instanceof Error ? e.message : 'Could not restore the owner', { tone: 'bad' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const current = app.member;
+  return (
+    <div className="stack">
+      <Callout tone="warn" title="No one on this device is the owner">
+        That hides prices, costs, the team and settings. It happens when the owner&rsquo;s own entry is edited into someone else. Add yourself back as the owner; everyone else stays as they are.
+      </Callout>
+      <Field label="Your name" htmlFor="restore-owner">
+        <TextInput id="restore-owner" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Joshua" />
+      </Field>
+      <div className="actions">
+        <Button variant="primary" disabled={busy || !name.trim()} onClick={() => run(async () => (await restoreOwner(name)).id)}>
+          Add me as the owner
+        </Button>
+        {current ? (
+          <Button
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                await makeOwner(current.id);
+                return current.id;
+              })
+            }
+          >
+            Make {current.name} the owner
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }

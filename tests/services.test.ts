@@ -14,7 +14,7 @@ import { completeSale, openSession, voidSale, closeSession } from '../src/servic
 import { exportAll, mergeBackup, parseBackup, type BackupFile } from '../src/services/backup';
 import { recordBatch, saveMaterial, setManualCost, adjustStock } from '../src/services/production';
 import { saveSpend, setSpendStatus } from '../src/services/spend';
-import { finalizePayouts, markPayoutPaid, saveMember } from '../src/services/team';
+import { deactivateMember, deleteMember, finalizePayouts, makeOwner, markPayoutPaid, restoreOwner, saveMember } from '../src/services/team';
 import { addToRoster } from '../src/services/events';
 import { runSetup } from '../src/services/setup';
 import type { Product, SalePayment } from '../src/db/types';
@@ -54,6 +54,31 @@ describe('first-run setup', () => {
     expect(members.filter((m) => m.name === 'Kaye')).toHaveLength(1);
     const methods = alive(await db.paymentMethods.toArray());
     expect(methods.filter((m) => m.active === 1).sort((x, y) => x.sort - y.sort).map((m) => m.name)).toEqual(['Cash', 'GCash', 'Maribank', 'Bank transfer']);
+  });
+});
+
+describe('the owner', () => {
+  it('can never be edited, deactivated or removed out of existence', async () => {
+    const ownerId = await runSetup({ businessName: 'JoshWorks', ownerName: 'Joshua', pin: '', deviceLetter: 'A', deviceName: 'Phone', importProducts: false, importMaterials: false, importTeam: false, calcRates: 'keep' });
+    const owner = (await db.members.get(ownerId))!;
+    // Editing your own entry into a new designer (the mistake that locked the owner out) is refused.
+    await expect(saveMember({ ...owner, name: 'Ian Harvey Yap', appRole: 'designer' })).rejects.toThrow(/at least one owner/);
+    await expect(saveMember({ ...owner, active: 0 })).rejects.toThrow(/at least one owner/);
+    await expect(deactivateMember(ownerId, false)).rejects.toThrow(/at least one owner/);
+    await expect(deleteMember(ownerId)).rejects.toThrow(/at least one owner/);
+    expect((await db.members.get(ownerId))!.appRole).toBe('owner');
+    // Renaming yourself is fine, and with a second owner the first can step down.
+    await saveMember({ ...owner, name: 'Joshua R.' });
+    const ian = await saveMember({ name: 'Ian Harvey Yap', appRole: 'designer' });
+    await makeOwner(ian.id);
+    await saveMember({ ...(await db.members.get(ownerId))!, appRole: 'designer' });
+    expect((await db.members.get(ownerId))!.appRole).toBe('designer');
+  });
+  it('can be restored when no one is the owner', async () => {
+    await saveMember({ name: 'Ian Harvey Yap', appRole: 'designer' });
+    const back = await restoreOwner('  Joshua ');
+    expect(back).toMatchObject({ name: 'Joshua', appRole: 'owner', active: 1 });
+    expect(alive(await db.members.toArray())).toHaveLength(2);
   });
 });
 
