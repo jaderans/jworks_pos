@@ -4,13 +4,14 @@ import { Download, HardDrive, Merge, Plus, QrCode, Share2, Smartphone, Upload } 
 import { useApp } from '../../app/AppContext';
 import { usePaymentMethods, useSettingRows } from '../../hooks/data';
 import { DEFAULT_BUSINESS, setSetting, settingValue } from '../../db/settings';
-import { updateDevice } from '../../db/local';
+import { setLocal, updateDevice } from '../../db/local';
 import { Dialog } from '../../components/Dialog';
 import { Badge, Button, Callout, PageHeader, Toggle } from '../../components/ui';
 import { Check, Field, Select, TextArea, TextInput } from '../../components/form';
 import { canShareFiles, compressImage, downloadBlob, readFileAsDataURL, readFileAsText, shareBlob } from '../../lib/files';
 import { backupBlob, backupFileName, exportAll, mergeBackup, parseBackup, wipeAll, type BackupFile, type MergeStats } from '../../services/backup';
 import { savePaymentMethod, setOwnerPin, verifyOwnerPin } from '../../services/team';
+import { backupOwner } from '../../services/setup';
 import { CloudSection } from './CloudSection';
 import type { BusinessSettings, PaymentMethod, SecuritySettings } from '../../db/types';
 
@@ -386,6 +387,10 @@ function BackupSection({ owner }: { owner: boolean }) {
     if (replace && !(await app.confirm({ title: 'Replace everything on this device?', message: 'All data here is erased first, then the file is loaded. Use this only to move to a new phone.', confirmLabel: 'Erase and replace', tone: 'danger' }))) return;
     if (replace) await wipeAll();
     const s = await mergeBackup(pending);
+    if (replace) {
+      const owner = backupOwner(pending);
+      if (owner) await setLocal('currentMemberId', owner.id);
+    }
     setStats(s);
     app.toast(`Merged: ${s.added} new, ${s.updated} updated`, { tone: 'good' });
   };

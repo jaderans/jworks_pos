@@ -4,7 +4,8 @@ import { getLocal, setLocal, updateDevice } from '../db/local';
 import { BLANK_CALC_SETTINGS, SHEET_CALC_SETTINGS, setSetting, DEFAULT_BUSINESS } from '../db/settings';
 import { SEED_CATEGORIES, SEED_MATERIALS, SEED_PRODUCTS, SEED_TEAM } from '../db/seedData';
 import { hashPin, newSalt } from '../lib/hash';
-import type { Category, Material, Member, PaymentMethod, Product } from '../db/types';
+import { mergeBackup, type BackupFile } from './backup';
+import type { Category, Material, Member, PaymentMethod, Product, Sale } from '../db/types';
 
 export interface SetupInput {
   businessName: string;
@@ -113,4 +114,32 @@ export async function runSetup(input: SetupInput): Promise<string> {
 export async function runJoinSetup(letter: string, deviceName: string): Promise<void> {
   await updateDevice({ letter: letter || 'B', name: deviceName || 'Second device' });
   await setLocal('setupDone', true);
+}
+
+/** The owner in a backup file, if it has one. */
+export function backupOwner(file: BackupFile): Member | null {
+  const members = (file.tables.members ?? []) as Member[];
+  return members.find((m) => m.deleted !== 1 && m.active === 1 && m.appRole === 'owner') ?? null;
+}
+
+/**
+ * Start this device from a backup file (moving to a new phone or browser): everything in the file,
+ * this device's own register letter, and the file's owner using it.
+ */
+export async function runRestoreSetup(file: BackupFile, letter: string, deviceName: string): Promise<Member | null> {
+  await mergeBackup(file, { markForUpload: true });
+  const device = await updateDevice({ letter: letter || 'A', name: deviceName || 'This device' });
+  // Receipt numbers carry on after any sale this letter already has in the file, so none repeat.
+  const used = ((file.tables.sales ?? []) as Sale[])
+    .filter((x) => x.receiptNo?.startsWith(`${device.letter}-`))
+    .map((x) => Number(x.receiptNo.slice(device.letter.length + 1)) || 0);
+  if (used.length) await setLocal('receiptSeq', Math.max(await getLocal<number>('receiptSeq', 0), ...used));
+  const owner = backupOwner(file);
+  if (owner) {
+    await setLocal('currentMemberId', owner.id);
+    setActor(owner.id);
+  }
+  await setLocal('setupDone', true);
+  await audit('setup', 'app', null, `Restored from a backup of ${file.device?.name ?? 'another device'} (${file.device?.letter ?? '?'})`);
+  return owner;
 }

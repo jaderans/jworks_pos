@@ -1,14 +1,16 @@
-import { useState } from 'react';
-import { ArrowLeft, ArrowRight, MonitorSmartphone, Store } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, FileUp, MonitorSmartphone, Store } from 'lucide-react';
 import logo from '../../assets/brand/logo-128.png';
 import { Button, Callout } from '../../components/ui';
 import { Check, Field, TextInput } from '../../components/form';
 import { SEED_MATERIALS, SEED_PRODUCTS, SEED_TEAM } from '../../db/seedData';
-import { runJoinSetup, runSetup } from '../../services/setup';
+import { backupOwner, runJoinSetup, runRestoreSetup, runSetup } from '../../services/setup';
+import { parseBackup, type BackupFile } from '../../services/backup';
+import { readFileAsText } from '../../lib/files';
 import { useApp } from '../../app/AppContext';
 import { setLanding } from '../../app/landing';
 
-type Step = 'welcome' | 'business' | 'pin' | 'import' | 'join';
+type Step = 'welcome' | 'business' | 'pin' | 'import' | 'join' | 'restore';
 
 export function SetupWizard({ onDone }: { onDone: () => void }) {
   const app = useApp();
@@ -25,6 +27,8 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
   const [calcRates, setCalcRates] = useState<'keep' | 'blank'>('keep');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [backup, setBackup] = useState<BackupFile | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const pinError = pin && !/^\d{4,8}$/.test(pin) ? 'Use 4 to 8 digits.' : pin && pin2 && pin !== pin2 ? 'The two PINs don’t match.' : '';
 
@@ -56,6 +60,43 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
     setLanding('/settings?section=devices');
     onDone();
   };
+
+  const pickBackup = async (file: File) => {
+    setError('');
+    try {
+      const parsed = parseBackup(await readFileAsText(file));
+      setBackup(parsed);
+      setLetter(parsed.device?.letter || 'A');
+      setDeviceName('This device');
+    } catch (e) {
+      setBackup(null);
+      setError(e instanceof Error ? e.message : 'That file could not be read.');
+    }
+  };
+
+  const restore = async () => {
+    if (!backup) return;
+    setBusy(true);
+    setError('');
+    try {
+      await runRestoreSetup(backup, letter, deviceName);
+      try {
+        await navigator.storage?.persist?.();
+      } catch {
+        /* not supported */
+      }
+      await app.refreshDevice();
+      setLanding('/');
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The restore failed. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const count = (t: keyof BackupFile['tables']) => ((backup?.tables[t] ?? []) as { deleted?: number }[]).filter((r) => r.deleted !== 1).length;
+  const restoredOwner = backup ? backupOwner(backup) : null;
 
   return (
     <div className="main" style={{ gridRow: 'auto', minHeight: '100%' }}>
@@ -91,6 +132,67 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
                 <h2>Add this device</h2>
                 <p className="muted">Another device is already set up. This one will sell alongside it.</p>
               </button>
+            </div>
+            <button
+              type="button"
+              className="card"
+              style={{ textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}
+              onClick={() => {
+                setError('');
+                setStep('restore');
+              }}
+            >
+              <FileUp size={24} className="teal" style={{ flex: 'none' }} />
+              <span>
+                <b>Restore from a backup file</b>
+                <span className="muted small" style={{ display: 'block' }}>
+                  Moving to a new phone, computer or browser? Start from the file you saved in Settings → Backup and devices.
+                </span>
+              </span>
+            </button>
+          </div>
+        ) : null}
+
+        {step === 'restore' ? (
+          <div className="card pad-lg stack">
+            <h2>Restore from a backup file</h2>
+            <p className="muted">Everything in the file comes over: products, prices, costs, events, sales, the team, your business details and owner PIN.</p>
+            <div>
+              <Button onClick={() => fileRef.current?.click()}>
+                <FileUp size={18} /> {backup ? 'Choose a different file' : 'Choose the backup file'}
+              </Button>
+              <input ref={fileRef} type="file" accept=".json,application/json" className="sr-only" aria-label="Backup file" onChange={(e) => e.target.files?.[0] && pickBackup(e.target.files[0])} />
+            </div>
+            {backup ? (
+              <>
+                <Callout tone={restoredOwner ? 'good' : 'warn'} title={`From ${backup.device?.name ?? 'a device'}, saved ${new Date(backup.exportedAt).toLocaleString('en-PH')}`}>
+                  {[
+                    plural(count('products'), 'product'),
+                    plural(count('events'), 'event'),
+                    plural(count('sales'), 'sale'),
+                    plural(count('members'), 'person', 'people'),
+                  ].join(' · ')}
+                  .{' '}
+                  {restoredOwner ? <>You&rsquo;ll be signed in as <b>{restoredOwner.name}</b>, the owner.</> : 'This file has no owner; add one afterwards in Switch person.'}
+                </Callout>
+                <div className="form-grid">
+                  <Field label="Register letter for this device" htmlFor="rletter" hint="Keep the same letter if the old device won’t sell any more; otherwise pick a new one.">
+                    <TextInput id="rletter" value={letter} maxLength={2} onChange={(e) => setLetter(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} />
+                  </Field>
+                  <Field label="Device name" htmlFor="rname">
+                    <TextInput id="rname" value={deviceName} onChange={(e) => setDeviceName(e.target.value)} />
+                  </Field>
+                </div>
+              </>
+            ) : null}
+            {error ? <Callout tone="bad">{error}</Callout> : null}
+            <div className="row between">
+              <Button variant="ghost" onClick={() => setStep('welcome')}>
+                <ArrowLeft size={18} /> Back
+              </Button>
+              <Button variant="primary" size="lg" disabled={!backup || !letter || busy} onClick={restore}>
+                {busy ? 'Restoring…' : 'Restore'}
+              </Button>
             </div>
           </div>
         ) : null}
@@ -235,3 +337,5 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
     </div>
   );
 }
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

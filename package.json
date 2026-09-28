@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "e2e": "playwright test e2e/smoke.spec.ts e2e/dryrun.spec.ts e2e/tour.spec.ts e2e/layout.spec.ts e2e/owner.spec.ts",
+    "e2e": "playwright test e2e/smoke.spec.ts e2e/dryrun.spec.ts e2e/tour.spec.ts e2e/layout.spec.ts e2e/owner.spec.ts e2e/restore.spec.ts",
     "e2e:cloud": "playwright test e2e/cloud.spec.ts",
     "emulators": "npx --yes firebase-tools emulators:start --only auth,firestore --project demo-jwpos",
     "check": "npm run typecheck && npm test"
