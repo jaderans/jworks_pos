@@ -1,0 +1,114 @@
+rules_version = '2';
+
+// JoshWorks POS — Firestore security rules.
+// Every record lives under ws/{ws}/t_{table}/{id}. Access is by verified email:
+// the owner writes ws/{ws}/access/{email} = { role, memberId, active } for each person.
+//   owner    — everything
+//   cashier  — sells: reads the catalog and events, writes sales, register sessions, stock moves, activity
+//   designer — reads events, products and sales; reads only their own payouts
+//   partner  — reads events and products; reads only their own payouts
+// Costs, materials, batches, booth spend and quotes are owner-only.
+// A write can never replace a newer copy of a record (last change wins, even offline).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+    function wsDoc(ws) {
+      return /databases/$(database)/documents/ws/$(ws);
+    }
+    function accessPath(ws) {
+      return /databases/$(database)/documents/ws/$(ws)/access/$(myEmail());
+    }
+    function isCreator(ws) {
+      return signedIn() && exists(wsDoc(ws)) && get(wsDoc(ws)).data.ownerUid == request.auth.uid;
+    }
+    function hasAccess(ws) {
+      return signedIn() && exists(accessPath(ws)) && get(accessPath(ws)).data.active == true;
+    }
+    function role(ws) {
+      return get(accessPath(ws)).data.role;
+    }
+    function myMember(ws) {
+      return get(accessPath(ws)).data.memberId;
+    }
+    function isOwner(ws) {
+      return isCreator(ws) || (hasAccess(ws) && role(ws) == 'owner');
+    }
+    function isStaff(ws) {
+      return isOwner(ws) || (hasAccess(ws) && role(ws) == 'cashier');
+    }
+    function isTeam(ws) {
+      return isStaff(ws) || (hasAccess(ws) && role(ws) == 'designer');
+    }
+    function isAnyone(ws) {
+      return isTeam(ws) || (hasAccess(ws) && role(ws) == 'partner');
+    }
+    // Last change wins: an update must not be older than what is stored.
+    function notOlder() {
+      return !('updatedAt' in resource.data) || request.resource.data.updatedAt >= resource.data.updatedAt;
+    }
+
+    match /ws/{ws} {
+      allow read: if signedIn() && (resource == null || resource.data.ownerUid == request.auth.uid || hasAccess(ws));
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isOwner(ws) && request.resource.data.ownerUid == resource.data.ownerUid;
+
+      match /access/{email} {
+        allow read: if signedIn() && (email == myEmail() || isOwner(ws));
+        allow write: if isOwner(ws);
+      }
+
+      // Owner-only: costs, materials, batches, booth spend, quotes
+      match /t_productCosts/{id} { allow read, write: if isOwner(ws); }
+      match /t_costPoints/{id} { allow read, write: if isOwner(ws); }
+      match /t_materials/{id} { allow read, write: if isOwner(ws); }
+      match /t_batches/{id} { allow read, write: if isOwner(ws); }
+      match /t_spend/{id} { allow read, write: if isOwner(ws); }
+      match /t_quotes/{id} { allow read, write: if isOwner(ws); }
+
+      // Settings: business details for everyone, the PIN check for cashiers, rates for the owner
+      match /t_settings/{key} {
+        allow read: if isOwner(ws)
+          || (isAnyone(ws) && key == 'business')
+          || (isStaff(ws) && key == 'security');
+        allow write: if isOwner(ws) && (resource == null || notOlder());
+      }
+
+      // Catalog and event setup: the team reads, the owner writes
+      match /t_categories/{id} { allow read: if isAnyone(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
+      match /t_products/{id} { allow read: if isAnyone(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
+      match /t_bundleRules/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
+      match /t_paymentMethods/{id} { allow read: if isStaff(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
+      match /t_members/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
+      match /t_eventProducts/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
+      match /t_roster/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
+      match /t_partnerDeals/{id} { allow read: if isOwner(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
+
+      // Events: cashiers may update (opening the register marks an event Live)
+      match /t_events/{id} {
+        allow read: if isAnyone(ws);
+        allow create: if isOwner(ws);
+        allow update: if isStaff(ws) && notOlder();
+        allow delete: if false;
+      }
+
+      // Selling: staff write, the team reads
+      match /t_sales/{id} { allow read: if isTeam(ws); allow create: if isStaff(ws); allow update: if isStaff(ws) && notOlder(); allow delete: if false; }
+      match /t_sessions/{id} { allow read: if isStaff(ws); allow create: if isStaff(ws); allow update: if isStaff(ws) && notOlder(); allow delete: if false; }
+      match /t_stockMoves/{id} { allow read: if isStaff(ws); allow create: if isStaff(ws); allow update: if isOwner(ws) && notOlder(); allow delete: if false; }
+      match /t_audit/{id} { allow read: if isOwner(ws); allow create: if isStaff(ws); allow update: if isOwner(ws) && notOlder(); allow delete: if false; }
+
+      // Payouts: the owner writes; each person reads their own
+      match /t_payouts/{id} {
+        allow read: if isOwner(ws) || (isAnyone(ws) && resource.data.memberId == myMember(ws));
+        allow write: if isOwner(ws) && (resource == null || notOlder());
+      }
+    }
+  }
+}

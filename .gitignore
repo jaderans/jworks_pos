@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dev-dist/
+coverage/
+test-results/
+playwright-report/
+*.log
+.DS_Store
+.env.local
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# The old workbooks contain client names, emails and payouts. Keep them off GitHub.
+sheet files/
