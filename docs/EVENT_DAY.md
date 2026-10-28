@@ -6,8 +6,9 @@
 - **Event → Plan**: work through the checklist (it comes with a JoshWorks starter list; add your own items). The Dashboard shows how much is done.
 - **Event → Edit prices**: set this event's prices. Turn on *Booth-aware pricing* to see each product's floor price and a suggested price for your profit target. Base prices stay as they are.
 - **Products → Bundle deals**: set up deals like *Cat Meme ×4 for ₱75*. They apply themselves at the register.
-- **Production**: make sure what you're selling has a cost (by hand, recipe or batch). Log any production runs.
-- **Event → Stock**: enter how many of each item you're bringing.
+- **Production**: make sure what you're selling has a cost (by hand, recipe or batch).
+- **Production → Restock plan**: pick the event; it works out how many of each to bring from what sold per hour at your last events. Buy the materials it lists, tap **Make it** on each product as you print, then **Use as stock to bring**. **Print the plan** for the studio wall.
+- **Event → Stock**: check how many of each item you're bringing (the restock plan fills this in).
 - **Event → Booth spend**: list everything: booth fee, tarps and cards (used up), stands (reusable, spread over events), materials. Mark what's bought and who paid.
 - **Event → Team & payouts**: add who's on duty and their shifts.
 - **Settings → Payment methods**: upload your GCash and Maribank QR images.

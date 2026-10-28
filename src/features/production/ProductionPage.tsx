@@ -12,16 +12,17 @@ import { fmtDate, fmtDateTime } from '../../lib/time';
 import { batchCost, materialUnitCost, recipeCost } from '../../domain/cost';
 import { SHEETS, fitsPerSheet } from '../../domain/sticker';
 import { materialCounted, needsReorder } from '../../domain/stock';
+import { RestockPlan } from './RestockPlan';
 import { adjustMaterial, deleteMaterial, recordBatch, saveMaterial, setCostMode, setManualCost, setRecipe } from '../../services/production';
 import type { CalcSettings, Material, Product, ProductCost, Recipe, RecipeItem } from '../../db/types';
 
-type Tab = 'costs' | 'batches' | 'materials';
+type Tab = 'costs' | 'batches' | 'materials' | 'plan';
 
 export default function ProductionPage() {
   const [params] = useSearchParams();
   const [tab, setTab] = useState<Tab>(() => {
     const t = params.get('tab');
-    return t === 'batches' || t === 'materials' ? t : 'costs';
+    return t === 'batches' || t === 'materials' || t === 'plan' ? t : 'costs';
   });
   return (
     <div className="page">
@@ -37,9 +38,10 @@ export default function ProductionPage() {
           { value: 'costs', label: 'Product costs' },
           { value: 'batches', label: 'Batches' },
           { value: 'materials', label: 'Materials' },
+          { value: 'plan', label: 'Restock plan' },
         ]}
       />
-      {tab === 'costs' ? <Costs /> : tab === 'batches' ? <Batches /> : <Materials />}
+      {tab === 'costs' ? <Costs /> : tab === 'batches' ? <Batches /> : tab === 'materials' ? <Materials /> : <PlanWithBatches />}
     </div>
   );
 }
@@ -363,7 +365,18 @@ function Batches() {
   );
 }
 
-function BatchDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+/** The restock plan; "Make it" opens the batch dialog with the product and quantity filled in. */
+function PlanWithBatches() {
+  const [making, setMaking] = useState<{ productId: string; made: number } | null>(null);
+  return (
+    <>
+      <RestockPlan onMake={(productId, made) => setMaking({ productId, made })} />
+      <BatchDialog open={!!making} initial={making ?? undefined} onClose={() => setMaking(null)} />
+    </>
+  );
+}
+
+function BatchDialog({ open, onClose, initial }: { open: boolean; onClose: () => void; initial?: { productId: string; made: number } }) {
   const app = useApp();
   const products = useProducts();
   const materials = useMaterials();
@@ -389,12 +402,13 @@ function BatchDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
 
   useEffect(() => {
     if (!open) return;
-    setProductId('');
-    setMade(null);
+    setProductId(initial?.productId ?? '');
+    setMade(initial?.made ?? null);
     setSpoiled(0);
     setItems([]);
     setMinutes(0);
     setRate(production?.rate ?? 0);
+    if (initial) fillFromRecipe(initial.productId, initial.made);
     setOneTime(null);
     setOther(null);
     setOverhead(calc.overheadPct);

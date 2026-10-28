@@ -20,7 +20,7 @@ const SIZES = [
   { name: 'tv-4k', width: 3840, height: 2160 },
 ];
 
-const PAGES = ['/', '/sell', '/sales', '/orders', '/event', '/event/plan', '/events', '/events/compare', '/products', '/production', '/calculator', '/team', '/customers', '/settings', '/activity'];
+const PAGES = ['/', '/sell', '/sales', '/orders', '/event', '/event/plan', '/events', '/events/compare', '/products', '/production', '/production?tab=plan', '/calculator', '/team', '/customers', '/settings', '/activity'];
 
 async function layoutProblems(page: Page): Promise<string[]> {
   return page.evaluate(() => {
