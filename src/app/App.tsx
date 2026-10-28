@@ -26,6 +26,7 @@ const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 const ActivityPage = lazy(() => import('../features/activity/ActivityPage'));
 const CustomersPage = lazy(() => import('../features/customers/CustomersPage'));
 const OrdersPage = lazy(() => import('../features/orders/OrdersPage'));
+const ComparePage = lazy(() => import('../features/events/ComparePage'));
 
 export function App() {
   return (
@@ -70,6 +71,7 @@ function Gate() {
         <Route path="orders" element={<Guard perm="orders"><Lazy><OrdersPage /></Lazy></Guard>} />
         <Route path="event/*" element={<Guard perm="viewEvent"><Lazy><EventPage /></Lazy></Guard>} />
         <Route path="events" element={<Guard perm="manageEvents"><Lazy><EventsPage /></Lazy></Guard>} />
+        <Route path="events/compare" element={<Guard perm="viewProfit"><Lazy><ComparePage /></Lazy></Guard>} />
         <Route path="products" element={<Guard perm="editProducts"><Lazy><ProductsPage /></Lazy></Guard>} />
         <Route path="production/*" element={<Guard perm="production"><Lazy><ProductionPage /></Lazy></Guard>} />
         <Route path="calculator/*" element={<Guard perm="calculator"><Lazy><CalculatorPage /></Lazy></Guard>} />

@@ -7,13 +7,14 @@ import {
 } from 'lucide-react';
 import { alive, db } from '../../db/db';
 import { useApp } from '../../app/AppContext';
-import { useAudit, useEventProducts, useEvents, useMaterials, useMembers, useOrders, usePayouts, useProductCosts, useProducts, useSales } from '../../hooks/data';
+import { useAudit, useEventProducts, useEventTasks, useEvents, useMaterials, useMembers, useOrders, usePayouts, useProductCosts, useProducts, useSales } from '../../hooks/data';
 import { useNow } from '../../hooks/useNow';
 import { useEventData } from '../event/useEventData';
 import { Badge, Button, Loading, Stat } from '../../components/ui';
 import { HourBars, Meter } from '../../components/charts';
 import { eventMetrics } from '../../domain/summary';
 import { needsReorder } from '../../domain/stock';
+import { readiness } from '../../domain/plan';
 import { formatCount, formatPct, peso, sum } from '../../lib/money';
 import { addDays, dayStart, daysBetween, fmtDateRange, fmtIsoDate, isoDate, relativeTime } from '../../lib/time';
 import { EVENT_STATUS_LABEL } from '../../services/events';
@@ -277,6 +278,8 @@ function CalendarCard({ events }: { events: JWEvent[] }) {
 function EventCard({ ev }: { ev: JWEvent }) {
   const app = useApp();
   const d = useEventData(ev);
+  const tasks = useEventTasks(ev.id);
+  const plan = tasks?.length ? readiness(tasks) : null;
   const today = isoDate(useNow(60_000));
   const todaySales = useMemo(() => d.sales.filter((s) => isoDate(s.at) === today), [d.sales, today]);
   const tm = useMemo(() => eventMetrics(todaySales, d.categories), [todaySales, d.categories]);
@@ -328,6 +331,17 @@ function EventCard({ ev }: { ev: JWEvent }) {
             <span>Event costs: {peso(s.costs.total)}</span>
           </div>
         </div>
+      ) : null}
+      {plan ? (
+        <Link to="/event/plan" className="plan-mini" aria-label={`Checklist: ${plan.done} of ${plan.total} done`}>
+          <span className="small strong">Checklist</span>
+          <span className="progress grow">
+            <span style={{ width: `${plan.pct}%` }} />
+          </span>
+          <span className="small muted">
+            {plan.done}/{plan.total}
+          </span>
+        </Link>
       ) : null}
       {tm.transactions > 0 ? <HourBars data={tm.byHour} label="Today by hour" height={150} /> : <p className="muted small">No sales yet today.</p>}
     </section>

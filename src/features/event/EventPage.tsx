@@ -8,6 +8,7 @@ import { fmtDateRange } from '../../lib/time';
 import { SummaryTab } from './SummaryTab';
 
 const PricesTab = lazy(() => import('./PricesTab'));
+const PlanTab = lazy(() => import('./PlanTab'));
 const StockTab = lazy(() => import('./StockTab'));
 const SpendTab = lazy(() => import('./SpendTab'));
 const TeamTab = lazy(() => import('./TeamTab'));
@@ -41,6 +42,7 @@ export default function EventPage() {
   const owner = app.can('viewProfit');
   const tabs = [
     { to: '/event', label: 'Summary', end: true },
+    { to: '/event/plan', label: 'Plan' },
     ...(app.can('editPrices') ? [{ to: '/event/prices', label: 'Edit prices' }] : []),
     { to: '/event/stock', label: 'Stock' },
     ...(app.can('spend') ? [{ to: '/event/spend', label: 'Booth spend' }] : []),
@@ -65,6 +67,7 @@ export default function EventPage() {
       <Suspense fallback={<Loading />}>
         <Routes>
           <Route index element={<SummaryTab ev={ev} />} />
+          <Route path="plan" element={<PlanTab ev={ev} />} />
           <Route path="prices" element={app.can('editPrices') ? <PricesTab ev={ev} /> : <Navigate to="/event" replace />} />
           <Route path="stock" element={<StockTab ev={ev} />} />
           <Route path="spend" element={app.can('spend') ? <SpendTab ev={ev} /> : <Navigate to="/event" replace />} />

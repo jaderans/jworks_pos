@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import type {
   AuditEntry, Batch, BundleRule, Category, CostPoint, Customer, EventProduct, HeldSale, JWEvent, LocalRow, Material,
   Member, PartnerDeal, PaymentMethod, Payout, Photo, Product, ProductCost, Quote, RosterEntry, Sale, Session,
-  Order, OutboxItem, SettingRow, SpendItem, StockMove, Voucher,
+  EventTask, Order, OutboxItem, SettingRow, SpendItem, StockMove, Voucher,
 } from './types';
 
 /**
@@ -34,6 +34,7 @@ export class JWDB extends Dexie {
   customers!: Table<Customer, string>;
   vouchers!: Table<Voucher, string>;
   orders!: Table<Order, string>;
+  eventTasks!: Table<EventTask, string>;
   // Device-only tables (never synced)
   local!: Table<LocalRow, string>;
   photos!: Table<Photo, string>;
@@ -81,6 +82,8 @@ export class JWDB extends Dexie {
       sales: 'id, eventId, sessionId, at, receiptNo, deviceId, customerId, voucherCode, orderId, updatedAt, _sync',
       orders: 'id, eventId, status, customerId, updatedAt, _sync',
     });
+    // Each event's checklist and packing list.
+    this.version(5).stores({ eventTasks: 'id, eventId, updatedAt, _sync' });
   }
 }
 
@@ -89,7 +92,7 @@ export const db = new JWDB();
 /** Tables that sync between devices and to the cloud, in upload order. */
 export const SYNCED_TABLES = [
   'settings', 'categories', 'members', 'paymentMethods', 'customers', 'vouchers', 'products', 'productCosts', 'costPoints', 'bundleRules',
-  'materials', 'events', 'eventProducts', 'roster', 'partnerDeals', 'sessions', 'sales', 'stockMoves', 'batches',
+  'materials', 'events', 'eventProducts', 'eventTasks', 'roster', 'partnerDeals', 'sessions', 'sales', 'stockMoves', 'batches',
   'spend', 'payouts', 'quotes', 'orders', 'audit',
 ] as const;
 export type SyncedTableName = (typeof SYNCED_TABLES)[number];

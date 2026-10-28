@@ -3,6 +3,7 @@
 ## The week before
 
 - **Events → New event** (or copy a past one). Add the booth fee when you create it.
+- **Event → Plan**: work through the checklist (it comes with a JoshWorks starter list; add your own items). The Dashboard shows how much is done.
 - **Event → Edit prices**: set this event's prices. Turn on *Booth-aware pricing* to see each product's floor price and a suggested price for your profit target. Base prices stay as they are.
 - **Products → Bundle deals**: set up deals like *Cat Meme ×4 for ₱75*. They apply themselves at the register.
 - **Production**: make sure what you're selling has a cost (by hand, recipe or batch). Log any production runs.
@@ -32,3 +33,4 @@
 4. **Event → Team & payouts → Save payouts**, then mark each one paid.
 5. **Event → Report**: full PDF, one-page summary for the team chat, payout slips.
 6. **Mark as reported** when everything is filed.
+7. Later: **Events → Compare events** to see which booths were worth it (sales per open hour and per peso of booth fee).

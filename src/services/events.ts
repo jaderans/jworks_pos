@@ -4,6 +4,7 @@ import { toCents } from '../lib/money';
 import { daysBetween, todayISO } from '../lib/time';
 import type { BundleRule, EventProduct, JWEvent, PartnerDeal, RosterEntry, Shift } from '../db/types';
 import { eventProductId } from './catalog';
+import { addStarterTasks, copyTasks } from './plan';
 
 export const EVENT_STATUS_LABEL: Record<JWEvent['status'], string> = {
   planning: 'Planning',
@@ -37,6 +38,7 @@ export async function newEventFields(): Promise<Omit<JWEvent, 'id' | 'createdAt'
 export async function createEvent(fields: Partial<JWEvent> & { name: string }): Promise<JWEvent> {
   const base = await newEventFields();
   const ev = await create<JWEvent>(db.events, { ...base, ...fields, name: fields.name.trim() });
+  await addStarterTasks(ev.id);
   await audit('create', 'event', ev.id, `Created event ${ev.name}`);
   return ev;
 }
@@ -66,13 +68,15 @@ export interface DuplicateOptions {
   copyRoster: boolean;
   copyDeals: boolean;
   copyBundles: boolean;
+  /** The checklist and packing list (unticked). Defaults to yes. */
+  copyTasks?: boolean;
 }
 
 /** Start a new event from an earlier one: settings, prices, team and deals carry over; sales don't. */
 export async function duplicateEvent(sourceId: string, opts: DuplicateOptions): Promise<JWEvent> {
   const src = await db.events.get(sourceId);
   if (!src) throw new Error('The event to copy no longer exists.');
-  return db.transaction('rw', [db.events, db.eventProducts, db.roster, db.partnerDeals, db.bundleRules, db.audit], async () => {
+  return db.transaction('rw', [db.events, db.eventProducts, db.roster, db.partnerDeals, db.bundleRules, db.eventTasks, db.audit], async () => {
     const ev = await create<JWEvent>(db.events, {
       ...src,
       id: undefined,
@@ -123,6 +127,8 @@ export async function duplicateEvent(sourceId: string, opts: DuplicateOptions): 
       const rules = alive(await db.bundleRules.where('eventId').equals(sourceId).toArray());
       await db.bundleRules.bulkPut(rules.map((r) => build<BundleRule>({ ...r, id: undefined, eventId: ev.id } as never)));
     }
+    const copied = opts.copyTasks === false ? 0 : await copyTasks(sourceId, ev.id);
+    if (!copied) await addStarterTasks(ev.id);
     await audit('create', 'event', ev.id, `Created ${ev.name} from ${src.name}`);
     return ev;
   });

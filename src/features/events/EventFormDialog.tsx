@@ -161,7 +161,7 @@ export function DuplicateEventDialog({ source, onClose, onDone }: { source: JWEv
   const [name, setName] = useState('');
   const [start, setStart] = useState(todayISO());
   const [end, setEnd] = useState(todayISO());
-  const [opts, setOpts] = useState({ copyPrices: true, copyStock: false, copyRoster: true, copyDeals: true, copyBundles: true });
+  const [opts, setOpts] = useState({ copyPrices: true, copyStock: false, copyRoster: true, copyDeals: true, copyBundles: true, copyTasks: true });
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (source) {
@@ -210,6 +210,7 @@ export function DuplicateEventDialog({ source, onClose, onDone }: { source: JWEv
         <Check id="dup-roster" checked={opts.copyRoster} onChange={(v) => setOpts({ ...opts, copyRoster: v })} label="Team roster and role weights" />
         <Check id="dup-deals" checked={opts.copyDeals} onChange={(v) => setOpts({ ...opts, copyDeals: v })} label="Partner deals" />
         <Check id="dup-bundles" checked={opts.copyBundles} onChange={(v) => setOpts({ ...opts, copyBundles: v })} label="Event-only bundle deals" />
+        <Check id="dup-tasks" checked={opts.copyTasks} onChange={(v) => setOpts({ ...opts, copyTasks: v })} label="Checklist and packing list (unticked)" />
       </div>
     </Dialog>
   );

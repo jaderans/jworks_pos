@@ -497,6 +497,20 @@ export interface Customer extends Syncable {
   firstEventId: string | null;
 }
 
+export type TaskSection = 'before' | 'pack' | 'day' | 'after';
+
+/** One line of an event's checklist or packing list. */
+export interface EventTask extends Syncable {
+  eventId: string;
+  section: TaskSection;
+  text: string;
+  /** For packing: how many to bring. */
+  qty: number | null;
+  done: 0 | 1;
+  doneBy: string | null;
+  sort: number;
+}
+
 export type OrderStatus = 'new' | 'in-progress' | 'ready' | 'picked-up' | 'cancelled';
 
 export interface OrderLine {

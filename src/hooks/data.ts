@@ -49,6 +49,8 @@ export const useCustomerSales = () => useLiveQuery(async () => alive(await db.sa
 /** Sales that used this voucher code, from any event. */
 export const useVoucherSales = (code: string | null | undefined) =>
   useLiveQuery(async () => (code ? alive(await db.sales.where('voucherCode').equals(code).toArray()) : []), [code]);
+export const useEventTasks = (eventId: string | null | undefined) =>
+  useLiveQuery(async () => (eventId ? alive(await db.eventTasks.where('eventId').equals(eventId).toArray()).sort((a, b) => a.sort - b.sort) : []), [eventId]);
 /** Pre-orders and commissions, newest first. */
 export const useOrders = () => useLiveQuery(async () => alive(await db.orders.toArray()).sort((a, b) => b.createdAt - a.createdAt), []);
 /** Deposits and pickups: every sale tied to an order. */

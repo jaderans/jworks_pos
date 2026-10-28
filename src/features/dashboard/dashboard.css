@@ -132,3 +132,6 @@
 .attn-text { flex: 1; min-width: 0; }
 .attn-ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; background: var(--warn-soft); color: var(--warn); }
 .attn-ic.info { background: var(--teal-soft); color: var(--teal); }
+
+.plan-mini { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; }
+.plan-mini .progress { display: block; }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { CalendarDays, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
+import { BarChart3, CalendarDays, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useApp } from '../../app/AppContext';
 import { useEvents } from '../../hooks/data';
@@ -70,9 +70,16 @@ export default function EventsPage() {
         title="Events"
         subtitle="Each event keeps its own prices, sales, booth spend, team and report."
         actions={
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            <Plus size={18} /> New event
-          </Button>
+          <>
+            {app.can('viewProfit') ? (
+              <Button onClick={() => navigate('/events/compare')}>
+                <BarChart3 size={18} /> Compare events
+              </Button>
+            ) : null}
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              <Plus size={18} /> New event
+            </Button>
+          </>
         }
       />
       {events && events.length === 0 ? (
