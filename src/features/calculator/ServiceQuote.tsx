@@ -78,10 +78,10 @@ export function ServiceQuote() {
   };
 
   const exportPdf = async () => {
-    const { buildQuotePdf } = await import('../../reports/quotePdf');
+    const { buildQuotePdf, quotePayMethods } = await import('../../reports/quotePdf');
     const { deliverPdf } = await import('../../reports/pdf');
     const business = settingValue<{ name: string; contact: string; address: string }>(settingRows, 'business');
-    await deliverPdf(await buildQuotePdf({ business, quoteNo: 'DRAFT', date: todayISO(), client, project, category, qty: qty ?? 1, result: r, labor, outsourced, vat, ewt }), `Quote - ${client || 'client'} - ${project || 'job'}.pdf`);
+    await deliverPdf(await buildQuotePdf({ business, quoteNo: 'DRAFT', date: todayISO(), client, project, category, qty: qty ?? 1, result: r, labor, outsourced, vat, ewt, payMethods: await quotePayMethods() }), `Quote - ${client || 'client'} - ${project || 'job'}.pdf`);
   };
 
   const healthTone = r.health === 'healthy' ? 'good' : r.health === 'thin' ? 'warn' : r.health === 'loss' ? 'bad' : undefined;

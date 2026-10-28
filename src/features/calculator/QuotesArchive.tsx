@@ -32,11 +32,11 @@ export function QuotesArchive() {
       app.toast('Only service quotes saved from the calculator can be turned into a PDF.', { tone: 'bad' });
       return;
     }
-    const { buildQuotePdf } = await import('../../reports/quotePdf');
+    const { buildQuotePdf, quotePayMethods } = await import('../../reports/quotePdf');
     const { deliverPdf } = await import('../../reports/pdf');
     const business = settingValue<{ name: string; contact: string; address: string }>(settingRows, 'business');
     await deliverPdf(
-      await buildQuotePdf({ business, quoteNo: quote.quoteNo, date: quote.date, client: quote.client, project: quote.project, category: quote.category, qty: quote.qty, result: inputs.result, labor: inputs.labor ?? [], outsourced: inputs.outsourced ?? [], vat: !!inputs.vat, ewt: !!inputs.ewt }),
+      await buildQuotePdf({ business, quoteNo: quote.quoteNo, date: quote.date, client: quote.client, project: quote.project, category: quote.category, qty: quote.qty, result: inputs.result, labor: inputs.labor ?? [], outsourced: inputs.outsourced ?? [], vat: !!inputs.vat, ewt: !!inputs.ewt, payMethods: await quotePayMethods() }),
       `${quote.quoteNo} - ${quote.client || 'client'}.pdf`,
     );
   };

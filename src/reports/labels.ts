@@ -58,5 +58,5 @@ export async function buildLabelSheet(items: { product: Product; price: number |
         } as Content,
       ]
     : [{ text: 'None of the chosen products has a barcode or code yet.' }];
-  return frame({ title: 'Barcode labels', business: opts.business }, content);
+  return frame({ title: 'Barcode labels', business: opts.business, plain: true }, content);
 }

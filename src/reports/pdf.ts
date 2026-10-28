@@ -4,12 +4,14 @@ import manropeBold from '../assets/fonts/Manrope-Bold.ttf?url';
 import manropeExtraBold from '../assets/fonts/Manrope-ExtraBold.ttf?url';
 import soraBold from '../assets/fonts/Sora-Bold.ttf?url';
 import logoUrl from '../assets/brand/logo-256.png?url';
+import frameGeneral from '../assets/brand/frames/general.png?url';
 import { downloadBlob, shareBlob } from '../lib/files';
 import { fmtDateTime } from '../lib/time';
 
 /**
  * PDFs are built on the device with pdfmake, using the app's own fonts
- * (Manrope has the ₱ sign), so reports work with no internet.
+ * (Manrope has the ₱ sign), so reports work with no internet. Documents go
+ * on the JoshWorks letterhead, the same one JoshWorks Studio prints on.
  */
 
 type PdfMake = typeof import('pdfmake/build/pdfmake');
@@ -61,7 +63,20 @@ export interface DocOptions {
   subtitle?: string;
   business: string;
   landscape?: boolean;
+  /** Shown beside the page number on the letterhead (a quote number, the event). */
+  footerNote?: string;
+  /** Plain A4 with a small logo header instead of the letterhead (label sheets, which must line up with the paper). */
+  plain?: boolean;
 }
+
+let frameImage = '';
+async function frameData(): Promise<string> {
+  frameImage ||= `data:image/png;base64,${await toBase64(frameGeneral)}`;
+  return frameImage;
+}
+
+/** Legal page in points, and the frame's free area (inside the side bar, header band and footer icons). */
+export const LEGAL = { width: 612, height: 1008, margins: [42, 104, 44, 64] as [number, number, number, number] };
 
 /**
  * pdfmake rewrites the objects and arrays it is given while laying out a page.
@@ -77,10 +92,11 @@ function copyContent<T>(v: T): T {
   return v;
 }
 
-/** Shared page frame: logo header, page numbers, the house styles. */
+/** Shared page frame: the letterhead (or the plain logo header), page numbers, the house styles. */
 export async function frame(opts: DocOptions, rawContent: Content[]): Promise<TDocumentDefinitions> {
   await load();
   const content = copyContent(rawContent);
+  if (!opts.plain && !opts.landscape) return letterheadDoc(opts, content, await frameData());
   const generated = fmtDateTime(Date.now());
   return {
     pageSize: 'A4',
@@ -122,6 +138,59 @@ export async function frame(opts: DocOptions, rawContent: Content[]): Promise<TD
   };
 }
 
+const STYLES: TDocumentDefinitions['styles'] = {
+  brand: { font: 'Sora', fontSize: 10, color: INK },
+  h1: { font: 'Sora', fontSize: 20, color: INK, margin: [0, 0, 0, 4] },
+  h2: { font: 'Sora', fontSize: 12.5, color: INK, margin: [0, 14, 0, 6] },
+  h3: { bold: true, fontSize: 10, margin: [0, 8, 0, 4] },
+  muted: { color: MUTED, fontSize: 8 },
+  label: { color: MUTED, fontSize: 7.5, bold: true, characterSpacing: 0.6 },
+  big: { font: 'ManropeX', fontSize: 16 },
+  th: { bold: true, fontSize: 7.5, color: MUTED, fillColor: SOFT, characterSpacing: 0.4 },
+  num: { alignment: 'right' },
+  total: { bold: true },
+  good: { color: GOOD, bold: true },
+  bad: { color: BAD, bold: true },
+  note: { color: MUTED, fontSize: 8, italics: false },
+  docTitle: { font: 'Sora', fontSize: 17, color: TEAL, alignment: 'center', margin: [0, 0, 0, 12] },
+  section: { font: 'Sora', fontSize: 11, color: TEAL, characterSpacing: 0.3, margin: [0, 12, 0, 6] },
+  small: { fontSize: 8.5 },
+};
+
+/** Brand-kit letterhead: Legal page, the frame drawn behind every page, page numbers clear of the footer icons. */
+function letterheadDoc(opts: DocOptions, content: Content[], image: string): TDocumentDefinitions {
+  return {
+    pageSize: { width: LEGAL.width, height: LEGAL.height },
+    pageOrientation: 'portrait',
+    pageMargins: LEGAL.margins,
+    info: { title: opts.title, author: opts.business, creator: 'JoshWorks POS' },
+    defaultStyle: { font: 'Manrope', fontSize: 9.5, color: INK, lineHeight: 1.25 },
+    images: { frame: image },
+    background: () =>
+      [
+        { image: 'frame', width: LEGAL.width, height: LEGAL.height, absolutePosition: { x: 0, y: 0 } },
+        // The frame has "COMMISSION CONTRACT" set in its header; POS documents set their own title, so it's covered.
+        { canvas: [{ type: 'rect', x: 372, y: 32, w: 204, h: 28, color: '#FFFFFF' }], absolutePosition: { x: 0, y: 0 } },
+      ] as Content[],
+    footer: (page: number, pages: number) => ({
+      margin: [404, 35, 44, 0],
+      text: [{ text: opts.footerNote ? `${opts.footerNote}  ·  ` : '' }, { text: `Page ${page} of ${pages}` }],
+      style: 'muted',
+      alignment: 'right',
+      fontSize: 7,
+    }),
+    styles: STYLES,
+    // Never leave a section heading (and its one-line intro) alone at the bottom of a page.
+    pageBreakBefore: (node, q) => {
+      if (node.headlineLevel !== 1) return false;
+      const low = ((node.startPosition as { verticalRatio?: number } | undefined)?.verticalRatio ?? 0) > 0.85;
+      const after = q.getFollowingNodesOnPage() as { table?: unknown; ul?: unknown; columns?: unknown; stack?: unknown }[];
+      return low || (after.length <= 1 && !after.some((n) => n.table || n.ul || n.columns || n.stack));
+    },
+    content,
+  };
+}
+
 export async function renderPdf(doc: TDocumentDefinitions): Promise<Blob> {
   const pdfMake = await load();
   return pdfMake.createPdf(doc).getBlob();
@@ -148,6 +217,59 @@ export const tableLayout = {
   paddingTop: () => 4,
   paddingBottom: () => 4,
 };
+
+/** The letterhead's bordered grid (document number, dates, who it's for). */
+export const gridLayout = {
+  hLineWidth: () => 0.7,
+  vLineWidth: () => 0.7,
+  hLineColor: () => '#9FB4B7',
+  vLineColor: () => '#9FB4B7',
+  paddingLeft: () => 6,
+  paddingRight: () => 6,
+  paddingTop: () => 4,
+  paddingBottom: () => 4,
+};
+
+/** The document's name, centred in teal under the letterhead: QUOTATION, EVENT REPORT. */
+export const docTitle = (text: string): Content => ({ text: text.toUpperCase(), style: 'docTitle' });
+
+// headlineLevel marks headings so a page never ends on one (see letterheadDoc).
+export const sectionTitle = (text: string): Content => ({ text: text.toUpperCase(), style: 'section', headlineLevel: 1 });
+
+/** A one-row grid of labelled facts under the title, e.g. Prepared for · Quote no. · Date. */
+export function infoGrid(cells: { label: string; value: Content | string; width?: string | number }[]): Content {
+  return {
+    table: {
+      dontBreakRows: true,
+      widths: cells.map((c) => c.width ?? '*'),
+      body: [cells.map((c) => th(c.label)), cells.map((c) => (typeof c.value === 'string' ? { text: c.value || '—', bold: true } : c.value))] as TableCell[][],
+    },
+    layout: gridLayout,
+    margin: [0, 0, 0, 12],
+  } as Content;
+}
+
+/**
+ * Where to pay: the QR codes of the payment methods, each with its name.
+ * Account names and numbers are never printed (documents get forwarded).
+ */
+export function paymentDetails(methods: readonly { label: string; qr: string }[]): Content[] {
+  if (!methods.length) return [];
+  const cells: TableCell[] = methods.map((m) => ({
+    stack: [
+      { image: m.qr, fit: [110, 110], alignment: 'center', margin: [0, 0, 0, 4] },
+      { text: `Scan to pay · ${m.label}`, bold: true, alignment: 'center', color: TEAL },
+    ],
+    margin: [0, 4, 0, 4],
+  })) as TableCell[];
+  const rows: TableCell[][] = [];
+  for (let i = 0; i < cells.length; i += 3) {
+    const row = cells.slice(i, i + 3);
+    while (row.length < 3) row.push({ text: '' });
+    rows.push(row);
+  }
+  return [sectionTitle('Payment details'), { table: { widths: ['*', '*', '*'], body: rows, dontBreakRows: true }, layout: 'noBorders', margin: [0, 0, 0, 6] } as Content];
+}
 
 export function table(widths: (string | number)[], head: TableCell[], body: TableCell[][], footer?: TableCell[]): Content {
   const rows = [head, ...body, ...(footer ? [footer.map((c) => ({ ...(c as object), bold: true }) as TableCell)] : [])];

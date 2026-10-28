@@ -11,7 +11,11 @@ async function setupWithoutTeam(page: Page) {
   await page.getByRole('button', { name: 'Skip for now' }).click();
   await page.getByLabel(/Team names and role weights/).uncheck();
   await page.getByRole('button', { name: 'Finish setup' }).click();
+  // Setup opens the first event's form; close it only once it's there, or it opens over the next page.
+  const first = page.getByRole('dialog', { name: 'New event' });
+  await first.waitFor();
   await page.keyboard.press('Escape');
+  await expect(first).toBeHidden();
 }
 
 const chip = (page: Page) => page.getByRole('button', { name: 'Account and settings' });

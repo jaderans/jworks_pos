@@ -1,6 +1,6 @@
 import { dayStock } from '../domain/stock';
 import type { Content, TableCell } from 'pdfmake/interfaces';
-import { barChartSvg, frame, kpis, signatureLine, table, td, th, waterfall, BAD, MUTED, TEAL } from './pdf';
+import { barChartSvg, docTitle, frame, infoGrid, kpis, sectionTitle, signatureLine, table, td, th, waterfall, BAD, MUTED, TEAL } from './pdf';
 import { formatPct, peso, sum } from '../lib/money';
 import { addDays, dayStart, fmtDateRange, fmtDateTime, fmtIsoWeekday, fmtTime, hourLabel, isoDate } from '../lib/time';
 import { drawerState, type EventMetrics } from '../domain/summary';
@@ -50,18 +50,19 @@ function productRows(i: ReportInput) {
     .sort((a, b) => b.revenue - a.revenue);
 }
 
-function header(i: ReportInput): Content[] {
+/** The event's facts in the letterhead grid. */
+function eventGrid(i: ReportInput, second: { label: string; value: string } = { label: 'Dates', value: fmtDateRange(i.ev.startDate, i.ev.endDate) }): Content {
   const { ev } = i;
+  return infoGrid([
+    { label: 'Event', value: { stack: [{ text: ev.name, bold: true }, ...(ev.organizer ? [{ text: `Organizer: ${ev.organizer}`, style: 'muted' }] : [])] } },
+    { label: second.label, value: { text: second.value || '—' }, width: 130 },
+    { label: 'Venue', value: { text: [ev.venue, ev.boothNo && `Booth ${ev.boothNo}`].filter(Boolean).join(' · ') || '—' }, width: 150 },
+  ]);
+}
+
+function header(i: ReportInput, title: string): Content[] {
   const onDuty = i.roster.map((r) => `${nameOf(i, r.memberId)} (${r.roleLabel})`).join(', ');
-  return [
-    { text: ev.name, style: 'h1' },
-    {
-      text: [fmtDateRange(ev.startDate, ev.endDate), ev.venue, ev.organizer && `Organizer: ${ev.organizer}`, ev.boothNo && `Booth ${ev.boothNo}`].filter(Boolean).join('  ·  '),
-      style: 'muted',
-      margin: [0, 0, 0, 2],
-    },
-    ...(onDuty ? [{ text: `On duty: ${onDuty}`, style: 'muted', margin: [0, 0, 0, 8] } as Content] : []),
-  ];
+  return [docTitle(title), eventGrid(i), ...(onDuty ? [{ text: `On duty: ${onDuty}`, style: 'muted', margin: [0, -4, 0, 8] } as Content] : [])];
 }
 
 function headline(i: ReportInput): Content {
@@ -133,13 +134,13 @@ function layers(i: ReportInput): Content {
 /** The full event report: cover, money, sales, stock, spend, profit share, summary. */
 export async function buildEventReport(i: ReportInput) {
   const { ev, metrics: m, share: s } = i;
-  const content: Content[] = [...header(i), headline(i)];
+  const content: Content[] = [...header(i, 'Event report'), headline(i)];
 
   // Money
-  content.push({ text: 'Money in', style: 'h2' });
+  content.push(sectionTitle('Money in'));
   content.push(table(['*', 'auto', 'auto'], [th('Method'), th('Payments', true), th('Amount', true)], m.byMethod.map((x) => [td(x.name), td(x.count, true), td(peso(x.amount), true)]), [td('Total'), td(sum(m.byMethod.map((x) => x.count)), true), td(peso(sum(m.byMethod.map((x) => x.amount))), true)]));
   if (i.sessions.length) {
-    content.push({ text: 'Cash drawer', style: 'h3' });
+    content.push({ text: 'Cash drawer', style: 'h3', headlineLevel: 1 });
     content.push(
       table(
         ['auto', '*', 'auto', 'auto', 'auto', 'auto', 'auto'],
@@ -165,22 +166,22 @@ export async function buildEventReport(i: ReportInput) {
   }
   const refs = i.sales.filter((x) => x.status === 'completed').flatMap((x) => x.payments.filter((p) => p.kind !== 'cash').map((p) => ({ sale: x, p })));
   if (refs.length) {
-    content.push({ text: 'E-wallet and bank references', style: 'h3' });
+    content.push({ text: 'E-wallet and bank references', style: 'h3', headlineLevel: 1 });
     content.push(table(['auto', 'auto', '*', 'auto'], [th('Receipt'), th('Time'), th('Method · reference'), th('Amount', true)], refs.map(({ sale, p }) => [td(sale.receiptNo), td(fmtTime(sale.at)), td(`${p.name}${p.ref ? ` · ${p.ref}` : ' · no reference'}`), td(peso(p.amount), true)])));
   }
 
   // Sales
-  content.push({ text: 'Sales', style: 'h2' });
+  content.push(sectionTitle('Sales'));
   if (m.byHour.length) {
     const hours: { label: string; value: number }[] = [];
     const minH = Math.min(...m.byHour.map((h) => h.hour));
     const maxH = Math.max(...m.byHour.map((h) => h.hour));
     for (let h = minH; h <= maxH; h++) hours.push({ label: hourLabel(h), value: m.byHour.find((x) => x.hour === h)?.amount ?? 0 });
-    content.push({ text: 'By hour', style: 'h3' });
+    content.push({ text: 'By hour', style: 'h3', headlineLevel: 1 });
     content.push({ svg: barChartSvg(hours), width: 523 } as Content);
   }
   if (m.byDay.length > 1) {
-    content.push({ text: 'By day', style: 'h3' });
+    content.push({ text: 'By day', style: 'h3', headlineLevel: 1 });
     content.push(table(['*', 'auto', 'auto'], [th('Day'), th('Sales', true), th('Amount', true)], m.byDay.map((x) => [td(fmtIsoWeekday(x.date)), td(x.count, true), td(peso(x.amount), true)])));
   }
   content.push({
@@ -204,13 +205,13 @@ export async function buildEventReport(i: ReportInput) {
   } as Content);
   const voided = i.sales.filter((x) => x.status === 'voided');
   if (voided.length) {
-    content.push({ text: 'Voided sales', style: 'h3' });
+    content.push({ text: 'Voided sales', style: 'h3', headlineLevel: 1 });
     content.push(table(['auto', 'auto', 'auto', '*'], [th('Receipt'), th('Time'), th('Amount', true), th('Reason')], voided.map((x) => [td(x.receiptNo), td(fmtTime(x.at)), td(peso(x.total), true), td(x.voidReason || '—')])));
   }
 
   // Products & stock
   const prows = productRows(i);
-  content.push({ text: 'Products and stock', style: 'h2' });
+  content.push(sectionTitle('Products and stock'));
   content.push(
     table(
       ['*', 'auto', 'auto', 'auto', 'auto', 'auto', 'auto', 'auto'],
@@ -231,7 +232,7 @@ export async function buildEventReport(i: ReportInput) {
   if (s.cogsMissing.length) content.push({ text: `No production cost set for: ${s.cogsMissing.map((x) => x.name).join(', ')}. Profit is overstated by their cost.`, style: 'note' });
 
   // Booth spend
-  content.push({ text: 'Booth spend', style: 'h2' });
+  content.push(sectionTitle('Booth spend'));
   const spendRows = i.spend.slice().sort((a, b) => a.type.localeCompare(b.type));
   content.push(
     table(
@@ -260,7 +261,7 @@ export async function buildEventReport(i: ReportInput) {
   );
 
   // Profit share
-  content.push({ text: 'Profit share', style: 'h2' });
+  content.push(sectionTitle('Profit share'));
   content.push(
     waterfall([
       { label: 'Gross sales', value: peso(s.gross) },
@@ -284,23 +285,23 @@ export async function buildEventReport(i: ReportInput) {
     if (s.topUpTotal) content.push({ text: `* Topped up to the ${peso(ev.share.minGuarantee)} minimum from the JoshWorks share (${peso(s.topUpTotal)} in total).`, style: 'note' });
   }
   if (s.partners.length) {
-    content.push({ text: 'Partner shares', style: 'h3' });
+    content.push({ text: 'Partner shares', style: 'h3', headlineLevel: 1 });
     content.push(table(['*', 'auto', 'auto', 'auto', 'auto', 'auto'], [th('Deal'), th('Sold', true), th('Sell-thru', true), th('Base', true), th('Share', true), th('Amount', true)], s.partners.map((p) => [td(`${p.dealName} (${p.partnerName})`), td(p.units, true), td(p.sellThroughPct === null ? '—' : formatPct(p.sellThroughPct), true), td(peso(p.base), true), td(`${p.pct}%`, true), td(peso(p.amount), true)])));
   }
   if (s.royalties.length) {
-    content.push({ text: 'Design royalties', style: 'h3' });
+    content.push({ text: 'Design royalties', style: 'h3', headlineLevel: 1 });
     content.push(table(['*', 'auto', 'auto', 'auto'], [th('Designer'), th('Pieces', true), th('Sales', true), th('Royalty', true)], s.royalties.map((r) => [td(r.name), td(r.units, true), td(peso(r.revenue), true), td(peso(r.amount), true)])));
   }
   if (i.payouts.length) {
-    content.push({ text: 'Payouts', style: 'h3' });
+    content.push({ text: 'Payouts', style: 'h3', headlineLevel: 1 });
     content.push(table(['*', 'auto', 'auto', 'auto'], [th('Person'), th('For'), th('Amount', true), th('Status')], i.payouts.map((p) => [td(nameOf(i, p.memberId)), td(p.kind), td(peso(p.amount), true), td(p.status === 'paid' ? `Paid${p.method ? ` · ${p.method}` : ''}` : 'To pay')])));
   }
 
   // Summary
-  content.push({ text: 'Summary', style: 'h2' });
+  content.push(sectionTitle('Summary'));
   content.push(layers(i));
   const leads = ev.counters?.leads ?? 0;
-  content.push({ text: 'Beyond sales', style: 'h3' });
+  content.push({ text: 'Beyond sales', style: 'h3', headlineLevel: 1 });
   content.push({
     ul: [
       `Contacts captured: ${leads}${leads ? ` · cost per contact ${peso(Math.round(s.costs.total / leads))}` : ''}`,
@@ -310,22 +311,22 @@ export async function buildEventReport(i: ReportInput) {
     margin: [0, 0, 0, 6],
   } as Content);
   if (s.warnings.length) {
-    content.push({ text: 'Check these', style: 'h3' });
+    content.push({ text: 'Check these', style: 'h3', headlineLevel: 1 });
     content.push({ ul: [...s.warnings], color: MUTED } as Content);
   }
   if (ev.notes) {
-    content.push({ text: 'Notes', style: 'h3' });
+    content.push({ text: 'Notes', style: 'h3', headlineLevel: 1 });
     content.push({ text: ev.notes });
   }
   content.push({ columns: [signatureLine('Prepared by'), signatureLine('Checked by (owner)')], margin: [0, 24, 0, 0] } as Content);
 
-  return frame({ title: 'Event report', subtitle: ev.name, business: i.business }, content);
+  return frame({ title: 'Event report', subtitle: ev.name, business: i.business, footerNote: ev.name }, content);
 }
 
 /** One page to send the team: headline, payments, top items, the split. */
 export async function buildSummaryPage(i: ReportInput) {
   const { metrics: m, share: s } = i;
-  const content: Content[] = [...header(i), headline(i)];
+  const content: Content[] = [...header(i, 'Event summary'), headline(i)];
   content.push({
     columns: [
       {
@@ -347,10 +348,10 @@ export async function buildSummaryPage(i: ReportInput) {
   } as Content);
   content.push(layers(i));
   if (s.staff.length) {
-    content.push({ text: 'Staff payouts', style: 'h3' });
+    content.push(sectionTitle('Staff payouts'));
     content.push(table(['*', 'auto', 'auto', 'auto'], [th('Person'), th('Role'), th('Hours', true), th('Payout', true)], s.staff.map((x) => [td(x.name), td(x.roleLabel), td(x.hours, true), td(peso(x.amount), true)])));
   }
-  return frame({ title: 'Event summary', subtitle: i.ev.name, business: i.business }, content);
+  return frame({ title: 'Event summary', subtitle: i.ev.name, business: i.business, footerNote: i.ev.name }, content);
 }
 
 /** Two payout slips per page, each with a signature line. */
@@ -362,7 +363,7 @@ export async function buildPayoutSlips(i: ReportInput) {
   slips.forEach((sl, k) => {
     content.push({
       stack: [
-        { text: 'PAYOUT SLIP', style: 'label' },
+        { text: 'PAYOUT SLIP', style: 'section', margin: [0, 0, 0, 2] },
         { text: sl.name, style: 'h1' },
         { text: `${i.ev.name} · ${fmtDateRange(i.ev.startDate, i.ev.endDate)}`, style: 'muted' },
         { text: sl.kind === 'staff' ? 'Staff share of the profit pool' : sl.kind === 'partner' ? 'Partner share' : 'Design royalty', margin: [0, 10, 0, 2] },
@@ -374,10 +375,10 @@ export async function buildPayoutSlips(i: ReportInput) {
       margin: [0, 0, 0, 24],
       ...(k % 2 === 1 && k < slips.length - 1 ? { pageBreak: 'after' } : {}),
     } as Content);
-    if (k % 2 === 0 && k < slips.length - 1) content.push({ canvas: [{ type: 'line', x1: 0, y1: 0, x2: 523, y2: 0, lineWidth: 0.6, dash: { length: 4 }, lineColor: '#BCCBCB' }], margin: [0, 0, 0, 24] } as Content);
+    if (k % 2 === 0 && k < slips.length - 1) content.push({ canvas: [{ type: 'line', x1: 0, y1: 0, x2: 526, y2: 0, lineWidth: 0.6, dash: { length: 4 }, lineColor: '#BCCBCB' }], margin: [0, 0, 0, 24] } as Content);
   });
-  if (!slips.length) content.push({ text: 'No payouts yet. Add the team and save payouts first.' });
-  return frame({ title: 'Payout slips', subtitle: i.ev.name, business: i.business }, content);
+  if (!slips.length) content.push(docTitle('Payout slips'), { text: 'No payouts yet. Add the team and save payouts first.', alignment: 'center' });
+  return frame({ title: 'Payout slips', subtitle: i.ev.name, business: i.business, footerNote: i.ev.name }, content);
 }
 
 /** End-of-day report for one calendar day. */
@@ -397,8 +398,8 @@ export async function buildEndOfDay(i: ReportInput, date: string) {
   const sessions = i.sessions.filter((s) => isoDate(s.openedAt) === date);
   const stock = dayStock(i.eventProducts, (id) => i.products.get(id)?.name ?? 'Deleted product', i.sales, dayStart(date), dayStart(addDays(date, 1)));
   const content: Content[] = [
-    { text: `${i.ev.name}`, style: 'h1' },
-    { text: `End of day · ${fmtIsoWeekday(date)}`, style: 'muted', margin: [0, 0, 0, 8] },
+    docTitle('End of day'),
+    eventGrid(i, { label: 'Day', value: fmtIsoWeekday(date) }),
     kpis([
       { label: 'Sales', value: peso(sum(done.map((s) => s.total))) },
       { label: 'Transactions', value: String(done.length) },
@@ -406,9 +407,9 @@ export async function buildEndOfDay(i: ReportInput, date: string) {
       { label: 'Voided', value: String(sales.length - done.length) },
       ...(deposits.length ? [{ label: 'Order deposits', value: peso(sum(deposits.map((s) => s.total))) }] : []),
     ]),
-    { text: 'Payments', style: 'h3' },
+    sectionTitle('Payments'),
     table(['*', 'auto', 'auto'], [th('Method'), th('Count', true), th('Amount', true)], [...byMethod.values()].map((v) => [td(v.name), td(v.count, true), td(peso(v.amount), true)])),
-    { text: 'Registers', style: 'h3' },
+    sectionTitle('Registers'),
     table(
       ['auto', '*', 'auto', 'auto', 'auto'],
       [th('Register'), th('Opened – closed'), th('Expected', true), th('Counted', true), th('Over/short', true)],
@@ -419,7 +420,7 @@ export async function buildEndOfDay(i: ReportInput, date: string) {
     ),
     ...(stock.length
       ? [
-          { text: 'Inventory', style: 'h3' } as Content,
+          sectionTitle('Inventory'),
           table(
             ['*', 'auto', 'auto', 'auto', 'auto'],
             [th('Product'), th('Brought', true), th('Sold today', true), th('Sold so far', true), th('Left', true)],
@@ -435,7 +436,7 @@ export async function buildEndOfDay(i: ReportInput, date: string) {
       : []),
     { columns: [signatureLine('Cashier'), signatureLine('Owner')], margin: [0, 24, 0, 0] } as Content,
   ];
-  return frame({ title: 'End of day', subtitle: i.ev.name, business: i.business }, content);
+  return frame({ title: 'End of day', subtitle: i.ev.name, business: i.business, footerNote: `${i.ev.name} · ${fmtIsoWeekday(date)}` }, content);
 }
 
 export function salesCsv(i: ReportInput): string {

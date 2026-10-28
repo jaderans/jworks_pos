@@ -18,7 +18,7 @@ The menu is grouped: **Selling** (Sell, Sales log, Orders), **Events** (This eve
 | **Events** | Create, or start from a past event (prices, team, deals and the checklist carry over). **Compare events**: up to five side by side, with sales, sales per open hour, sales per peso of booth fee, profit before and after event costs, cash share, sell-through, discounts and best sellers, and the best in each row highlighted. |
 | **Products** | Catalog, categories, bundle deals, design credit and royalties, barcode labels for your A4 sticker paper. |
 | **Production** | Cost per piece by hand, from a recipe (materials, labor, packaging, spoilage, overhead, with a sticker-size helper), or from logged batches (weighted average). Materials with pack costs, stock and reorder points. **Restock plan**: for the next event, each product's sales per open hour at recent events (newest counting most, and only events it was on the table), times the hours you'll be open, plus extra to be safe, less what's in the studio. Change any amount, tap **Make it** to log the batch with its recipe filled in, set the targets as the event's stock to bring, and get the materials to buy (packs and cost) from the recipes. Prints as a PDF. |
-| **Pricing** | Service quotes (logo, branding, shirts, tarp, layout…), sticker jobs priced by size, quick checks (client's price, markup ↔ margin, booth fee, bulk ladder), quote archive with win rate, quote PDFs, and your rates. |
+| **Pricing** | Service quotes (logo, branding, shirts, tarp, layout…), sticker jobs priced by size, quick checks (client's price, markup ↔ margin, booth fee, bulk ladder), quote archive with win rate, quote PDFs on the JoshWorks letterhead (with a 50% down payment line and where to pay), and your rates. |
 | **Team** | People, roles (Owner, Cashier, Designer, Partner), and invite links for their phones. |
 | **Customers** | Who buys from the booth: visits, spend and history, with consent to message them recorded (Data Privacy Act); delete on request wipes their details. **Vouchers**: codes like KOMIKET50 with pesos or percent off, minimum spend, dates, one event, total and per-customer limits. **Stamp card**: a stamp per ₱X spent and a reward after N stamps. Stamps and voucher uses are counted from sales, so merging phones never doubles them. |
 | **My page** | What a designer sees: their shifts, payouts and how their designs sold. |
@@ -51,7 +51,7 @@ npm run dev          # local development server
 npm run build        # type-check and production build into dist/
 npm run preview      # serve the production build (offline caching works here)
 npm test             # unit and service tests (Vitest)
-npm run e2e          # browser tests with the installed Chrome: smoke, two-phone offline dry run, tour, layout on 14 screen sizes, owner recovery, restore, customers, email, orders, plan and compare, restock plan, Studio link
+npm run e2e          # browser tests with the installed Chrome: smoke, two-phone offline dry run, tour, layout on 14 screen sizes, owner recovery, restore, customers, email, orders, plan and compare, restock plan, Studio link, documents on the letterhead
 npm run emulators    # Firebase Auth + Firestore emulators (needs Java 11+)
 npm run e2e:cloud    # owner, cashier and designer syncing through the emulators
 ```
@@ -62,7 +62,7 @@ npm run e2e:cloud    # owner, cashier and designer syncing through the emulators
 - The on-device database (IndexedDB via Dexie) is the source of truth. Money is stored as whole centavos.
 - Every synced record has `id`, `updatedAt`, `_dev` and a `_sync` flag; deletes are tombstones. Merge files and cloud sync both keep the newer copy, so merging twice never doubles a sale.
 - Cloud sync (optional) is the team's own Firebase project: Auth (email + password, verified) and Firestore under `ws/{team}/t_{table}`. Rules in `firebase/firestore.rules` enforce roles and reject older writes. Costs, materials, batches, booth spend and quotes never leave the owner's devices.
-- PDFs are generated on the device with pdfmake using bundled Manrope and Sora fonts (Manrope has the ₱ sign).
+- PDFs are generated on the device with pdfmake using bundled Manrope and Sora fonts (Manrope has the ₱ sign). Quotes, event reports, the one-page summary, payout slips, the end of day and the restock plan print on the JoshWorks letterhead (Legal size, the brand-kit frame), laid out like JoshWorks Studio's documents: a teal title, a grid with who and when, teal section headings, and on quotes the payment QR codes from Settings → Payment methods (names only, never account numbers). Barcode label sheets stay plain A4 so they line up with the sticker paper.
 
 ```
 src/
@@ -71,7 +71,7 @@ src/
   domain/       pure logic: cart and bundles, costs, profit share, summaries, sticker and service pricing
   services/     database operations: selling, events, production, spend, team, backups
   features/     screens
-  reports/      PDF builders (event report, summary, slips, end of day, labels, quotes)
+  reports/      PDF builders on the letterhead (event report, summary, slips, end of day, quotes, restock plan) and label sheets
   barcode/      scanner input and camera scanning
   sync/         Firebase sync engine, sign-in, invite links
 tests/          Vitest
