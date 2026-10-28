@@ -49,3 +49,43 @@ export function eventStock(eventProducts: readonly EventProduct[], sold: Readonl
 export const materialCounted = (m: Material): boolean => m.counted === 1 || m.onHand > 0;
 
 export const needsReorder = (m: Material): boolean => m.deleted !== 1 && m.reorderAt > 0 && materialCounted(m) && m.onHand <= m.reorderAt;
+
+export interface DayStockRow {
+  productId: string;
+  name: string;
+  /** Counted in for this event; null when not counted. */
+  brought: number | null;
+  soldToday: number;
+  soldSoFar: number;
+  left: number | null;
+  status: 'out' | 'low' | 'ok' | 'uncounted';
+}
+
+/**
+ * The booth's inventory at the end of a day: for every product counted in or
+ * sold, what was brought, sold that day, sold so far, and what's left.
+ * Low means 2 or fewer, or under a tenth of what was brought.
+ */
+export function dayStock(
+  eventProducts: readonly EventProduct[],
+  productName: (id: string) => string,
+  sales: readonly Sale[],
+  dayStartMs: number,
+  dayEndMs: number,
+): DayStockRow[] {
+  const upTo = sales.filter((s) => s.at < dayEndMs);
+  const today = upTo.filter((s) => s.at >= dayStartMs);
+  const soldToday = soldByProduct(today);
+  const soldSoFar = soldByProduct(upTo);
+  const brought = new Map(eventProducts.filter((e) => e.deleted !== 1).map((e) => [e.productId, e.stockBrought]));
+  const ids = new Set([...[...brought].filter(([, b]) => b !== null).map(([id]) => id), ...soldSoFar.keys()]);
+  return [...ids]
+    .map((id) => {
+      const b = brought.get(id) ?? null;
+      const so = soldSoFar.get(id) ?? 0;
+      const left = b === null ? null : b - so;
+      const status: DayStockRow['status'] = left === null ? 'uncounted' : left <= 0 ? 'out' : left <= Math.max(2, Math.ceil((b ?? 0) / 10)) ? 'low' : 'ok';
+      return { productId: id, name: productName(id), brought: b, soldToday: soldToday.get(id) ?? 0, soldSoFar: so, left, status };
+    })
+    .sort((a, b) => b.soldToday - a.soldToday || a.name.localeCompare(b.name));
+}

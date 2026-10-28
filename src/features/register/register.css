@@ -92,3 +92,9 @@
 }
 .cust-chip .grow { display: grid; min-width: 0; color: var(--ink); line-height: 1.25; }
 .cust-chip b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* receipt: the JoshWorks lockup on top, and the email row under it */
+.receipt-head { display: grid; justify-items: center; gap: 2px; }
+.receipt-lockup { height: 40px; width: auto; max-width: 70%; object-fit: contain; margin-bottom: 4px; }
+.email-receipt { display: grid; gap: 8px; }
+.email-receipt .row .input { flex: 1; min-width: 0; }

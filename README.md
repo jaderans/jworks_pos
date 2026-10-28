@@ -11,7 +11,7 @@ The menu is grouped: **Selling** (Sell, Sales log), **Events** (This event, All 
 | Screen | What it does |
 |---|---|
 | **Dashboard** | The owner's start screen: greeting, live clock (digital and analog), a month calendar with every event on it, the event in progress (sales today, whole event, break-even), what needs attention (missing prices or costs, registers left open, unpaid payouts, events to report, materials to reorder), latest sales and recent activity. |
-| **Sell** | Product tiles, search, barcode scanning (camera or USB/Bluetooth scanner), automatic bundle deals ("4 for ₱75"), preset and typed discounts, free items, Cash / GCash / Maribank / bank transfer with reference numbers and split payments, held sales, digital receipts with a QR code, opening float, cash in/out, and closing the register with a denomination count. Add the customer to a sale for stamps; type voucher codes. |
+| **Sell** | Product tiles, search, barcode scanning (camera or USB/Bluetooth scanner), automatic bundle deals ("4 for ₱75"), preset and typed discounts, free items, Cash / GCash / Maribank / bank transfer with reference numbers and split payments, held sales, digital receipts with a QR code, opening float, cash in/out, and closing the register with a denomination count. Add the customer to a sale for stamps; type voucher codes. Email the receipt (JoshWorks-branded) from the receipt screen. |
 | **Sales** | Every sale with the price it sold at. Void with a reason (owner PIN), fix a wrong payment method. |
 | **Event** | Summary (sales by hour, payments, top products, break-even, the three layers: Trading, Event result, Cash), **Edit prices** (base vs event prices, bulk +₱/+%/round to ₱5, booth-aware floor and suggested prices), **Stock** (brought, sold, left, sell-through), **Booth spend** (booth fee, used-up items, reusable assets spread over events, materials to stock, receipts photos, reimbursements), **Team & payouts** (roster and shifts, 40/60 split by role weight × hours, minimum guarantee, partner deals fixed or tiered by sell-through, design royalties, mark paid), **Report** (full PDF, one-page summary, payout slips, end of day, CSV). |
 | **Events** | Create, or start from a past event (prices, team, deals carry over). |
@@ -22,7 +22,8 @@ The menu is grouped: **Selling** (Sell, Sales log), **Events** (This event, All 
 | **Customers** | Who buys from the booth: visits, spend and history, with consent to message them recorded (Data Privacy Act); delete on request wipes their details. **Vouchers**: codes like KOMIKET50 with pesos or percent off, minimum spend, dates, one event, total and per-customer limits. **Stamp card**: a stamp per ₱X spent and a reward after N stamps. Stamps and voucher uses are counted from sales, so merging phones never doubles them. |
 | **My page** | What a designer sees: their shifts, payouts and how their designs sold. |
 | **Activity** | Who changed a price, voided a sale, or edited a payout, and when. The top-bar button shows the latest, with a dot when someone else changed something. |
-| **Settings** | Business, this device's register letter, owner PIN, payment methods and QR codes, backups and merging a second phone's sales, cloud sync, install help. |
+| **Settings** | Business, this device's register letter, owner PIN, payment methods and QR codes, **email**, backups and merging a second phone's sales, cloud sync, install help. |
+| **Email** | Receipts and an automatic **end-of-day summary** (sales, payments, registers, inventory with what to restock, materials to reorder, and the End-of-day PDF attached) sent from the studio Gmail through the same Google Apps Script mailer JoshWorks Studio uses ("Use Studio's mailer" fills it in on a device that has both apps). The summary goes out when a register closes, or at a set time, and catches up on missed days. Offline, emails wait in an outbox and send by themselves. The mailer link and key stay on the device, never in backups. |
 
 ## Day to day
 
@@ -49,7 +50,7 @@ npm run dev          # local development server
 npm run build        # type-check and production build into dist/
 npm run preview      # serve the production build (offline caching works here)
 npm test             # unit and service tests (Vitest)
-npm run e2e          # browser tests with the installed Chrome: smoke, two-phone offline dry run, tour, layout on 14 screen sizes, owner recovery, restore, customers
+npm run e2e          # browser tests with the installed Chrome: smoke, two-phone offline dry run, tour, layout on 14 screen sizes, owner recovery, restore, customers, email
 npm run emulators    # Firebase Auth + Firestore emulators (needs Java 11+)
 npm run e2e:cloud    # owner, cashier and designer syncing through the emulators
 ```

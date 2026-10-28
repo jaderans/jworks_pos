@@ -1,7 +1,8 @@
+import { dayStock } from '../domain/stock';
 import type { Content, TableCell } from 'pdfmake/interfaces';
-import { barChartSvg, frame, kpis, signatureLine, table, td, th, waterfall, MUTED, TEAL } from './pdf';
+import { barChartSvg, frame, kpis, signatureLine, table, td, th, waterfall, BAD, MUTED, TEAL } from './pdf';
 import { formatPct, peso, sum } from '../lib/money';
-import { fmtDateRange, fmtDateTime, fmtIsoWeekday, fmtTime, hourLabel, isoDate } from '../lib/time';
+import { addDays, dayStart, fmtDateRange, fmtDateTime, fmtIsoWeekday, fmtTime, hourLabel, isoDate } from '../lib/time';
 import { drawerState, type EventMetrics } from '../domain/summary';
 import { rosterHours, type ShareResult } from '../domain/share';
 import { lineRevenue } from '../domain/cart';
@@ -391,6 +392,7 @@ export async function buildEndOfDay(i: ReportInput, date: string) {
     byMethod.set(p.methodId, v);
   }
   const sessions = i.sessions.filter((s) => isoDate(s.openedAt) === date);
+  const stock = dayStock(i.eventProducts, (id) => i.products.get(id)?.name ?? 'Deleted product', i.sales, dayStart(date), dayStart(addDays(date, 1)));
   const content: Content[] = [
     { text: `${i.ev.name}`, style: 'h1' },
     { text: `End of day · ${fmtIsoWeekday(date)}`, style: 'muted', margin: [0, 0, 0, 8] },
@@ -411,6 +413,22 @@ export async function buildEndOfDay(i: ReportInput, date: string) {
         return [td(sess.letter), td(`${fmtTime(sess.openedAt)} – ${sess.closedAt ? fmtTime(sess.closedAt) : 'open'}`), td(peso(d.expected), true), td(d.counted === null ? '—' : peso(d.counted), true), td(d.overShort === null ? '—' : peso(d.overShort), true)] as TableCell[];
       }),
     ),
+    ...(stock.length
+      ? [
+          { text: 'Inventory', style: 'h3' } as Content,
+          table(
+            ['*', 'auto', 'auto', 'auto', 'auto'],
+            [th('Product'), th('Brought', true), th('Sold today', true), th('Sold so far', true), th('Left', true)],
+            stock.map((r) => [
+              td(r.name),
+              td(r.brought ?? '—', true),
+              td(r.soldToday, true),
+              td(r.soldSoFar, true),
+              td(r.left === null ? 'not counted' : r.left <= 0 ? 'OUT' : r.status === 'low' ? `${r.left} low` : r.left, true, r.status === 'out' || r.status === 'low' ? { color: BAD, bold: true } : {}),
+            ]),
+          ),
+        ]
+      : []),
     { columns: [signatureLine('Cashier'), signatureLine('Owner')], margin: [0, 24, 0, 0] } as Content,
   ];
   return frame({ title: 'End of day', subtitle: i.ev.name, business: i.business }, content);

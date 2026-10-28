@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ReceiptText } from 'lucide-react';
+﻿import { useEffect, useMemo, useState } from 'react';
+import { Mail, ReceiptText } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db/db';
 import { useApp } from '../../app/AppContext';
 import { useMembers, usePaymentMethods, useSales, useSettingRows } from '../../hooks/data';
 import { settingValue } from '../../db/settings';
@@ -25,6 +27,11 @@ export default function SalesLogPage() {
   const [status, setStatus] = useState<'all' | 'completed' | 'voided'>('all');
   const [open, setOpen] = useState<Sale | null>(null);
   const [receipt, setReceipt] = useState<Sale | null>(null);
+  // Emailed receipts on this device: the latest status per sale.
+  const emailed = useLiveQuery(async () => {
+    const rows = await db.outbox.where('saleId').above('').toArray();
+    return new Map(rows.sort((a, b) => a.at - b.at).map((o) => [o.saleId, o]));
+  }, []);
 
   const memberName = useMemo(() => new Map((members ?? []).map((m) => [m.id, m.name])), [members]);
   const shown = useMemo(() => {
@@ -87,7 +94,18 @@ export default function SalesLogPage() {
                 <tr key={s.id} className={`click ${s.status === 'voided' ? 'voided' : ''}`} onClick={() => setOpen(s)}>
                   <td className="nowrap">
                     <b className="mono">{s.receiptNo}</b>
-                    <div className="muted tiny">{fmtTime(s.at)}</div>
+                    <div className="muted tiny">
+                      {fmtTime(s.at)}
+                      {emailed?.get(s.id) ? (
+                        <span
+                          className={`email-mark ${emailed.get(s.id)!.status}`}
+                          title={emailed.get(s.id)!.status === 'sent' ? `Emailed to ${emailed.get(s.id)!.to}` : emailed.get(s.id)!.status === 'failed' ? `Email failed: ${emailed.get(s.id)!.error}` : 'Email waiting to send'}
+                        >
+                          {' '}
+                          <Mail size={12} aria-hidden="true" /> {emailed.get(s.id)!.status === 'sent' ? 'emailed' : emailed.get(s.id)!.status === 'failed' ? 'email failed' : 'email waiting'}
+                        </span>
+                      ) : null}
+                    </div>
                   </td>
                   <td>
                     {s.lines.map((l) => `${l.qty} × ${l.name}`).join(', ')}

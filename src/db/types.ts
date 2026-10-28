@@ -398,6 +398,39 @@ export interface SettingRow extends Syncable {
   value: unknown;
 }
 
+/** The studio Gmail mailer (Google Apps Script) on this device. Device-only: the key never goes into backups. */
+export interface MailerSettings {
+  url: string;
+  key: string;
+  fromName: string;
+  replyTo: string;
+  /** Email the end-of-day summary (sales, registers, inventory) when a register closes, or at summaryTime. */
+  summaryOn: boolean;
+  /** Who gets it: one or more addresses, separated by commas. */
+  summaryTo: string;
+  /** "21:00": if no register was closed by then, it goes out anyway (while the app is open). */
+  summaryTime: string;
+}
+
+/** An email waiting to go out, sent or failed. Device-only: it holds the customer's address. */
+export interface OutboxItem {
+  id: string;
+  at: number;
+  kind: 'receipt' | 'test' | 'summary';
+  saleId: string | null;
+  to: string;
+  toName: string;
+  subject: string;
+  html: string;
+  text: string;
+  /** Files sent with it, e.g. the end-of-day PDF (base64). */
+  attachments?: { name: string; type: string; data: string }[];
+  status: 'queued' | 'sent' | 'failed';
+  tries: number;
+  error: string;
+  sentAt: number | null;
+}
+
 /** Device-only values (never synced). */
 export interface LocalRow {
   key: string;

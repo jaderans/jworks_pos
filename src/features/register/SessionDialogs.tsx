@@ -3,7 +3,7 @@ import { Dialog } from '../../components/Dialog';
 import { Button, Callout, Segmented } from '../../components/ui';
 import { Field, MoneyInput, NumberInput, TextArea, TextInput } from '../../components/form';
 import { peso, sum, type Cents } from '../../lib/money';
-import { fmtTime } from '../../lib/time';
+import { isoDate, fmtTime } from '../../lib/time';
 import { DENOMINATIONS, countTotal, drawerState } from '../../domain/summary';
 import { addCashMove, closeSession } from '../../services/sales';
 import { backupBlob, backupFileName, exportAll } from '../../services/backup';
@@ -96,6 +96,14 @@ export function CloseRegisterDialog({ session, sales, open, onClose }: { session
     const s = await closeSession(session.id, counts, notes, app.member?.id ?? null);
     setBusy(false);
     setDone(s ?? null);
+    // Closing the register sends the end-of-day summary (sales, registers, inventory) to the owner's email.
+    if (s)
+      void import('../../email/automation')
+        .then((m) => m.queueDaySummary(s.eventId, isoDate(s.openedAt), 'closed'))
+        .then((r) => {
+          if (r.queued) app.toast('The end-of-day summary is on its way to your email.', { tone: 'good' });
+        })
+        .catch(() => undefined);
   };
 
   const saveBackup = async (share: boolean) => {

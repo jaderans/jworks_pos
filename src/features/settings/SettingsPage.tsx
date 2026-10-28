@@ -13,6 +13,7 @@ import { backupBlob, backupFileName, exportAll, mergeBackup, parseBackup, wipeAl
 import { savePaymentMethod, setOwnerPin, verifyOwnerPin } from '../../services/team';
 import { backupOwner } from '../../services/setup';
 import { CloudSection } from './CloudSection';
+import { EmailSection } from './EmailSection';
 import type { BusinessSettings, PaymentMethod, SecuritySettings } from '../../db/types';
 
 export default function SettingsPage() {
@@ -25,11 +26,12 @@ export default function SettingsPage() {
   }, [params]);
   return (
     <div className="page narrow">
-      <PageHeader title="Settings" subtitle={owner ? 'Business, devices, payments, backups and cloud sync.' : 'This device and how the app looks.'} />
+      <PageHeader title="Settings" subtitle={owner ? 'Business, devices, payments, email, backups and cloud sync.' : 'This device and how the app looks.'} />
       {owner ? <BusinessSection /> : null}
       <DeviceSection />
       {owner ? <PinSection /> : null}
       {owner ? <PaymentsSection /> : null}
+      {owner ? <EmailSection /> : null}
       <BackupSection owner={owner} />
       <CloudSection />
       <InstallSection />

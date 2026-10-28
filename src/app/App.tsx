@@ -9,6 +9,8 @@ import { EmptyState, Loading } from '../components/ui';
 import { usePwaUpdates } from './usePwa';
 import { clearLanding, peekLanding } from './landing';
 import { startSync } from '../sync/engine';
+import { startOutbox } from '../email/outbox';
+import { startDailySummary } from '../email/automation';
 import { JoinPage } from '../features/join/JoinPage';
 
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
@@ -42,7 +44,10 @@ function Gate() {
     isSetupDone().then(setDone);
   }, []);
   useEffect(() => {
-    if (done) void startSync();
+    if (!done) return;
+    void startSync();
+    startOutbox();
+    startDailySummary();
   }, [done]);
   if (done === null) return <Loading />;
   if (location.pathname === '/join')

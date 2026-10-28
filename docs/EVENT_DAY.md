@@ -10,6 +10,7 @@
 - **Event → Booth spend**: list everything: booth fee, tarps and cards (used up), stands (reusable, spread over events), materials. Mark what's bought and who paid.
 - **Event → Team & payouts**: add who's on duty and their shifts.
 - **Settings → Payment methods**: upload your GCash and Maribank QR images.
+- **Settings → Email** (once, on your own phone or laptop): tap **Use Studio's mailer** (or paste the link and key from JoshWorks Studio → Settings → Email), put your email under **Send it to**, then **Send a test**.
 - **Customers → Vouchers**: make the codes you'll post or hand out (e.g. KOMIKET50). **Customers → Stamp card**: turn it on if you're giving stamps.
 - Every phone that will sell: open the app once online, install it, and give it its own register letter (A, B, C…).
 
@@ -24,7 +25,7 @@
 
 ## Closing
 
-1. **Close register**: count each denomination. The app shows expected vs counted, over or short, and the e-wallet totals to check against your apps.
+1. **Close register**: count each denomination. The app shows expected vs counted, over or short, and the e-wallet totals to check against your apps. On a device with email set up, the **end-of-day summary** (sales, registers, inventory, what to restock, with the PDF) is emailed to you; with no signal it goes out once there is one.
 2. Save the backup file it offers (share it to Drive or Messenger when online).
 3. Second phone without cloud sync: on that phone **Settings → Backup and devices → Share this device's data**; on the main phone **Merge a file**. Merging the same file twice is safe.
 4. **Event → Team & payouts → Save payouts**, then mark each one paid.

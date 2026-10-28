@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import type {
   AuditEntry, Batch, BundleRule, Category, CostPoint, Customer, EventProduct, HeldSale, JWEvent, LocalRow, Material,
   Member, PartnerDeal, PaymentMethod, Payout, Photo, Product, ProductCost, Quote, RosterEntry, Sale, Session,
-  SettingRow, SpendItem, StockMove, Voucher,
+  OutboxItem, SettingRow, SpendItem, StockMove, Voucher,
 } from './types';
 
 /**
@@ -37,6 +37,7 @@ export class JWDB extends Dexie {
   local!: Table<LocalRow, string>;
   photos!: Table<Photo, string>;
   heldSales!: Table<HeldSale, string>;
+  outbox!: Table<OutboxItem, string>;
 
   constructor(name = 'jworks-pos') {
     super(name);
@@ -72,6 +73,8 @@ export class JWDB extends Dexie {
       customers: 'id, name, phone, email, updatedAt, _sync',
       vouchers: 'id, code, eventId, updatedAt, _sync',
     });
+    // Emails waiting to go out (device-only).
+    this.version(3).stores({ outbox: 'id, status, saleId, at' });
   }
 }
 

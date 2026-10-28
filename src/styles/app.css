@@ -645,3 +645,9 @@ img { max-width: 100%; display: block; }
 /* Native selects render taller than inputs with the same padding; pin them to the input height. */
 .select { height: 44px; padding-block: 0; line-height: 1.2; }
 .table .select { height: 38px; }
+
+/* emailed-receipt marker in the sales log */
+.email-mark { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; }
+.email-mark.sent { color: var(--good); }
+.email-mark.queued { color: var(--warn); }
+.email-mark.failed { color: var(--bad); }
