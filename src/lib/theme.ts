@@ -16,7 +16,7 @@ export function applyTheme(mode: ThemeMode) {
   if (mode === 'auto') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', mode);
   const dark = mode === 'dark' || (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#161312' : '#F2F5F5');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#181516' : '#F2F5F5');
 }
 
 export function setTheme(mode: ThemeMode) {

@@ -42,6 +42,13 @@ export const usePayouts = (eventId?: string | null) =>
   useLiveQuery(async () => (eventId ? alive(await db.payouts.where('eventId').equals(eventId).toArray()) : alive(await db.payouts.toArray())), [eventId]);
 export const useQuotes = () => useLiveQuery(async () => alive(await db.quotes.toArray()).sort((a, b) => b.createdAt - a.createdAt), []);
 export const useAudit = (limit = 300) => useLiveQuery(async () => (await db.audit.orderBy('at').reverse().limit(limit).toArray()).filter((a) => a.deleted !== 1), [limit]);
+export const useCustomers = () => useLiveQuery(async () => alive(await db.customers.toArray()).sort(byName), []);
+export const useVouchers = () => useLiveQuery(async () => alive(await db.vouchers.toArray()).sort((a, b) => a.code.localeCompare(b.code)), []);
+/** Every sale with a customer on it, from any event (for stamps and history). */
+export const useCustomerSales = () => useLiveQuery(async () => alive(await db.sales.where('customerId').above('').toArray()), []);
+/** Sales that used this voucher code, from any event. */
+export const useVoucherSales = (code: string | null | undefined) =>
+  useLiveQuery(async () => (code ? alive(await db.sales.where('voucherCode').equals(code).toArray()) : []), [code]);
 export const useSettingRows = () => useLiveQuery(async () => (await db.settings.toArray()) as SettingRow[], []);
 export const useLocal = <T,>(key: string, fallback: T) =>
   useLiveQuery(async () => {

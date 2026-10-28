@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import {
-  CalendarDays, Calculator, ChevronDown, ChevronsLeft, ChevronsRight, CloudUpload, History, Layers, LayoutGrid, Menu,
+  CalendarDays, Calculator, ChevronDown, Contact, ChevronsLeft, ChevronsRight, CloudUpload, History, Layers, LayoutGrid, Menu,
   Monitor, Moon, Package, ReceiptText, Settings, ShoppingCart, Store, Sun, UserRound, Users, WifiOff, type LucideIcon,
 } from 'lucide-react';
-import logo from '../assets/brand/logo-128.png';
+import mark from '../assets/brand/mark.png';
+import lockupLight from '../assets/brand/lockup-on-light.png';
+import lockupDark from '../assets/brand/lockup-on-dark.png';
 import { useApp, type Permission } from './AppContext';
 import { useAudit, useEvents, useMembers, usePendingCount, useSettingRows } from '../hooks/data';
 import { setLocal } from '../db/local';
@@ -71,6 +73,7 @@ const GROUPS: NavGroup[] = [
     label: 'People',
     items: [
       { to: '/team', label: 'Team', icon: Users, perm: 'manageTeam' },
+      { to: '/customers', label: 'Customers', icon: Contact, perm: 'customers' },
       { to: '/me', label: 'My page', icon: UserRound, roles: ['designer', 'partner', 'cashier'] },
     ],
   },
@@ -92,6 +95,19 @@ function writePref(key: string, value: string) {
   } catch {
     /* private mode: it just won't be remembered */
   }
+}
+
+/** The JoshWorks lockup from the brand kit (dark text in light mode, white text in dark mode); the mark alone in the narrow rail. */
+function Brand() {
+  return (
+    <span className="brand-lockup">
+      <img className="brand-mark" src={mark} alt="" width={44} height={44} />
+      <span className="brand-words">
+        <img className="lockup only-light" src={lockupLight} alt="JoshWorks" />
+        <img className="lockup only-dark" src={lockupDark} alt="" aria-hidden="true" />
+      </span>
+    </span>
+  );
 }
 
 export function Shell() {
@@ -135,11 +151,7 @@ export function Shell() {
     <div className="shell" data-nav={navMode}>
       <aside className="sidebar">
         <Link to="/" className="side-brand" aria-label="JoshWorks POS home">
-          <img src={logo} alt="" width={36} height={36} />
-          <span className="brand-text">
-            <b>JoshWorks</b>
-            <span>POS</span>
-          </span>
+          <Brand />
         </Link>
         <nav className="side-nav" aria-label="Main">
           {groups.map((g) => (
@@ -169,7 +181,7 @@ export function Shell() {
 
       <header className="topbar">
         <Link to="/" className="topbar-brand" aria-label="JoshWorks POS home">
-          <img src={logo} alt="" width={34} height={34} />
+          <img src={mark} alt="" width={36} height={36} />
         </Link>
         {app.can('viewEvent') || app.can('sell') ? (
           <button type="button" className="event-switch" onClick={() => setEventPicker(true)} aria-label="Change event">

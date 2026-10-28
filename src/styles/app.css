@@ -1,5 +1,6 @@
-/* JoshWorks POS — colors sampled from the logo. Light: soft grey-teal, never pure white.
-   Dark: warm charcoal from the logo. Teal and yellow are accents, never large areas. */
+/* JoshWorks POS — colors from the JoshWorks brand kit, shared with JoshWorks Studio (teal #167D88 / #4FC0D0, yellow #FEC756,
+   ink #231F20). Light: soft grey-teal, never pure white. Dark: the kit's warm ink.
+   Teal and yellow are accents, never large areas. */
 :root {
   color-scheme: light;
   --bg: #F2F5F5;
@@ -8,18 +9,18 @@
   --sunk: #E6EDED;
   --line: #DAE3E3;
   --line-strong: #BCCBCB;
-  --ink: #152122;
+  --ink: #231F20;
   --ink-2: #394748;
   --muted: #5D6C6D;
-  --teal: #087A86;
-  --teal-brand: #1FA3A8;
-  --teal-soft: #DCEFEF;
-  --teal-track: #C9E5E6;
+  --teal: #167D88;
+  --teal-brand: #41ACBA;
+  --teal-soft: #DCEFF1;
+  --teal-track: #C2E5EA;
   --on-teal: #FFFFFF;
-  --yellow: #F7D820;
-  --yellow-hover: #EFCD0C;
-  --yellow-soft: #FFF4BF;
-  --on-yellow: #241D08;
+  --yellow: #FEC756;
+  --yellow-hover: #F5B93C;
+  --yellow-soft: #FFF1D1;
+  --on-yellow: #231F20;
   --warn: #A35E00;
   --warn-soft: #FCEBD2;
   --good: #1E7B45;
@@ -36,6 +37,9 @@
   --f-display: 'Sora', 'Manrope', 'Segoe UI', system-ui, sans-serif;
   --f-ui: 'Manrope', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   --f-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* The letterhead's side bar: teal into gold. */
+  --brand-bar: linear-gradient(180deg, #1A8C99 0%, #4FC0D0 32%, #7FD3E0 58%, #FEC756 58%, #F9BB2E 82%, #E9A517 100%);
+  --brand-glow: radial-gradient(120% 90% at 0% 0%, rgba(65, 172, 186, 0.55), transparent 60%), radial-gradient(90% 80% at 100% 100%, rgba(236, 192, 57, 0.4), transparent 60%);
   --rail-w: 84px;
   --top-h: 60px;
   --bottom-h: 66px;
@@ -44,24 +48,24 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #161312;
-    --surface: #201C1B;
-    --surface-2: #1B1817;
-    --sunk: #2A2523;
+    --bg: #181516;
+    --surface: #231F20;
+    --surface-2: #1E1A1B;
+    --sunk: #2C2728;
     --line: #332D2B;
     --line-strong: #4D4542;
     --ink: #EFEAE5;
     --ink-2: #D2CAC3;
     --muted: #A39990;
-    --teal: #3EC1C5;
-    --teal-brand: #1FA3A8;
-    --teal-soft: #15302F;
-    --teal-track: #1F4443;
+    --teal: #4FC0D0;
+    --teal-brand: #41ACBA;
+    --teal-soft: #14313A;
+    --teal-track: #1E4650;
     --on-teal: #0A1B1C;
-    --yellow: #F5D52A;
-    --yellow-hover: #FFE14A;
-    --yellow-soft: #39310F;
-    --on-yellow: #231C07;
+    --yellow: #FEC756;
+    --yellow-hover: #FFD27A;
+    --yellow-soft: #3A2F14;
+    --on-yellow: #231F20;
     --warn: #F2A948;
     --warn-soft: #3A2A12;
     --good: #62CE91;
@@ -76,24 +80,24 @@
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #161312;
-  --surface: #201C1B;
-  --surface-2: #1B1817;
-  --sunk: #2A2523;
+  --bg: #181516;
+  --surface: #231F20;
+  --surface-2: #1E1A1B;
+  --sunk: #2C2728;
   --line: #332D2B;
   --line-strong: #4D4542;
   --ink: #EFEAE5;
   --ink-2: #D2CAC3;
   --muted: #A39990;
-  --teal: #3EC1C5;
-  --teal-brand: #1FA3A8;
-  --teal-soft: #15302F;
-  --teal-track: #1F4443;
+  --teal: #4FC0D0;
+  --teal-brand: #41ACBA;
+  --teal-soft: #14313A;
+  --teal-track: #1E4650;
   --on-teal: #0A1B1C;
-  --yellow: #F5D52A;
-  --yellow-hover: #FFE14A;
-  --yellow-soft: #39310F;
-  --on-yellow: #231C07;
+  --yellow: #FEC756;
+  --yellow-hover: #FFD27A;
+  --yellow-soft: #3A2F14;
+  --on-yellow: #231F20;
   --warn: #F2A948;
   --warn-soft: #3A2A12;
   --good: #62CE91;
@@ -166,11 +170,12 @@ img { max-width: 100%; display: block; }
 /* Tablets and computers get a sidebar: full with labels from 1280px wide (it can be collapsed), a narrow rail below.
    Phones and short landscape screens get a bottom bar. The menu never scrolls; it tightens as the screen gets shorter. */
 .shell {
-  --nav-w: 88px;
+  --nav-w: 96px;
   display: grid; grid-template-columns: var(--nav-w) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
 }
 .sidebar {
+  position: relative;
   grid-column: 1; grid-row: 1 / -1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
   background: var(--surface); border-right: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -180,11 +185,21 @@ img { max-width: 100%; display: block; }
   min-height: var(--top-h); padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px;
   text-decoration: none; color: var(--ink);
 }
-.side-brand img { width: 36px; height: 36px; border-radius: 10px; }
-.brand-text { display: none; min-width: 0; }
-.brand-text b { display: block; font-family: var(--f-display); font-size: 1.02rem; letter-spacing: -0.01em; line-height: 1.15; }
-.brand-text span { display: block; font-size: 0.72rem; color: var(--muted); font-weight: 700; }
-.side-nav { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 6px 10px; }
+/* The letterhead's teal-to-gold side bar, from the brand kit (as in JoshWorks Studio). */
+.sidebar::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: var(--brand-bar); }
+.side-brand { padding-left: 18px; }
+.brand-lockup { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-mark { width: 44px; height: 44px; object-fit: contain; flex: none; }
+.brand-words { display: none; min-width: 0; }
+.brand-words .lockup { display: block; height: 50px; width: auto; max-width: 186px; object-fit: contain; object-position: left center; }
+.only-dark { display: none !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .only-light { display: none !important; }
+  :root:not([data-theme='light']) .only-dark { display: block !important; }
+}
+:root[data-theme='dark'] .only-light { display: none !important; }
+:root[data-theme='dark'] .only-dark { display: block !important; }
+.side-nav { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 6px 10px 6px 16px; }
 .nav-group { display: grid; gap: 2px; }
 .nav-group + .nav-group { border-top: 1px solid var(--line); padding-top: 6px; }
 .nav-group-label { display: none; }
@@ -196,23 +211,25 @@ img { max-width: 100%; display: block; }
 .nav-item:hover { background: var(--sunk); color: var(--ink); }
 .nav-item.active { background: var(--teal-soft); color: var(--teal); }
 .nav-item.active::before {
-  content: ''; position: absolute; left: -10px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--teal);
+  content: ''; position: absolute; left: -8px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--teal);
 }
 .nav-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-label.full { display: none; }
 .nav-collapse { display: none; }
 
 @media (min-width: 1280px) {
-  .shell[data-nav='full'] { --nav-w: 236px; }
-  .shell[data-nav='full'] .side-brand { justify-content: flex-start; padding-inline: 22px; }
-  .shell[data-nav='full'] .brand-text { display: block; }
-  .shell[data-nav='full'] .side-nav { padding: 8px 12px; gap: 14px; }
+  .shell[data-nav='full'] { --nav-w: 244px; }
+  .shell[data-nav='full'] .side-brand { justify-content: flex-start; padding-inline: 26px 18px; }
+  .shell[data-nav='full'] .brand-words { display: block; }
+  /* The full lockup already carries the mark. */
+  .shell[data-nav='full'] .brand-mark { display: none; }
+  .shell[data-nav='full'] .side-nav { padding: 8px 12px 8px 18px; gap: 14px; }
   .shell[data-nav='full'] .nav-group + .nav-group { border-top: 0; padding-top: 0; }
   .shell[data-nav='full'] .nav-group-label {
     display: block; padding: 0 12px 4px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
   }
   .shell[data-nav='full'] .nav-item { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; font-size: 0.9rem; font-weight: 700; letter-spacing: 0; }
-  .shell[data-nav='full'] .nav-item.active::before { left: -12px; }
+  .shell[data-nav='full'] .nav-item.active::before { left: -10px; }
   .shell[data-nav='full'] .nav-label.full { display: block; }
   .shell[data-nav='full'] .nav-label.short { display: none; }
   .nav-collapse {
@@ -227,17 +244,29 @@ img { max-width: 100%; display: block; }
   .side-nav { gap: 4px; }
   .nav-item { padding-block: 6px; gap: 1px; }
 }
-@media (max-height: 660px) {
-  .nav-item { padding-block: 10px; }
-  .nav-label.short { display: none; }
+/* The wide menu trades its group headings for thin dividers first. */
+@media (max-height: 720px) {
   .shell[data-nav='full'] .side-nav { gap: 6px; }
   .shell[data-nav='full'] .nav-group-label { display: none; }
   .shell[data-nav='full'] .nav-group + .nav-group { border-top: 1px solid var(--line); padding-top: 6px; }
+}
+@media (max-height: 660px) {
+  .nav-item { padding-block: 10px; }
+  .nav-label.short { display: none; }
   .shell[data-nav='full'] .nav-item { min-height: 36px; }
 }
 @media (max-height: 600px) {
   .nav-item { padding-block: 8px; }
   .side-brand { min-height: 52px; }
+}
+@media (max-height: 560px) {
+  .side-nav { gap: 4px; }
+  .nav-item { padding-block: 6px; }
+  .shell[data-nav='full'] .side-nav { gap: 4px; }
+  .shell[data-nav='full'] .nav-item { min-height: 32px; }
+  .nav-group + .nav-group, .shell[data-nav='full'] .nav-group + .nav-group { padding-top: 4px; }
+  .side-brand { min-height: 48px; padding-block: 4px; }
+  .nav-collapse { min-height: 32px; margin-top: 2px; margin-bottom: 6px; }
 }
 
 .topbar {
@@ -250,7 +279,7 @@ img { max-width: 100%; display: block; }
   position: relative; z-index: 20;
 }
 .topbar-brand { display: none; }
-.topbar-brand img { width: 34px; height: 34px; border-radius: 9px; }
+.topbar-brand img { width: 36px; height: 36px; object-fit: contain; }
 .event-switch {
   display: flex; align-items: center; gap: 8px; min-width: 0;
   border: 1px solid var(--line); background: var(--surface); border-radius: 999px;

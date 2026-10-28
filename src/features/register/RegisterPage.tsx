@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowDownUp, CalendarPlus, Gift, Lock, Minus, PackageOpen, PauseCircle, Percent, Plus, ScanLine, ShoppingCart, Trash2, X } from 'lucide-react';
+import { ArrowDownUp, CalendarPlus, Gift, Lock, Minus, PackageOpen, PauseCircle, Percent, Plus, ScanLine, ShoppingCart, Ticket, Trash2, UserPlus, UserRound, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import {
-  useBundleRules, useCategories, useEventProducts, usePaymentMethods, useProducts, useSales, useSessions, useSettingRows, useStockMoves,
+  useBundleRules, useCategories, useCustomerSales, useCustomers, useEventProducts, usePaymentMethods, useProducts, useSales, useSessions, useSettingRows,
+  useStockMoves, useVoucherSales, useVouchers,
 } from '../../hooks/data';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../db/db';
+import { alive, db } from '../../db/db';
 import { settingValue } from '../../db/settings';
 import { Dialog } from '../../components/Dialog';
 import { Badge, Button, Callout, EmptyState, IconButton, Segmented } from '../../components/ui';
 import { Field, MoneyInput, NumberInput, SearchInput, TextInput } from '../../components/form';
 import { peso, percentOf, type Cents } from '../../lib/money';
-import { fmtTime, relativeTime } from '../../lib/time';
+import { fmtTime, relativeTime, todayISO } from '../../lib/time';
 import { uid } from '../../lib/ids';
 import { priceCart, type CartDiscount, type PricedCart } from '../../domain/cart';
 import { onHandByProduct, soldByProduct } from '../../domain/stock';
+import { checkVoucher, loyaltyDiscount, loyaltyState, normalizeCode, rewardText, type LoyaltyState, type VoucherCheck } from '../../domain/loyalty';
 import { effectivePrice, findByCode, isOnSale, setEventProduct, updateProduct } from '../../services/catalog';
 import { completeSale, openSession } from '../../services/sales';
 import { updateEvent } from '../../services/events';
@@ -23,9 +25,10 @@ import { useCart, type CartApi, type CartState } from './useCart';
 import { PaymentDialog } from './PaymentDialog';
 import { ReceiptDialog } from './ReceiptDialog';
 import { CashMoveDialog, CloseRegisterDialog } from './SessionDialogs';
+import { CustomerPicker } from './CustomerPicker';
 import { CameraScanner } from '../../barcode/CameraScanner';
 import { useWedgeScanner } from '../../barcode/useWedgeScanner';
-import type { BusinessSettings, JWEvent, Product, Sale, Session } from '../../db/types';
+import type { BusinessSettings, Customer, JWEvent, LoyaltySettings, Product, Sale, Session } from '../../db/types';
 import './register.css';
 
 export function RegisterPage() {
@@ -82,7 +85,12 @@ function Register({ ev }: { ev: JWEvent }) {
   const settingRows = useSettingRows();
   const held = useLiveQuery(() => db.heldSales.where('eventId').equals(ev.id).toArray(), [ev.id]);
   const business = settingValue<BusinessSettings>(settingRows, 'business');
+  const loyaltyRules = settingValue<LoyaltySettings>(settingRows, 'loyalty');
   const cart = useCart(ev.id);
+  const customers = useCustomers();
+  const customerSales = useCustomerSales();
+  const vouchers = useVouchers();
+  const voucherSales = useVoucherSales(cart.state.voucherCode);
 
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState<string>('all');
@@ -97,13 +105,16 @@ function Register({ ev }: { ev: JWEvent }) {
   const [customOpen, setCustomOpen] = useState(false);
   const [priceFor, setPriceFor] = useState<Product | null>(null);
   const [showUnpriced, setShowUnpriced] = useState(false);
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [voucherOpen, setVoucherOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const session = sessions?.find((s) => s.deviceId === app.device.deviceId && s.closedAt === null);
   const epMap = useMemo(() => new Map((eps ?? []).map((e) => [e.productId, e])), [eps]);
   const sold = useMemo(() => soldByProduct(sales ?? []), [sales]);
   const onHand = useMemo(() => onHandByProduct(moves ?? []), [moves]);
-  const hasStockData = useMemo(() => new Set((moves ?? []).map((m) => m.productId)), [moves]);
+  // Counted means a batch, an opening count or an adjustment; sales alone don't make a product "out of stock".
+  const hasStockData = useMemo(() => new Set((moves ?? []).filter((m) => m.kind !== 'sale' && m.kind !== 'void').map((m) => m.productId)), [moves]);
   const activeRules = useMemo(() => (rules ?? []).filter((r) => r.active === 1 && (r.eventId === null || r.eventId === ev.id)), [rules, ev.id]);
   const eventMethods = useMemo(
     () => ev.paymentMethodIds.map((id) => (methods ?? []).find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m && m.active === 1 && m.deleted !== 1),
@@ -123,14 +134,51 @@ function Register({ ev }: { ev: JWEvent }) {
   const shown = useMemo(() => matching.filter((p) => effectivePrice(p, epMap.get(p.id)) !== null), [matching, epMap]);
   const unpriced = useMemo(() => matching.filter((p) => effectivePrice(p, epMap.get(p.id)) === null), [matching, epMap]);
 
+  const customer = useMemo(() => (customers ?? []).find((c) => c.id === cart.state.customerId) ?? null, [customers, cart.state.customerId]);
+  const loyalty = useMemo(
+    () => (customer && loyaltyRules.enabled ? loyaltyState(customer.id, customerSales ?? [], loyaltyRules) : null),
+    [customer, customerSales, loyaltyRules],
+  );
+  // What the cart costs after bundle deals: vouchers check their minimum spend against it.
+  const base = useMemo(() => {
+    const p = priceCart(cart.state.items, activeRules, []);
+    return p.subtotal - p.bundleTotal;
+  }, [cart.state.items, activeRules]);
+  const voucherCheck = useMemo<VoucherCheck | null>(() => {
+    const code = cart.state.voucherCode;
+    if (!code) return null;
+    return checkVoucher((vouchers ?? []).find((v) => v.code === code), {
+      code,
+      today: todayISO(),
+      eventId: ev.id,
+      base,
+      customerId: cart.state.customerId,
+      sales: voucherSales ?? [],
+    });
+  }, [cart.state.voucherCode, cart.state.customerId, vouchers, voucherSales, base, ev.id]);
+  const rewardOn = cart.state.useReward && !!loyalty && loyalty.rewards > 0;
+
   const discounts: CartDiscount[] = useMemo(
     () => [
       ...ev.discounts.filter((d) => cart.state.presetIds.includes(d.id)).map((d) => ({ id: d.id, label: d.label, kind: d.kind, value: d.kind === 'amount' ? d.value : d.value })),
       ...cart.state.custom,
+      ...(voucherCheck?.ok ? [voucherCheck.discount] : []),
+      ...(rewardOn ? [loyaltyDiscount(loyaltyRules)] : []),
     ],
-    [ev.discounts, cart.state.presetIds, cart.state.custom],
+    [ev.discounts, cart.state.presetIds, cart.state.custom, voucherCheck, rewardOn, loyaltyRules],
   );
   const priced = useMemo(() => priceCart(cart.state.items, activeRules, discounts), [cart.state.items, activeRules, discounts]);
+
+  /** Check a typed code before it goes on the sale. */
+  const checkCode = useCallback(
+    async (typed: string): Promise<VoucherCheck> => {
+      const code = normalizeCode(typed);
+      const [v] = alive(await db.vouchers.where('code').equals(code).toArray());
+      const used = alive(await db.sales.where('voucherCode').equals(code).toArray());
+      return checkVoucher(v, { code, today: todayISO(), eventId: ev.id, base, customerId: cart.state.customerId, sales: used });
+    },
+    [ev.id, base, cart.state.customerId],
+  );
 
   const stockLeft = useCallback(
     (p: Product): number | null => {
@@ -175,7 +223,17 @@ function Register({ ev }: { ev: JWEvent }) {
 
   const pay = async (payments: Parameters<typeof completeSale>[0]['payments']) => {
     if (!session) return;
-    const sale = await completeSale({ eventId: ev.id, session, device: app.device, cashierId: app.member?.id ?? null, priced, payments, note: cart.state.note });
+    const sale = await completeSale({
+      eventId: ev.id,
+      session,
+      device: app.device,
+      cashierId: app.member?.id ?? null,
+      priced,
+      payments,
+      note: cart.state.note,
+      customerId: cart.state.customerId,
+      voucherCode: voucherCheck?.ok ? cart.state.voucherCode : undefined,
+    });
     if (ev.status === 'planning') await updateEvent(ev.id, { status: 'live' });
     cart.clear();
     setPaying(false);
@@ -227,6 +285,12 @@ function Register({ ev }: { ev: JWEvent }) {
       onLine={(k) => setLineKey(k)}
       onCustom={() => setCustomOpen(true)}
       onTogglePreset={togglePreset}
+      customer={customer}
+      loyalty={loyalty}
+      loyaltyRules={loyaltyRules}
+      voucherCheck={voucherCheck}
+      onCustomer={() => setCustomerOpen(true)}
+      onVoucher={() => setVoucherOpen(true)}
     />
   );
 
@@ -378,6 +442,24 @@ function Register({ ev }: { ev: JWEvent }) {
       <LineDialog lineKey={lineKey} onClose={() => setLineKey(null)} cart={cart} />
       <CustomDiscountDialog open={customOpen} onClose={() => setCustomOpen(false)} ev={ev} cart={cart} base={priced.subtotal - priced.bundleTotal} />
       <QuickPriceDialog product={priceFor} ev={ev} onClose={() => setPriceFor(null)} onPriced={(p, price) => cart.add(p, price)} />
+      <CustomerPicker
+        open={customerOpen}
+        onClose={() => setCustomerOpen(false)}
+        eventId={ev.id}
+        onPick={(c) => {
+          cart.setCustomer(c.id);
+          setCustomerOpen(false);
+        }}
+      />
+      <VoucherDialog
+        open={voucherOpen}
+        onClose={() => setVoucherOpen(false)}
+        check={checkCode}
+        onApply={(code) => {
+          cart.setVoucher(code);
+          setVoucherOpen(false);
+        }}
+      />
     </div>
     {closeDialog}
     </>
@@ -394,6 +476,12 @@ function CartPanel({
   onLine,
   onCustom,
   onTogglePreset,
+  customer,
+  loyalty,
+  loyaltyRules,
+  voucherCheck,
+  onCustomer,
+  onVoucher,
 }: {
   priced: PricedCart;
   cart: CartApi;
@@ -404,8 +492,25 @@ function CartPanel({
   onLine: (key: string) => void;
   onCustom: () => void;
   onTogglePreset: (id: string) => void;
+  customer: Customer | null;
+  loyalty: LoyaltyState | null;
+  loyaltyRules: LoyaltySettings;
+  voucherCheck: VoucherCheck | null;
+  onCustomer: () => void;
+  onVoucher: () => void;
 }) {
   const empty = priced.lines.length === 0;
+  const removable = (id: string) => cart.state.custom.some((c) => c.id === id) || id === 'voucher' || id === 'loyalty';
+  const removeDiscount = (id: string) => {
+    if (id === 'voucher') cart.setVoucher('');
+    else if (id === 'loyalty') cart.setUseReward(false);
+    else cart.removeCustom(id);
+  };
+  const stampLine = loyalty
+    ? `${loyalty.balance} stamp${loyalty.balance === 1 ? '' : 's'} · ${
+        loyalty.rewards ? `${loyalty.rewards} reward${loyalty.rewards === 1 ? '' : 's'} ready` : `${loyalty.toNext} more for ${rewardText(loyaltyRules)}`
+      }`
+    : '';
   return (
     <div className="cart">
       <div className="cart-head">
@@ -456,6 +561,37 @@ function CartPanel({
         )}
       </div>
       <div className="cart-foot">
+        <div className="cart-customer">
+          {customer ? (
+            <div className="cust-chip">
+              <UserRound size={18} aria-hidden="true" />
+              <span className="grow">
+                <b>{customer.name}</b>
+                {stampLine ? <span className="muted tiny">{stampLine}</span> : null}
+              </span>
+              <IconButton label={`Remove ${customer.name} from this sale`} size="sm" plain onClick={() => cart.setCustomer(null)}>
+                <X size={16} />
+              </IconButton>
+            </div>
+          ) : (
+            <button type="button" className="chip" onClick={onCustomer}>
+              <UserPlus size={14} /> Customer
+            </button>
+          )}
+          {loyalty && loyalty.rewards > 0 ? (
+            <button type="button" className="chip" aria-pressed={cart.state.useReward} onClick={() => cart.setUseReward(!cart.state.useReward)} disabled={empty}>
+              <Gift size={14} /> Use reward ({rewardText(loyaltyRules)})
+            </button>
+          ) : null}
+        </div>
+        {voucherCheck && !voucherCheck.ok ? (
+          <p className="small bad" role="alert">
+            {voucherCheck.reason}{' '}
+            <button type="button" className="btn link small" onClick={() => cart.setVoucher('')}>
+              Remove the code
+            </button>
+          </p>
+        ) : null}
         {ev.discounts.length || !empty ? (
           <div className="chip-row">
             {ev.discounts.map((d) => (
@@ -466,6 +602,11 @@ function CartPanel({
             <button type="button" className="chip" onClick={onCustom} disabled={empty}>
               <Plus size={14} /> Discount
             </button>
+            {!cart.state.voucherCode ? (
+              <button type="button" className="chip" onClick={onVoucher} disabled={empty}>
+                <Ticket size={14} /> Voucher
+              </button>
+            ) : null}
           </div>
         ) : null}
         <div className="cart-sums">
@@ -486,8 +627,8 @@ function CartPanel({
             <div key={d.id} className="row between small good">
               <span className="row" style={{ gap: 4 }}>
                 {d.label}
-                {cart.state.custom.some((c) => c.id === d.id) ? (
-                  <button type="button" className="icon-btn plain sm" aria-label={`Remove ${d.label}`} onClick={() => cart.removeCustom(d.id)}>
+                {removable(d.id) ? (
+                  <button type="button" className="icon-btn plain sm" aria-label={`Remove ${d.label}`} onClick={() => removeDiscount(d.id)}>
                     <X size={14} />
                   </button>
                 ) : null}
@@ -717,6 +858,62 @@ function QuickPriceDialog({ product, ev, onClose, onPriced }: { product: Product
         <MoneyInput id="qp-price" large value={price} onChange={setPrice} autoFocus onEnter={() => done('event')} />
       </Field>
       <Badge tone="outline">{product.sku || product.barcode}</Badge>
+    </Dialog>
+  );
+}
+
+/** Type a voucher code; it's checked against this cart before it goes on the sale. */
+function VoucherDialog({ open, onClose, check, onApply }: { open: boolean; onClose: () => void; check: (code: string) => Promise<VoucherCheck>; onApply: (code: string) => void }) {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setCode('');
+      setError('');
+    }
+  }, [open]);
+  const apply = async () => {
+    const c = normalizeCode(code);
+    if (!c) return;
+    setBusy(true);
+    const r = await check(c);
+    setBusy(false);
+    if (r.ok) onApply(c);
+    else setError(r.reason);
+  };
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Voucher code"
+      size="sm"
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={apply} disabled={!normalizeCode(code) || busy}>
+            Apply
+          </Button>
+        </>
+      }
+    >
+      <Field label="Code" htmlFor="vc-code" error={error || undefined}>
+        <TextInput
+          id="vc-code"
+          value={code}
+          autoFocus
+          autoCapitalize="characters"
+          autoComplete="off"
+          onChange={(e) => {
+            setCode(e.target.value.toUpperCase());
+            setError('');
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void apply();
+          }}
+          placeholder="e.g. KOMIKET50"
+        />
+      </Field>
     </Dialog>
   );
 }

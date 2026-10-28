@@ -76,7 +76,7 @@ service cloud.firestore {
       match /t_settings/{key} {
         allow read: if isOwner(ws)
           || (isAnyone(ws) && key == 'business')
-          || (isStaff(ws) && key == 'security');
+          || (isStaff(ws) && (key == 'security' || key == 'loyalty'));
         allow write: if isOwner(ws) && (resource == null || notOlder());
       }
 
@@ -86,6 +86,9 @@ service cloud.firestore {
       match /t_bundleRules/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
       match /t_paymentMethods/{id} { allow read: if isStaff(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
       match /t_members/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
+      // Customers' contact details: owner and cashiers only (cashiers add them at the register).
+      match /t_customers/{id} { allow read: if isStaff(ws); allow write: if isStaff(ws) && (resource == null || notOlder()); }
+      match /t_vouchers/{id} { allow read: if isStaff(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
       match /t_eventProducts/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
       match /t_roster/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
       match /t_partnerDeals/{id} { allow read: if isOwner(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }

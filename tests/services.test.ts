@@ -17,6 +17,8 @@ import { saveSpend, setSpendStatus } from '../src/services/spend';
 import { deactivateMember, deleteMember, finalizePayouts, makeOwner, markPayoutPaid, restoreOwner, saveMember } from '../src/services/team';
 import { addToRoster } from '../src/services/events';
 import { runSetup } from '../src/services/setup';
+import { deleteCustomer, saveCustomer, saveVoucher } from '../src/services/customers';
+import { checkVoucher } from '../src/domain/loyalty';
 import type { Product, SalePayment } from '../src/db/types';
 
 const P = toCents;
@@ -124,6 +126,39 @@ describe('selling', () => {
       completeSale({ eventId: ev.id, session, device, cashierId: null, priced, payments: [{ methodId: 'c', name: 'Cash', kind: 'cash', amount: P(50), tendered: P(50), ref: '' }], note: '' }),
     ).rejects.toThrow(/cover/);
     expect(await db.sales.count()).toBe(0);
+  });
+});
+
+describe('customers and vouchers', () => {
+  it('saves who a sale was for and the voucher used, and both travel in backups', async () => {
+    const ev = await createEvent({ name: 'Fair' });
+    const sticker = await createProduct({ name: 'Sticker', price: P(100), trackStock: 0 });
+    const kaye = await saveCustomer({ name: ' Kaye ', phone: '0917 123 4567', email: 'KAYE@Example.com', marketingOk: 1 });
+    expect(kaye).toMatchObject({ name: 'Kaye', phone: '09171234567', email: 'kaye@example.com', marketingOk: 1 });
+    expect(kaye.consentAt).not.toBeNull();
+    const v = await saveVoucher({ code: 'fair 20', kind: 'amount', value: P(20) });
+    expect(v.code).toBe('FAIR20');
+    await expect(saveVoucher({ code: 'FAIR20', kind: 'amount', value: P(10) })).rejects.toThrow(/already/);
+
+    const device = await ensureDevice();
+    const session = await openSession(ev.id, device, P(1000), null);
+    const check = checkVoucher(v, { code: 'FAIR20', today: '2026-10-28', eventId: ev.id, base: P(200), customerId: kaye.id, sales: [] });
+    if (!check.ok) throw new Error(check.reason);
+    const priced = priceCart([{ key: 'k', productId: sticker.id, name: 'Sticker', categoryId: null, unitPrice: P(100), qty: 2, free: false, freeReason: '', designerId: null }], [], [check.discount]);
+    const sale = await completeSale({
+      eventId: ev.id, session, device, cashierId: null, priced, note: '', customerId: kaye.id, voucherCode: 'FAIR20',
+      payments: [{ methodId: 'cash', name: 'Cash', kind: 'cash', amount: P(180), tendered: P(180), ref: '' }],
+    });
+    expect(sale).toMatchObject({ customerId: kaye.id, voucherCode: 'FAIR20', total: P(180) });
+    expect(await db.sales.where('customerId').equals(kaye.id).count()).toBe(1);
+
+    const file = await exportAll();
+    expect(file.tables.customers).toHaveLength(1);
+    expect(file.tables.vouchers).toHaveLength(1);
+
+    // Delete on request wipes the details, not just hides them.
+    await deleteCustomer(kaye.id);
+    expect(await db.customers.get(kaye.id)).toMatchObject({ deleted: 1, name: 'Deleted customer', phone: '', email: '' });
   });
 });
 

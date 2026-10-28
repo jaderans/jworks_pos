@@ -22,6 +22,7 @@ const TeamPage = lazy(() => import('../features/team/TeamPage'));
 const MyPage = lazy(() => import('../features/me/MyPage'));
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 const ActivityPage = lazy(() => import('../features/activity/ActivityPage'));
+const CustomersPage = lazy(() => import('../features/customers/CustomersPage'));
 
 export function App() {
   return (
@@ -66,6 +67,7 @@ function Gate() {
         <Route path="production/*" element={<Guard perm="production"><Lazy><ProductionPage /></Lazy></Guard>} />
         <Route path="calculator/*" element={<Guard perm="calculator"><Lazy><CalculatorPage /></Lazy></Guard>} />
         <Route path="team" element={<Guard perm="manageTeam"><Lazy><TeamPage /></Lazy></Guard>} />
+        <Route path="customers" element={<Guard perm="customers"><Lazy><CustomersPage /></Lazy></Guard>} />
         <Route path="me" element={<Lazy><MyPage /></Lazy>} />
         <Route path="activity" element={<Guard perm="activity"><Lazy><ActivityPage /></Lazy></Guard>} />
         <Route path="settings" element={<Lazy><SettingsPage /></Lazy>} />

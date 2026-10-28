@@ -20,7 +20,7 @@ const SIZES = [
   { name: 'tv-4k', width: 3840, height: 2160 },
 ];
 
-const PAGES = ['/', '/sell', '/sales', '/event', '/events', '/products', '/production', '/calculator', '/team', '/settings', '/activity'];
+const PAGES = ['/', '/sell', '/sales', '/event', '/events', '/products', '/production', '/calculator', '/team', '/customers', '/settings', '/activity'];
 
 async function layoutProblems(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -113,4 +113,25 @@ test('menu fits and nothing scrolls sideways on every device size', async ({ pag
 
   expect(problems).toEqual([]);
   expect(errors).toEqual([]);
+});
+
+test('the menu fits at every window height, wide and narrow', async ({ page }) => {
+  test.setTimeout(180_000);
+  await setupOwner(page, 'Joshua Ranin', '1111');
+  await createEvent(page, 'Komiket Iloilo');
+  await page.goto('/#/');
+  const problems: string[] = [];
+  const sweep = async (label: string, width: number) => {
+    for (let height = 520; height <= 1000; height += 20) {
+      await page.setViewportSize({ width, height });
+      await page.waitForTimeout(40);
+      for (const p of await layoutProblems(page)) problems.push(`${label} ${width}×${height}: ${p}`);
+    }
+  };
+  await sweep('full', 1366);
+  await sweep('rail', 1100);
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.getByRole('button', { name: 'Collapse the menu' }).click();
+  await sweep('collapsed', 1366);
+  expect(problems).toEqual([]);
 });

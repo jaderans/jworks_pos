@@ -1,7 +1,7 @@
 import { db } from './db';
 import { save } from './write';
 import { toCents } from '../lib/money';
-import type { BusinessSettings, CalcSettings, SecuritySettings, SettingRow } from './types';
+import type { BusinessSettings, CalcSettings, LoyaltySettings, SecuritySettings, SettingRow } from './types';
 
 /** Settings shared by every device (they sync). */
 
@@ -14,6 +14,9 @@ export const DEFAULT_BUSINESS: BusinessSettings = {
 };
 
 export const DEFAULT_SECURITY: SecuritySettings = { pinHash: null, pinSalt: null };
+
+/** A stamp per ₱100 spent; 10 stamps take ₱100 off. Off until the owner turns it on. */
+export const DEFAULT_LOYALTY: LoyaltySettings = { enabled: false, pesoPerStamp: toCents(100), stampsForReward: 10, rewardKind: 'amount', rewardValue: toCents(100) };
 
 /** The rates from the old Pricing Calculator's SETTINGS tab ("keep my current rates"). */
 export const SHEET_CALC_SETTINGS: CalcSettings = {
@@ -51,16 +54,19 @@ const DEFAULTS: Record<string, unknown> = {
   business: DEFAULT_BUSINESS,
   security: DEFAULT_SECURITY,
   calc: SHEET_CALC_SETTINGS,
+  loyalty: DEFAULT_LOYALTY,
 };
 
-export async function getSetting<T>(key: 'business' | 'security' | 'calc'): Promise<T> {
+export type SettingKey = 'business' | 'security' | 'calc' | 'loyalty';
+
+export async function getSetting<T>(key: SettingKey): Promise<T> {
   const row = await db.settings.get(key);
   const fallback = DEFAULTS[key] as T;
   if (!row || row.deleted === 1) return fallback;
   return { ...(fallback as object), ...(row.value as object) } as T;
 }
 
-export async function setSetting(key: 'business' | 'security' | 'calc', value: unknown): Promise<void> {
+export async function setSetting(key: SettingKey, value: unknown): Promise<void> {
   const existing = await db.settings.get(key);
   const row: SettingRow = existing
     ? { ...existing, value }
@@ -69,7 +75,7 @@ export async function setSetting(key: 'business' | 'security' | 'calc', value: u
 }
 
 /** Read a settings row synchronously from a live query result. */
-export function settingValue<T>(rows: readonly SettingRow[] | undefined, key: 'business' | 'security' | 'calc'): T {
+export function settingValue<T>(rows: readonly SettingRow[] | undefined, key: SettingKey): T {
   const row = rows?.find((r) => r.id === key && r.deleted !== 1);
   const fallback = DEFAULTS[key] as T;
   return row ? ({ ...(fallback as object), ...(row.value as object) } as T) : fallback;

@@ -245,7 +245,7 @@ export interface SaleLine {
 export interface AppliedDiscount {
   id: string;
   label: string;
-  kind: 'amount' | 'percent' | 'bundle' | 'manual';
+  kind: 'amount' | 'percent' | 'bundle' | 'manual' | 'voucher' | 'loyalty';
   amount: Cents;
 }
 
@@ -279,6 +279,10 @@ export interface Sale extends Syncable {
   voidedAt: number | null;
   voidedBy: string | null;
   voidReason: string;
+  /** The customer this sale is for (loyalty stamps, receipts). Older sales have none. */
+  customerId?: string | null;
+  /** The voucher code used on this sale, uppercase. */
+  voucherCode?: string;
 }
 
 export interface StockMove extends Syncable {
@@ -428,6 +432,52 @@ export interface BusinessSettings {
 export interface SecuritySettings {
   pinHash: string | null;
   pinSalt: string | null;
+}
+
+/** Stamp card: a stamp for every pesoPerStamp spent; enough stamps earn a reward. */
+export interface LoyaltySettings {
+  enabled: boolean;
+  pesoPerStamp: Cents;
+  stampsForReward: number;
+  rewardKind: 'amount' | 'percent';
+  /** Centavos for amount, a percentage for percent. */
+  rewardValue: number;
+}
+
+/** A customer, kept on the devices (and in backups) for receipts, loyalty and orders. */
+export interface Customer extends Syncable {
+  name: string;
+  phone: string;
+  email: string;
+  /** Instagram, Facebook or TikTok handle. */
+  handle: string;
+  /** Agreed to hear about new drops and events (Data Privacy Act consent), and when. */
+  marketingOk: 0 | 1;
+  consentAt: number | null;
+  notes: string;
+  /** The event where they were added. */
+  firstEventId: string | null;
+}
+
+/** A discount code, e.g. KOMIKET50. */
+export interface Voucher extends Syncable {
+  /** Uppercase, no spaces. */
+  code: string;
+  label: string;
+  kind: 'amount' | 'percent';
+  /** Centavos for amount, a percentage for percent. */
+  value: number;
+  /** Spend at least this (after bundles) to use it. */
+  minSpend: Cents;
+  /** ISO dates; '' means no limit. */
+  validFrom: string;
+  validTo: string;
+  /** Only at this event; null means any event. */
+  eventId: string | null;
+  maxUses: number | null;
+  perCustomer: number | null;
+  active: 0 | 1;
+  notes: string;
 }
 
 export interface LaborRole {

@@ -83,3 +83,12 @@
 .denoms { display: grid; gap: 6px; }
 .denom { display: grid; grid-template-columns: 70px minmax(0, 1fr) 90px; gap: 10px; align-items: center; font-weight: 700; }
 .denom .num { text-align: right; }
+
+/* customer on the sale */
+.cart-customer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cust-chip {
+  display: flex; align-items: center; gap: 10px; flex: 1 1 220px; min-width: 0;
+  padding: 6px 6px 6px 12px; border-radius: 12px; background: var(--teal-soft); color: var(--teal);
+}
+.cust-chip .grow { display: grid; min-width: 0; color: var(--ink); line-height: 1.25; }
+.cust-chip b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

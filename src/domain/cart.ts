@@ -21,6 +21,8 @@ export interface CartDiscount {
   value: number;
   /** A discount typed at the register (as opposed to an event preset). */
   manual?: boolean;
+  /** A voucher code or a loyalty reward, recorded as such on the sale. */
+  source?: 'voucher' | 'loyalty';
 }
 
 export interface BundleLike {
@@ -119,7 +121,7 @@ export function priceCart(items: readonly CartItem[], rules: readonly BundleLike
     const amount = Math.max(0, Math.min(raw, remaining));
     if (amount <= 0) continue;
     remaining -= amount;
-    applied2.push({ id: d.id, label: d.label, kind: d.manual ? 'manual' : d.kind, amount });
+    applied2.push({ id: d.id, label: d.label, kind: d.source ?? (d.manual ? 'manual' : d.kind), amount });
   }
   const discountTotal = bundleTotal + sum(applied2.map((d) => d.amount));
 

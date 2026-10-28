@@ -48,9 +48,9 @@ async function load(): Promise<PdfMake> {
   }
 }
 
-export const INK = '#152122';
+export const INK = '#231F20';
 export const MUTED = '#5D6C6D';
-export const TEAL = '#087A86';
+export const TEAL = '#167D88';
 export const LINE = '#DAE3E3';
 export const SOFT = '#EEF4F4';
 export const GOOD = '#1E7B45';

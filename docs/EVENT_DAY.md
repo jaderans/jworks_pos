@@ -10,6 +10,7 @@
 - **Event → Booth spend**: list everything: booth fee, tarps and cards (used up), stands (reusable, spread over events), materials. Mark what's bought and who paid.
 - **Event → Team & payouts**: add who's on duty and their shifts.
 - **Settings → Payment methods**: upload your GCash and Maribank QR images.
+- **Customers → Vouchers**: make the codes you'll post or hand out (e.g. KOMIKET50). **Customers → Stamp card**: turn it on if you're giving stamps.
 - Every phone that will sell: open the app once online, install it, and give it its own register letter (A, B, C…).
 
 ## On the day
@@ -17,8 +18,9 @@
 1. Open the app (no internet needed) and pick the event at the top.
 2. **Sell → Open register** with the float you counted.
 3. Sell. For GCash or bank transfers, type the reference number from the customer's screen and check it arrived before handing over the items.
-4. Money that isn't a sale (water, tricycle, extra coins): **Cash in/out**.
-5. Mistakes: **Sales** → tap the sale → *Void* (with a reason) or *Change payment*. Cashiers need the owner PIN.
+4. Regulars and new fans: tap **Customer** in the cart to add them (ask before ticking "OK to message"). They earn stamps, and **Use reward** appears when one is ready. A code from a post goes in **Voucher**.
+5. Money that isn't a sale (water, tricycle, extra coins): **Cash in/out**.
+6. Mistakes: **Sales** → tap the sale → *Void* (with a reason) or *Change payment*. Cashiers need the owner PIN.
 
 ## Closing
 

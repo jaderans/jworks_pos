@@ -67,6 +67,8 @@ export interface CompleteSaleInput {
   priced: PricedCart;
   payments: SalePayment[];
   note: string;
+  customerId?: string | null;
+  voucherCode?: string;
 }
 
 /** Save a sale and take its items out of stock, in one transaction. */
@@ -96,6 +98,8 @@ export async function completeSale(input: CompleteSaleInput): Promise<Sale> {
       voidedAt: null,
       voidedBy: null,
       voidReason: '',
+      customerId: input.customerId ?? null,
+      voucherCode: input.voucherCode || undefined,
     });
     await db.sales.put(sale);
     const ids = [...new Set(sale.lines.map((l) => l.productId))];

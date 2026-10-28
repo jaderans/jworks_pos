@@ -4,7 +4,10 @@ import { Dialog } from '../../components/Dialog';
 import { Button } from '../../components/ui';
 import { peso } from '../../lib/money';
 import { fmtDateTime } from '../../lib/time';
-import type { BusinessSettings, Sale } from '../../db/types';
+import { useCustomerSales, useCustomers, useSettingRows } from '../../hooks/data';
+import { settingValue } from '../../db/settings';
+import { loyaltyState, rewardText, stampsForSale } from '../../domain/loyalty';
+import type { BusinessSettings, LoyaltySettings, Sale } from '../../db/types';
 
 export function receiptText(sale: Sale, business: BusinessSettings, eventName: string): string {
   const lines = [
@@ -39,6 +42,9 @@ export function ReceiptDialog({
 }) {
   const [qr, setQr] = useState('');
   const [showQr, setShowQr] = useState(false);
+  const customers = useCustomers();
+  const customerSales = useCustomerSales();
+  const rules = settingValue<LoyaltySettings>(useSettingRows(), 'loyalty');
 
   useEffect(() => {
     setShowQr(false);
@@ -50,6 +56,9 @@ export function ReceiptDialog({
 
   if (!sale) return null;
   const cash = sale.payments.find((p) => p.kind === 'cash');
+  const customer = sale.customerId ? customers?.find((c) => c.id === sale.customerId) : undefined;
+  const card = customer && rules.enabled ? loyaltyState(customer.id, customerSales ?? [], rules) : null;
+  const earned = card ? stampsForSale(sale, rules) : 0;
   return (
     <Dialog
       open={!!sale}
@@ -124,6 +133,18 @@ export function ReceiptDialog({
             <span>Change</span>
             <span className="num">{peso(sale.change)}</span>
           </div>
+        ) : null}
+        {customer ? (
+          <p className="small">
+            For <b>{customer.name}</b>
+            {card ? (
+              <span className="muted">
+                {' '}
+                · +{earned} stamp{earned === 1 ? '' : 's'}, {card.balance} on the card
+                {card.rewards ? ` · ${rewardText(rules)} ready next time` : ` · ${card.toNext} more for ${rewardText(rules)}`}
+              </span>
+            ) : null}
+          </p>
         ) : null}
         {sale.note ? <p className="small muted">Note: {sale.note}</p> : null}
         <p className="center small muted">{business.receiptFooter}</p>

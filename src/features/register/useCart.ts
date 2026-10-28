@@ -8,9 +8,15 @@ export interface CartState {
   presetIds: string[];
   custom: CartDiscount[];
   note: string;
+  /** Who the sale is for (stamps, receipts). */
+  customerId: string | null;
+  /** A voucher code typed for this sale, uppercase. */
+  voucherCode: string;
+  /** Trade in stamps for the customer's reward on this sale. */
+  useReward: boolean;
 }
 
-const empty = (): CartState => ({ items: [], presetIds: [], custom: [], note: '' });
+const empty = (): CartState => ({ items: [], presetIds: [], custom: [], note: '', customerId: null, voucherCode: '', useReward: false });
 const key = (eventId: string) => `jwpos-cart-${eventId}`;
 
 function load(eventId: string | null): CartState {
@@ -33,7 +39,7 @@ export function useCart(eventId: string | null) {
   useEffect(() => {
     if (!eventId) return;
     try {
-      if (state.items.length || state.custom.length || state.presetIds.length || state.note) localStorage.setItem(key(eventId), JSON.stringify(state));
+      if (state.items.length || state.custom.length || state.presetIds.length || state.note || state.customerId || state.voucherCode) localStorage.setItem(key(eventId), JSON.stringify(state));
       else localStorage.removeItem(key(eventId));
     } catch {
       /* storage full or blocked; the cart still works in memory */
@@ -70,10 +76,13 @@ export function useCart(eventId: string | null) {
   const addCustom = useCallback((d: CartDiscount) => setState((s) => ({ ...s, custom: [...s.custom, d] })), []);
   const removeCustom = useCallback((id: string) => setState((s) => ({ ...s, custom: s.custom.filter((d) => d.id !== id) })), []);
   const setNote = useCallback((note: string) => setState((s) => ({ ...s, note })), []);
+  const setCustomer = useCallback((customerId: string | null) => setState((s) => ({ ...s, customerId, useReward: customerId ? s.useReward : false })), []);
+  const setVoucher = useCallback((voucherCode: string) => setState((s) => ({ ...s, voucherCode })), []);
+  const setUseReward = useCallback((useReward: boolean) => setState((s) => ({ ...s, useReward })), []);
   const clear = useCallback(() => setState(empty()), []);
   const replace = useCallback((next: CartState) => setState({ ...empty(), ...next }), []);
 
-  return { state, add, setQty, remove, setFree, togglePreset, addCustom, removeCustom, setNote, clear, replace };
+  return { state, add, setQty, remove, setFree, togglePreset, addCustom, removeCustom, setNote, setCustomer, setVoucher, setUseReward, clear, replace };
 }
 
 export type CartApi = ReturnType<typeof useCart>;
