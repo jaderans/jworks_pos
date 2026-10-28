@@ -583,3 +583,99 @@ export interface CalcSettings {
   roles: LaborRole[];
   categories: string[];
 }
+
+// ----- JoshWorks Studio link -----
+// What the POS hands to JoshWorks Studio. Studio reads these rows straight from
+// this device's database (both apps share jaderans.github.io) or from a
+// downloaded file, so the shape is versioned and only ever grows.
+
+/** Money in by payment method; for an event the amounts add up to its sales. */
+export interface StudioFeedMethod {
+  methodId: string;
+  name: string;
+  kind: PayKind | 'other';
+  amount: Cents;
+}
+
+/** One person's money from an event, as the event report works it out. */
+export interface StudioFeedPerson {
+  /** The person's id in the POS. */
+  memberId: string;
+  name: string;
+  email: string;
+  kind: 'staff' | 'royalty' | 'partner';
+  /** Role at the booth, or the deal name for a partner. */
+  role: string;
+  amount: Cents;
+  /** Already paid out in the POS. */
+  paid: Cents;
+  paidAt: number | null;
+  method: string;
+}
+
+export interface StudioEventFeed {
+  type: 'event';
+  v: 1;
+  eventId: string;
+  name: string;
+  venue: string;
+  startDate: string;
+  endDate: string;
+  status: EventStatus;
+  business: string;
+  gross: Cents;
+  transactions: number;
+  itemsSold: number;
+  discounts: Cents;
+  methods: StudioFeedMethod[];
+  /** Production cost of what sold. */
+  cogs: Cents;
+  /** Products sold with no production cost yet. */
+  cogsMissing: number;
+  boothFee: Cents;
+  /** Used-up supplies plus this event's share of reusable assets. */
+  supplies: Cents;
+  people: StudioFeedPerson[];
+  tradingProfit: Cents;
+  joshworksNet: Cents;
+  /** Deposits for orders not yet picked up: money in, not sales yet. */
+  depositsHeld: Cents;
+}
+
+export interface StudioOrderPayment {
+  saleId: string;
+  /** Local date, YYYY-MM-DD. */
+  date: string;
+  name: string;
+  kind: PayKind | 'other';
+  amount: Cents;
+  /** A deposit, or the balance paid at pickup. */
+  stage: 'deposit' | 'pickup';
+}
+
+export interface StudioOrderFeed {
+  type: 'order';
+  v: 1;
+  orderId: string;
+  number: string;
+  eventId: string;
+  eventName: string;
+  customer: { name: string; email: string; phone: string; handle: string };
+  designer: { memberId: string; name: string; email: string } | null;
+  lines: { name: string; qty: number; unitPrice: Cents }[];
+  total: Cents;
+  /** Local date and time, or ''. */
+  dueAt: string;
+  status: OrderStatus;
+  createdAt: number;
+  payments: StudioOrderPayment[];
+  notes: string;
+}
+
+export type StudioFeed = StudioEventFeed | StudioOrderFeed;
+
+/** Id: `event:<eventId>` or `order:<orderId>`. Written by "Send to Studio". */
+export interface StudioFeedRow extends Syncable {
+  feed: StudioFeed;
+  sentBy: string;
+}

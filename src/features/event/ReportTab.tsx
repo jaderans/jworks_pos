@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { FileDown, FileSpreadsheet, FileText, Share2 } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { FileDown, FileSpreadsheet, FileText, Send, Share2 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { useEventData } from './useEventData';
 import { usePayouts, useSettingRows } from '../../hooks/data';
@@ -7,8 +8,11 @@ import { settingValue } from '../../db/settings';
 import { Badge, Button, Callout, Loading } from '../../components/ui';
 import { Select } from '../../components/form';
 import { canShareFiles, downloadBlob, safeFileName } from '../../lib/files';
-import { daysBetween, fmtIsoWeekday, isoDate } from '../../lib/time';
+import { daysBetween, fmtDateTime, fmtIsoWeekday, isoDate } from '../../lib/time';
 import { updateEvent } from '../../services/events';
+import { downloadStudioFile, eventFeed, sendEventToStudio } from '../../services/studio';
+import { STUDIO_FEED_ID, sameFeed } from '../../domain/studioFeed';
+import { db } from '../../db/db';
 import type { BusinessSettings, JWEvent } from '../../db/types';
 
 type Kind = 'report' | 'summary' | 'slips' | 'eod';
@@ -135,6 +139,7 @@ export default function ReportTab({ ev }: { ev: JWEvent }) {
           <Button onClick={() => csv('staff')}>Staff split</Button>
         </div>
       </div>
+      <StudioCard ev={ev} business={business.name} />
       <div className="card">
         <div className="card-head">
           <h2>Finish the event</h2>
@@ -150,6 +155,59 @@ export default function ReportTab({ ev }: { ev: JWEvent }) {
           ) : null}
           {ev.status !== 'live' ? <Button variant="ghost" onClick={() => updateEvent(ev.id, { status: 'live' })}>Reopen</Button> : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Send the event's money to JoshWorks Studio: on this device, or as a file for another. */
+function StudioCard({ ev, business }: { ev: JWEvent; business: string }) {
+  const app = useApp();
+  const id = STUDIO_FEED_ID.event(ev.id);
+  const row = useLiveQuery(() => db.studioFeed.get(id), [id]);
+  const now = useLiveQuery(() => eventFeed(ev.id), [ev.id]);
+  const [busy, setBusy] = useState(false);
+  const sent = row && row.deleted !== 1 ? row : undefined;
+  const changed = !!sent && !!now && !sameFeed(sent.feed, now);
+  const send = async (file: boolean) => {
+    setBusy(true);
+    try {
+      await sendEventToStudio(ev.id, app.member?.name ?? '');
+      if (file) {
+        const n = await downloadStudioFile(business || 'JoshWorks');
+        app.toast(`Studio file saved to Downloads (${n} ${n === 1 ? 'item' : 'items'})`, { tone: 'good' });
+      } else app.toast('Sent. In JoshWorks Studio on this device: Money → Booth events.', { tone: 'good' });
+    } catch (e) {
+      app.toast(e instanceof Error ? e.message : 'Couldn’t send it', { tone: 'bad' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>
+          <Send size={20} className="teal" /> JoshWorks Studio
+        </h2>
+        {sent ? <Badge tone={changed ? 'warn' : 'good'}>{changed ? 'Changed since sent' : 'Sent'}</Badge> : null}
+      </div>
+      <p className="sub">
+        Add this event to Studio’s money: sales by payment method, everyone’s payout (and who’s been paid), the booth fee and supplies, production cost and partner shares. Studio on this
+        device finds it under Money → Booth events. For Studio on another device, download the file and open it there.
+      </p>
+      {sent ? (
+        <p className="muted small">
+          Sent {fmtDateTime(sent.updatedAt)}
+          {sent.sentBy ? ` by ${sent.sentBy}` : ''}.{changed ? ' The numbers have changed since, so send it again.' : ''}
+        </p>
+      ) : null}
+      <div className="actions">
+        <Button variant="primary" disabled={busy || !now} onClick={() => send(false)}>
+          <Send size={18} /> {sent ? 'Send again' : 'Send to Studio'}
+        </Button>
+        <Button disabled={busy || !now} onClick={() => send(true)}>
+          <FileDown size={18} /> Download Studio file
+        </Button>
       </div>
     </div>
   );

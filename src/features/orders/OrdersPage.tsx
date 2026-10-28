@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Ban, ClipboardList, HandCoins, PackageCheck, Pencil, Plus, Trash2, UserRound, Wallet, X } from 'lucide-react';
+import { Ban, ClipboardList, HandCoins, PackageCheck, Pencil, Plus, Send, Trash2, UserRound, Wallet, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import {
   useCustomers, useEventProducts, useMembers, useOrderSales, useOrders, usePaymentMethods, useProducts, useSessions, useSettingRows,
@@ -14,6 +14,7 @@ import { fmtDateTime } from '../../lib/time';
 import { effectivePrice, isOnSale } from '../../services/catalog';
 import { ORDER_STATUS_LABEL, dueText, isOpenOrder, orderMoney, orderTotal, suggestedDeposit, type OrderMoney } from '../../domain/orders';
 import { cancelOrder, createOrder, pickUpOrder, setOrderStatus, takeDeposit, updateOrder } from '../../services/orders';
+import { sendOrderToStudio } from '../../services/studio';
 import { getMailer, isEmail, mailerReady } from '../../email/send';
 import { flushOutbox, queueEmail } from '../../email/outbox';
 import { orderReadyEmail, orderReadyText } from '../../email/templates';
@@ -63,6 +64,15 @@ function Orders({ ev }: { ev: JWEvent }) {
   const [cancelling, setCancelling] = useState<Order | null>(null);
   const [created, setCreated] = useState<Order | null>(null);
   const [receipt, setReceipt] = useState<Sale | null>(null);
+  const owner = app.can('viewProfit');
+  const toStudio = async (o: Order) => {
+    try {
+      await sendOrderToStudio(o.id, app.member?.name ?? '');
+      app.toast(`${o.number} sent to JoshWorks Studio (Money → Booth events)`, { tone: 'good' });
+    } catch (e) {
+      app.toast(e instanceof Error ? e.message : 'Couldn’t send it', { tone: 'bad' });
+    }
+  };
 
   const session = sessions?.find((s) => s.deviceId === app.device.deviceId && s.closedAt === null);
   const eventMethods = useMemo(
@@ -190,6 +200,7 @@ function Orders({ ev }: { ev: JWEvent }) {
                     onStart={() => setOrderStatus(o.id, 'in-progress')}
                     onReady={() => markReady(o)}
                     onHandOver={() => handOver(o)}
+                    onStudio={owner ? () => toStudio(o) : undefined}
                   />
                 ))}
               </section>
@@ -211,6 +222,11 @@ function Orders({ ev }: { ev: JWEvent }) {
                 </span>
                 <Badge tone={o.status === 'picked-up' ? 'good' : undefined}>{ORDER_STATUS_LABEL[o.status]}</Badge>
                 <span className="muted tiny nowrap">{fmtDateTime(o.statusAt)}</span>
+                {owner ? (
+                  <IconButton label={`Send ${o.number} to Studio`} size="sm" plain onClick={() => toStudio(o)}>
+                    <Send size={15} />
+                  </IconButton>
+                ) : null}
               </div>
             ))}
           </div>
@@ -276,7 +292,7 @@ function Orders({ ev }: { ev: JWEvent }) {
 }
 
 function OrderCard({
-  order: o, money: m, customer, maker, otherEvent, onEdit, onCancel, onDeposit, onStart, onReady, onHandOver,
+  order: o, money: m, customer, maker, otherEvent, onEdit, onCancel, onDeposit, onStart, onReady, onHandOver, onStudio,
 }: {
   order: Order;
   money: OrderMoney;
@@ -289,6 +305,8 @@ function OrderCard({
   onStart: () => void;
   onReady: () => void;
   onHandOver: () => void;
+  /** Owner only: send it to JoshWorks Studio as a job. */
+  onStudio?: () => void;
 }) {
   const due = dueText(o.dueAt);
   const late = !!o.dueAt && new Date(o.dueAt).getTime() < Date.now();
@@ -306,6 +324,11 @@ function OrderCard({
           <IconButton label={`Cancel ${o.number}`} size="sm" plain onClick={onCancel}>
             <Ban size={15} />
           </IconButton>
+          {onStudio ? (
+            <IconButton label={`Send ${o.number} to Studio`} size="sm" plain onClick={onStudio}>
+              <Send size={15} />
+            </IconButton>
+          ) : null}
         </div>
       </div>
       <ul className="order-lines">

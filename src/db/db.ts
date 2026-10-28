@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import type {
   AuditEntry, Batch, BundleRule, Category, CostPoint, Customer, EventProduct, HeldSale, JWEvent, LocalRow, Material,
   Member, PartnerDeal, PaymentMethod, Payout, Photo, Product, ProductCost, Quote, RosterEntry, Sale, Session,
-  EventTask, Order, OutboxItem, SettingRow, SpendItem, StockMove, Voucher,
+  EventTask, Order, OutboxItem, SettingRow, SpendItem, StockMove, StudioFeedRow, Voucher,
 } from './types';
 
 /**
@@ -35,6 +35,7 @@ export class JWDB extends Dexie {
   vouchers!: Table<Voucher, string>;
   orders!: Table<Order, string>;
   eventTasks!: Table<EventTask, string>;
+  studioFeed!: Table<StudioFeedRow, string>;
   // Device-only tables (never synced)
   local!: Table<LocalRow, string>;
   photos!: Table<Photo, string>;
@@ -84,6 +85,8 @@ export class JWDB extends Dexie {
     });
     // Each event's checklist and packing list.
     this.version(5).stores({ eventTasks: 'id, eventId, updatedAt, _sync' });
+    // Event and order summaries for JoshWorks Studio.
+    this.version(6).stores({ studioFeed: 'id, updatedAt, _sync' });
   }
 }
 
@@ -93,13 +96,13 @@ export const db = new JWDB();
 export const SYNCED_TABLES = [
   'settings', 'categories', 'members', 'paymentMethods', 'customers', 'vouchers', 'products', 'productCosts', 'costPoints', 'bundleRules',
   'materials', 'events', 'eventProducts', 'eventTasks', 'roster', 'partnerDeals', 'sessions', 'sales', 'stockMoves', 'batches',
-  'spend', 'payouts', 'quotes', 'orders', 'audit',
+  'spend', 'payouts', 'quotes', 'orders', 'studioFeed', 'audit',
 ] as const;
 export type SyncedTableName = (typeof SYNCED_TABLES)[number];
 
 /** Tables only the owner may read (costs, spend, quotes); designers never receive them. */
 export const OWNER_ONLY_TABLES: readonly SyncedTableName[] = [
-  'productCosts', 'costPoints', 'materials', 'batches', 'spend', 'quotes',
+  'productCosts', 'costPoints', 'materials', 'batches', 'spend', 'quotes', 'studioFeed',
 ];
 
 export function syncedTable(name: SyncedTableName): Table<any, string> {

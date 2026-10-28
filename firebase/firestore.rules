@@ -71,6 +71,7 @@ service cloud.firestore {
       match /t_batches/{id} { allow read, write: if isOwner(ws); }
       match /t_spend/{id} { allow read, write: if isOwner(ws); }
       match /t_quotes/{id} { allow read, write: if isOwner(ws); }
+      match /t_studioFeed/{id} { allow read, write: if isOwner(ws); }
 
       // Settings: business details for everyone, the PIN check for cashiers, rates for the owner
       match /t_settings/{key} {

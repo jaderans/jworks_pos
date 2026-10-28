@@ -33,5 +33,6 @@
 3. Second phone without cloud sync: on that phone **Settings → Backup and devices → Share this device's data**; on the main phone **Merge a file**. Merging the same file twice is safe.
 4. **Event → Team & payouts → Save payouts**, then mark each one paid.
 5. **Event → Report**: full PDF, one-page summary for the team chat, payout slips.
-6. **Mark as reported** when everything is filed.
-7. Later: **Events → Compare events** to see which booths were worth it (sales per open hour and per peso of booth fee).
+6. **Event → Report → Send to Studio**, then in JoshWorks Studio: **Money → Booth events → Add to Studio**. The event becomes a job with the sales, everyone's earnings (payouts already made count as paid) and the booth costs. Studio on another device: **Download Studio file** here and **Open a POS file** there. Send it again after any change; Studio shows **Changed in the POS** and **Update** brings it in line.
+7. **Mark as reported** when everything is filed.
+8. Later: **Events → Compare events** to see which booths were worth it (sales per open hour and per peso of booth fee).
