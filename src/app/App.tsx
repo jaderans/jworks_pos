@@ -25,6 +25,7 @@ const MyPage = lazy(() => import('../features/me/MyPage'));
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 const ActivityPage = lazy(() => import('../features/activity/ActivityPage'));
 const CustomersPage = lazy(() => import('../features/customers/CustomersPage'));
+const OrdersPage = lazy(() => import('../features/orders/OrdersPage'));
 
 export function App() {
   return (
@@ -66,6 +67,7 @@ function Gate() {
         <Route index element={<Home />} />
         <Route path="sell" element={<Guard perm="sell"><RegisterPage /></Guard>} />
         <Route path="sales" element={<Guard perm="viewSales"><Lazy><SalesLogPage /></Lazy></Guard>} />
+        <Route path="orders" element={<Guard perm="orders"><Lazy><OrdersPage /></Lazy></Guard>} />
         <Route path="event/*" element={<Guard perm="viewEvent"><Lazy><EventPage /></Lazy></Guard>} />
         <Route path="events" element={<Guard perm="manageEvents"><Lazy><EventsPage /></Lazy></Guard>} />
         <Route path="products" element={<Guard perm="editProducts"><Lazy><ProductsPage /></Lazy></Guard>} />

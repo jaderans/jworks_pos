@@ -89,6 +89,7 @@ service cloud.firestore {
       // Customers' contact details: owner and cashiers only (cashiers add them at the register).
       match /t_customers/{id} { allow read: if isStaff(ws); allow write: if isStaff(ws) && (resource == null || notOlder()); }
       match /t_vouchers/{id} { allow read: if isStaff(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
+      match /t_orders/{id} { allow read: if isStaff(ws); allow write: if isStaff(ws) && (resource == null || notOlder()); }
       match /t_eventProducts/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
       match /t_roster/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
       match /t_partnerDeals/{id} { allow read: if isOwner(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }

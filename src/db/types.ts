@@ -252,7 +252,8 @@ export interface AppliedDiscount {
 export interface SalePayment {
   methodId: string;
   name: string;
-  kind: PayKind;
+  /** 'deposit': the part already paid as an order deposit (not new money). */
+  kind: PayKind | 'deposit';
   /** Amount applied to the sale. */
   amount: Cents;
   /** Cash handed over (cash only). */
@@ -283,6 +284,10 @@ export interface Sale extends Syncable {
   customerId?: string | null;
   /** The voucher code used on this sale, uppercase. */
   voucherCode?: string;
+  /** 'deposit': money taken toward an order. It counts in the drawer, not in sales, until pickup. */
+  kind?: 'deposit';
+  /** The order this deposit or pickup belongs to. */
+  orderId?: string;
 }
 
 export interface StockMove extends Syncable {
@@ -490,6 +495,38 @@ export interface Customer extends Syncable {
   notes: string;
   /** The event where they were added. */
   firstEventId: string | null;
+}
+
+export type OrderStatus = 'new' | 'in-progress' | 'ready' | 'picked-up' | 'cancelled';
+
+export interface OrderLine {
+  /** A catalog product, or null for a custom piece (a commission, a name sticker). */
+  productId: string | null;
+  name: string;
+  categoryId: string | null;
+  designerId: string | null;
+  qty: number;
+  unitPrice: Cents;
+}
+
+/** A pre-order or commission taken at the booth: a deposit now, the rest at pickup. */
+export interface Order extends Syncable {
+  /** Queue number with the device letter, e.g. QA-07, so two phones never clash. */
+  number: string;
+  eventId: string;
+  customerId: string | null;
+  /** As typed when there's no customer record. */
+  customerName: string;
+  contact: string;
+  lines: OrderLine[];
+  /** Who makes it (commissions). */
+  designerId: string | null;
+  /** Local date and time, "2026-10-29T15:00", or ''. */
+  dueAt: string;
+  status: OrderStatus;
+  statusAt: number;
+  notes: string;
+  pickupSaleId: string | null;
 }
 
 /** A discount code, e.g. KOMIKET50. */

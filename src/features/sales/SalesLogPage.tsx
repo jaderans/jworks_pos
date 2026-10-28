@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Mail, ReceiptText } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
@@ -50,11 +50,12 @@ export default function SalesLogPage() {
 
   if (!ev) return <div className="page"><EmptyState title="Pick an event">Sales are listed per event. Choose one from the top bar.</EmptyState></div>;
   if (!sales) return <Loading />;
-  const completed = shown.filter((s) => s.status === 'completed');
+  const completed = shown.filter((s) => s.status === 'completed' && s.kind !== 'deposit');
+  const deposits = shown.filter((s) => s.status === 'completed' && s.kind === 'deposit');
 
   return (
     <div className="page">
-      <PageHeader eyebrow={ev.name} title="Sales log" subtitle={`${completed.length} sale${completed.length === 1 ? '' : 's'} · ${peso(sum(completed.map((s) => s.total)))} shown. Each sale keeps the price it was sold at.`} />
+      <PageHeader eyebrow={ev.name} title="Sales log" subtitle={`${completed.length} sale${completed.length === 1 ? '' : 's'} · ${peso(sum(completed.map((s) => s.total)))} shown${deposits.length ? `, plus ${peso(sum(deposits.map((s) => s.total)))} in order deposits` : ''}. Each sale keeps the price it was sold at.`} />
       <div className="row wrap">
         <div className="grow" style={{ minWidth: 220 }}>
           <SearchInput value={q} onChange={setQ} placeholder="Receipt no., product, reference or note" />
@@ -108,7 +109,7 @@ export default function SalesLogPage() {
                     </div>
                   </td>
                   <td>
-                    {s.lines.map((l) => `${l.qty} × ${l.name}`).join(', ')}
+                    {s.kind === 'deposit' ? <Badge tone="teal">Deposit</Badge> : null} {s.lines.map((l) => `${l.qty} × ${l.name}`).join(', ')}
                     {s.status === 'voided' ? (
                       <div>
                         <Badge tone="bad">Voided</Badge>

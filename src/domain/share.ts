@@ -115,7 +115,7 @@ export function computeShare(input: ShareInput): ShareResult {
   const { event } = input;
   const cfg = event.share;
   const warnings: string[] = [];
-  const completed = input.sales.filter((s) => s.status === 'completed' && s.deleted !== 1);
+  const completed = input.sales.filter((s) => s.status === 'completed' && s.deleted !== 1 && s.kind !== 'deposit');
 
   let gross = 0;
   let itemsSold = 0;
@@ -130,7 +130,8 @@ export function computeShare(input: ShareInput): ShareResult {
     const rev = lineRevenue(sale);
     sale.lines.forEach((line, i) => {
       itemsSold += line.qty;
-      const { cost, backfilled: bf } = input.costOf(line.productId, sale.at);
+      // A custom order piece (not a catalog product) has no production cost to look up.
+      const { cost, backfilled: bf } = line.productId.startsWith('order:') ? { cost: 0, backfilled: false } : input.costOf(line.productId, sale.at);
       let lineCogs = 0;
       if (cost === null) {
         const m = missing.get(line.productId) ?? { productId: line.productId, name: line.name, qty: 0 };

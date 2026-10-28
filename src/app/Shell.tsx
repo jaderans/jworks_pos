@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import {
-  CalendarDays, Calculator, ChevronDown, Contact, ChevronsLeft, ChevronsRight, CloudUpload, History, Layers, LayoutGrid, Menu,
+  CalendarDays, Calculator, ChevronDown, ClipboardList, Contact, ChevronsLeft, ChevronsRight, CloudUpload, History, Layers, LayoutGrid, Menu,
   Monitor, Moon, Package, ReceiptText, Settings, ShoppingCart, Store, Sun, UserRound, Users, WifiOff, type LucideIcon,
 } from 'lucide-react';
 import mark from '../assets/brand/mark.png';
@@ -49,6 +49,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/sell', label: 'Sell', icon: ShoppingCart, perm: 'sell' },
       { to: '/sales', label: 'Sales log', short: 'Sales', icon: ReceiptText, perm: 'viewSales' },
+      { to: '/orders', label: 'Orders', icon: ClipboardList, perm: 'orders' },
     ],
   },
   {

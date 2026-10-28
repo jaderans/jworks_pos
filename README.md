@@ -6,13 +6,14 @@ It's an installable web app: open the link once, tap **Install**, and it runs fr
 
 ## What's in it
 
-The menu is grouped: **Selling** (Sell, Sales log), **Events** (This event, All events), **Studio** (Products, Production, Pricing) and **People** (Team, Customers). Activity sits in the top bar; the profile menu at the top right holds light/dark mode, switching person, My page and Settings. On computers the menu can be collapsed to icons. It never scrolls: it tightens on shorter screens, and phones get a bottom bar. The app works on phones, iPads, laptops, monitors and TVs.
+The menu is grouped: **Selling** (Sell, Sales log, Orders), **Events** (This event, All events), **Studio** (Products, Production, Pricing) and **People** (Team, Customers). Activity sits in the top bar; the profile menu at the top right holds light/dark mode, switching person, My page and Settings. On computers the menu can be collapsed to icons. It never scrolls: it tightens on shorter screens, and phones get a bottom bar. The app works on phones, iPads, laptops, monitors and TVs.
 
 | Screen | What it does |
 |---|---|
 | **Dashboard** | The owner's start screen: greeting, live clock (digital and analog), a month calendar with every event on it, the event in progress (sales today, whole event, break-even), what needs attention (missing prices or costs, registers left open, unpaid payouts, events to report, materials to reorder), latest sales and recent activity. |
 | **Sell** | Product tiles, search, barcode scanning (camera or USB/Bluetooth scanner), automatic bundle deals ("4 for ₱75"), preset and typed discounts, free items, Cash / GCash / Maribank / bank transfer with reference numbers and split payments, held sales, digital receipts with a QR code, opening float, cash in/out, and closing the register with a denomination count. Add the customer to a sale for stamps; type voucher codes. Email the receipt (JoshWorks-branded) from the receipt screen. |
 | **Sales** | Every sale with the price it sold at. Void with a reason (owner PIN), fix a wrong payment method. |
+| **Orders** | Pre-orders and commissions: catalog items or custom pieces, who makes it, ready-by time, a queue number per register (QA-01). A deposit is money in (drawer, GCash) but becomes a sale only at pickup, when the real items come out of stock with their production cost; cancel to refund it (owner PIN) or keep it. "Ready" emails the customer or copies a message for Messenger. Event summary shows deposits held. |
 | **Event** | Summary (sales by hour, payments, top products, break-even, the three layers: Trading, Event result, Cash), **Edit prices** (base vs event prices, bulk +₱/+%/round to ₱5, booth-aware floor and suggested prices), **Stock** (brought, sold, left, sell-through), **Booth spend** (booth fee, used-up items, reusable assets spread over events, materials to stock, receipts photos, reimbursements), **Team & payouts** (roster and shifts, 40/60 split by role weight × hours, minimum guarantee, partner deals fixed or tiered by sell-through, design royalties, mark paid), **Report** (full PDF, one-page summary, payout slips, end of day, CSV). |
 | **Events** | Create, or start from a past event (prices, team, deals carry over). |
 | **Products** | Catalog, categories, bundle deals, design credit and royalties, barcode labels for your A4 sticker paper. |
@@ -50,7 +51,7 @@ npm run dev          # local development server
 npm run build        # type-check and production build into dist/
 npm run preview      # serve the production build (offline caching works here)
 npm test             # unit and service tests (Vitest)
-npm run e2e          # browser tests with the installed Chrome: smoke, two-phone offline dry run, tour, layout on 14 screen sizes, owner recovery, restore, customers, email
+npm run e2e          # browser tests with the installed Chrome: smoke, two-phone offline dry run, tour, layout on 14 screen sizes, owner recovery, restore, customers, email, orders
 npm run emulators    # Firebase Auth + Firestore emulators (needs Java 11+)
 npm run e2e:cloud    # owner, cashier and designer syncing through the emulators
 ```

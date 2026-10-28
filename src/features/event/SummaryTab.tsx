@@ -3,6 +3,8 @@ import { Link } from 'react-router';
 import { CheckCircle2, Circle, Minus, Plus } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { useEventData } from './useEventData';
+import { useOrderSales, useOrders } from '../../hooks/data';
+import { depositsHeld, isOpenOrder } from '../../domain/orders';
 import { Badge, Callout, IconButton, Loading, Stat } from '../../components/ui';
 import { BarList, HourBars, Meter } from '../../components/charts';
 import { peso, formatPct, formatCount } from '../../lib/money';
@@ -14,6 +16,11 @@ import type { JWEvent } from '../../db/types';
 export function SummaryTab({ ev }: { ev: JWEvent }) {
   const app = useApp();
   const d = useEventData(ev);
+  const orders = useOrders();
+  const orderSales = useOrderSales();
+  const eventOrders = (orders ?? []).filter((o) => o.eventId === ev.id);
+  const openOrders = eventOrders.filter(isOpenOrder);
+  const held = depositsHeld(eventOrders, orderSales ?? []);
   const owner = app.can('viewProfit');
   const { metrics: m, share: s } = d;
 
@@ -61,6 +68,9 @@ export function SummaryTab({ ev }: { ev: JWEvent }) {
         <Stat label="Items sold" value={formatCount(m.itemsSold)} hint={m.freeItems ? `${m.freeItems} given free` : undefined} />
         <Stat label="Average sale" value={peso(m.avgSale)} hint={`Biggest ${peso(m.biggestSale)}`} />
         <Stat label="Discounts given" value={peso(m.discounts)} />
+        {eventOrders.length ? (
+          <Stat label="Deposits held" value={peso(held)} hint={`${openOrders.length} open order${openOrders.length === 1 ? '' : 's'}; they become sales at pickup`} />
+        ) : null}
         {m.addOnAttach !== null ? <Stat label="Add-ons per sale" value={m.addOnAttach.toFixed(2)} hint={m.addOnAttach < 0.5 ? 'Below 0.5: remind the team to offer add-ons' : 'Good attach rate'} /> : null}
       </div>
 

@@ -2,12 +2,12 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  ArrowRight, Calculator, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, FileText, Layers, LayoutDashboard, PackageX, ShoppingCart, Tag,
+  ArrowRight, ClipboardList, Calculator, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, FileText, Layers, LayoutDashboard, PackageX, ShoppingCart, Tag,
   TimerReset, Wallet,
 } from 'lucide-react';
 import { alive, db } from '../../db/db';
 import { useApp } from '../../app/AppContext';
-import { useAudit, useEventProducts, useEvents, useMaterials, useMembers, usePayouts, useProductCosts, useProducts, useSales } from '../../hooks/data';
+import { useAudit, useEventProducts, useEvents, useMaterials, useMembers, useOrders, usePayouts, useProductCosts, useProducts, useSales } from '../../hooks/data';
 import { useNow } from '../../hooks/useNow';
 import { useEventData } from '../event/useEventData';
 import { Badge, Button, Loading, Stat } from '../../components/ui';
@@ -373,6 +373,7 @@ function AttentionCard({ ev }: { ev: JWEvent | null }) {
   const payouts = usePayouts();
   const events = useEvents();
   const openSessions = useLiveQuery(async () => alive(await db.sessions.toArray()).filter((s) => s.closedAt === null), []);
+  const orders = useOrders();
   const today = isoDate(useNow(60_000));
 
   const todos = useMemo<Todo[] | null>(() => {
@@ -426,11 +427,17 @@ function AttentionCard({ ev }: { ev: JWEvent | null }) {
         cta: 'Materials',
         go: () => navigate('/production?tab=materials'),
       });
+    const ready = (orders ?? []).filter((o) => o.status === 'ready');
+    const late = (orders ?? []).filter((o) => (o.status === 'new' || o.status === 'in-progress') && o.dueAt && new Date(o.dueAt).getTime() < Date.now());
+    if (late.length)
+      out.push({ key: 'orders-late', icon: <ClipboardList size={18} />, tone: 'warn', text: <><b>{late.length}</b> order{late.length === 1 ? ' is' : 's are'} past the ready-by time ({late.slice(0, 3).map((o) => o.number).join(', ')})</>, cta: 'Orders', go: () => navigate('/orders') });
+    if (ready.length)
+      out.push({ key: 'orders-ready', icon: <ClipboardList size={18} />, tone: 'info', text: <><b>{ready.length}</b> order{ready.length === 1 ? ' is' : 's are'} ready for pickup</>, cta: 'Orders', go: () => navigate('/orders') });
     const noCost = active.filter((p) => (costs.get(p.id)?.current ?? null) === null).length;
     if (noCost)
       out.push({ key: 'cost', icon: <Layers size={18} />, tone: 'info', text: <><b>{noCost}</b> product{noCost === 1 ? ' has' : 's have'} no production cost, so profit reads high</>, cta: 'Add costs', go: () => navigate('/production') });
     return out;
-  }, [products, costs, materials, eventProducts, payouts, events, openSessions, ev, today, app, navigate]);
+  }, [products, costs, materials, eventProducts, payouts, events, openSessions, orders, ev, today, app, navigate]);
 
   return (
     <section className="card dash-attn" aria-labelledby="attn-title">

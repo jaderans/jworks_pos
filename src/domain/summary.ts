@@ -36,10 +36,16 @@ export interface EventMetrics {
   byCategory: { categoryId: string | null; name: string; qty: number; revenue: Cents }[];
   byCashier: { cashierId: string | null; amount: Cents; count: number }[];
   addOnAttach: number | null;
+  /** Order deposits taken (money in, not yet sales). */
+  depositsTaken: Cents;
+  /** Deposits used to pay for picked-up orders. */
+  depositsApplied: Cents;
 }
 
 export function eventMetrics(sales: readonly Sale[], categories: readonly Category[]): EventMetrics {
-  const completed = sales.filter((s) => s.status === 'completed' && s.deleted !== 1);
+  const done = sales.filter((s) => s.status === 'completed' && s.deleted !== 1);
+  // Order deposits are money in (they show under payments) but only become sales at pickup.
+  const completed = done.filter((s) => s.kind !== 'deposit');
   const voided = sales.filter((s) => s.status === 'voided' && s.deleted !== 1).length;
   const catName = new Map(categories.map((c) => [c.id, c.name]));
 
@@ -53,13 +59,18 @@ export function eventMetrics(sales: readonly Sale[], categories: readonly Catego
   let freeItems = 0;
   let addOns = 0;
 
-  for (const s of completed) {
+  for (const s of done) {
     for (const p of s.payments) {
+      // The deposit part of a pickup was already counted when the deposit was taken.
+      if (p.kind === 'deposit') continue;
       const m = methods.get(p.methodId) ?? { methodId: p.methodId, name: p.name, kind: p.kind, amount: 0, count: 0 };
       m.amount += p.amount;
       m.count += 1;
       methods.set(p.methodId, m);
     }
+  }
+
+  for (const s of completed) {
     const h = localHour(s.at);
     const hv = hours.get(h) ?? { amount: 0, count: 0 };
     hv.amount += s.total;
@@ -115,6 +126,8 @@ export function eventMetrics(sales: readonly Sale[], categories: readonly Catego
     byCategory: [...cats.values()].sort((a, b) => b.revenue - a.revenue),
     byCashier: [...cashiers.values()].sort((a, b) => b.amount - a.amount),
     addOnAttach: hasAddOnCategory && completed.length ? addOns / completed.length : null,
+    depositsTaken: sum(done.filter((s) => s.kind === 'deposit').map((s) => s.total)),
+    depositsApplied: sum(completed.flatMap((s) => s.payments.filter((p) => p.kind === 'deposit').map((p) => p.amount))),
   };
 }
 

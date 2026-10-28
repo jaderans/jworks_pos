@@ -158,14 +158,17 @@ export function testEmail(b: BusinessSettings): EmailContent {
 export function daySummaryEmail(b: BusinessSettings, i: ReportInput, day: string, o: { materials?: readonly Material[]; reason: string }): EmailContent {
   const from = dayStart(day);
   const to = dayStart(addDays(day, 1));
-  const daySales = i.sales.filter((x) => x.at >= from && x.at < to);
+  const allToday = i.sales.filter((x) => x.at >= from && x.at < to);
+  const daySales = allToday.filter((x) => x.kind !== 'deposit');
   const done = daySales.filter((x) => x.status === 'completed');
+  const deposits = allToday.filter((x) => x.kind === 'deposit' && x.status === 'completed');
   const gross = sum(done.map((x) => x.total));
   const items = sum(done.flatMap((x) => x.lines.map((l) => l.qty)));
   const discounts = sum(done.map((x) => x.discountTotal));
   const methods = new Map<string, { name: string; amount: number; count: number }>();
-  for (const x of done)
+  for (const x of [...done, ...deposits])
     for (const pm of x.payments) {
+      if (pm.kind === 'deposit') continue;
       const v = methods.get(pm.methodId) ?? { name: pm.name, amount: 0, count: 0 };
       v.amount += pm.amount;
       v.count += 1;
@@ -194,6 +197,7 @@ export function daySummaryEmail(b: BusinessSettings, i: ReportInput, day: string
       ['Average sale', peso(done.length ? Math.round(gross / done.length) : 0)],
       ...(discounts ? ([['Discounts given', peso(discounts)]] as [string, string][]) : []),
       ...(daySales.length > done.length ? ([['Voided', String(daySales.length - done.length)]] as [string, string][]) : []),
+      ...(deposits.length ? ([['Order deposits taken', peso(sum(deposits.map((x) => x.total)))]] as [string, string][]) : []),
       ['Whole event so far', peso(i.metrics.gross)],
     ],
     sections: [
@@ -212,4 +216,22 @@ export function fmtSummaryReason(reason: 'closed' | 'scheduled' | 'catch-up' | '
   if (reason === 'scheduled') return `Sent automatically by JoshWorks POS at ${fmtTime(at)}.`;
   if (reason === 'catch-up') return 'Sent automatically by JoshWorks POS (this day hadn’t been summarized yet).';
   return `Sent from JoshWorks POS on ${fmtDateTime(at)}.`;
+}
+
+/** "Your order is ready": the queue number, what's in it, and the balance to bring. */
+export function orderReadyEmail(b: BusinessSettings, o: { number: string; customerName: string; eventName: string; items: string[]; balance: number }): EmailContent {
+  const name = o.customerName.split(/\s+/)[0];
+  return build(b, `Your order ${o.number} is ready · ${b.name || 'JoshWorks'}`, {
+    preheader: `Pick it up at the ${b.name || 'JoshWorks'} booth.`,
+    heading: 'Your order is ready!',
+    paragraphs: [`Hi ${esc(name || 'there')}, your order is ready for pickup at the ${esc(b.name || 'JoshWorks')} booth at <strong>${esc(o.eventName)}</strong>. Show this email or tell us your order number.`],
+    highlight: { label: 'Order number', value: o.number },
+    rows: [...o.items.map((x) => [x, ''] as [string, string]), ['Balance to pay', o.balance > 0 ? peso(o.balance) : 'Fully paid']],
+  });
+}
+
+/** The same message as plain text, for Messenger, Viber or SMS. */
+export function orderReadyText(b: BusinessSettings, o: { number: string; customerName: string; eventName: string; balance: number }): string {
+  const name = o.customerName.split(/\s+/)[0];
+  return `Hi ${name || 'there'}! Your ${b.name || 'JoshWorks'} order ${o.number} is ready for pickup at our booth at ${o.eventName}.${o.balance > 0 ? ` Balance: ${peso(o.balance)}.` : ' It is fully paid.'} See you!`;
 }

@@ -49,6 +49,10 @@ export const useCustomerSales = () => useLiveQuery(async () => alive(await db.sa
 /** Sales that used this voucher code, from any event. */
 export const useVoucherSales = (code: string | null | undefined) =>
   useLiveQuery(async () => (code ? alive(await db.sales.where('voucherCode').equals(code).toArray()) : []), [code]);
+/** Pre-orders and commissions, newest first. */
+export const useOrders = () => useLiveQuery(async () => alive(await db.orders.toArray()).sort((a, b) => b.createdAt - a.createdAt), []);
+/** Deposits and pickups: every sale tied to an order. */
+export const useOrderSales = () => useLiveQuery(async () => alive(await db.sales.where('orderId').above('').toArray()), []);
 export const useSettingRows = () => useLiveQuery(async () => (await db.settings.toArray()) as SettingRow[], []);
 export const useLocal = <T,>(key: string, fallback: T) =>
   useLiveQuery(async () => {

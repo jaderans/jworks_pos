@@ -20,8 +20,9 @@
 2. **Sell → Open register** with the float you counted.
 3. Sell. For GCash or bank transfers, type the reference number from the customer's screen and check it arrived before handing over the items.
 4. Regulars and new fans: tap **Customer** in the cart to add them (ask before ticking "OK to message"). They earn stamps, and **Use reward** appears when one is ready. A code from a post goes in **Voucher**.
-5. Money that isn't a sale (water, tricycle, extra coins): **Cash in/out**.
-6. Mistakes: **Sales** → tap the sale → *Void* (with a reason) or *Change payment*. Cashiers need the owner PIN.
+5. Custom requests (a name sticker, a commission): **Orders → New order**, take a deposit, give them the order number. When it's done, **Ready** (they get an email or you paste the copied message), then **Hand over** to collect the balance.
+6. Money that isn't a sale (water, tricycle, extra coins): **Cash in/out**.
+7. Mistakes: **Sales** → tap the sale → *Void* (with a reason) or *Change payment*. Cashiers need the owner PIN.
 
 ## Closing
 

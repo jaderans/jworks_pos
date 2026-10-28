@@ -14,8 +14,8 @@ export function onHandByProduct(moves: readonly StockMove[]): Map<string, number
 export function soldByProduct(sales: readonly Sale[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const s of sales) {
-    if (s.status !== 'completed' || s.deleted === 1) continue;
-    for (const l of s.lines) out.set(l.productId, (out.get(l.productId) ?? 0) + l.qty);
+    if (s.status !== 'completed' || s.deleted === 1 || s.kind === 'deposit') continue;
+    for (const l of s.lines) if (!l.productId.startsWith('order:')) out.set(l.productId, (out.get(l.productId) ?? 0) + l.qty);
   }
   return out;
 }

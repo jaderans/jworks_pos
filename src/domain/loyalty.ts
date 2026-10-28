@@ -9,7 +9,7 @@ import type { LoyaltySettings, Sale, Voucher } from '../db/types';
  * files (or the same file twice) can never double them.
  */
 
-const counts = (s: Sale) => s.status === 'completed' && s.deleted !== 1;
+const counts = (s: Sale) => s.status === 'completed' && s.deleted !== 1 && s.kind !== 'deposit';
 
 /** Stamps one sale earns: one for every pesoPerStamp actually paid. */
 export function stampsForSale(sale: Pick<Sale, 'total'>, rules: LoyaltySettings): number {

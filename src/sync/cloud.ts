@@ -25,13 +25,13 @@ import type { AppRole, Member, Syncable } from '../db/types';
 
 const READ: Record<AppRole, readonly SyncedTableName[]> = {
   owner: SYNCED_TABLES.filter((t) => t !== 'settings'),
-  cashier: ['categories', 'members', 'paymentMethods', 'customers', 'vouchers', 'products', 'bundleRules', 'events', 'eventProducts', 'roster', 'sessions', 'sales', 'stockMoves', 'payouts'],
+  cashier: ['categories', 'members', 'paymentMethods', 'customers', 'vouchers', 'products', 'bundleRules', 'events', 'eventProducts', 'roster', 'sessions', 'sales', 'stockMoves', 'payouts', 'orders'],
   designer: ['categories', 'members', 'products', 'bundleRules', 'events', 'eventProducts', 'roster', 'sales', 'payouts'],
   partner: ['categories', 'products', 'events', 'payouts'],
 };
 const WRITE: Record<AppRole, readonly SyncedTableName[]> = {
   owner: SYNCED_TABLES,
-  cashier: ['customers', 'events', 'sessions', 'sales', 'stockMoves', 'audit'],
+  cashier: ['customers', 'orders', 'events', 'sessions', 'sales', 'stockMoves', 'audit'],
   designer: [],
   partner: [],
 };
