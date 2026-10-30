@@ -2,7 +2,7 @@ import { sum, type Cents } from '../lib/money';
 import { isoDate } from '../lib/time';
 import { isRevenueSale, orderTotal } from './orders';
 import type { ReportInput } from '../reports/eventReport';
-import type { Customer, Member, Order, Payout, Sale, StudioEventFeed, StudioFeed, StudioFeedMethod, StudioFeedPerson, StudioOrderFeed, StudioOrderPayment } from '../db/types';
+import type { Customer, Member, Order, Payout, Sale, StudioEventFeed, StudioFeed, StudioFeedMethod, StudioFeedPerson, StudioFeedSpend, StudioOrderFeed, StudioOrderPayment } from '../db/types';
 
 /**
  * The summaries JoshWorks Studio imports: an event's money as the event report
@@ -87,6 +87,26 @@ export function feedPeople(i: Pick<ReportInput, 'share' | 'members' | 'payouts'>
   return [...lines.values()].filter((p) => p.amount > 0 || p.paid > 0);
 }
 
+/**
+ * What the event cost, item by item: the booth fee and used-up supplies bought for
+ * it, and its share of each reusable asset (its own and those carried from
+ * earlier events). They add up to boothFee + supplies.
+ */
+export function feedSpend(i: Pick<ReportInput, 'spend' | 'assetCharges'>): StudioFeedSpend[] {
+  const out: StudioFeedSpend[] = [];
+  // The booth fee first, then what was used up, each in the order it was added.
+  const own = [...i.spend].sort((a, b) => Number(a.type !== 'booth_fee') - Number(b.type !== 'booth_fee') || a.createdAt - b.createdAt);
+  for (const x of own) {
+    if (x.deleted === 1 || x.status !== 'bought' || (x.type !== 'booth_fee' && x.type !== 'consumable')) continue;
+    const amount = Math.round(x.qty * x.unitCost);
+    if (amount) out.push({ id: x.id, type: x.type, name: x.name, qty: x.qty, unitCost: x.unitCost, amount });
+  }
+  for (const c of i.assetCharges) {
+    if (c.amount) out.push({ id: c.item.id, type: 'asset', name: c.item.name, qty: c.item.qty, unitCost: c.item.unitCost, amount: c.amount, total: c.total, of: c.of, index: c.index, paidOff: c.paidOff, boughtFor: c.boughtForName });
+  }
+  return out;
+}
+
 export function buildEventFeed(i: ReportInput, depositSales: readonly Sale[], depositsHeld: Cents): StudioEventFeed {
   const { ev, share, metrics } = i;
   return {
@@ -108,6 +128,7 @@ export function buildEventFeed(i: ReportInput, depositSales: readonly Sale[], de
     cogsMissing: share.cogsMissing.length,
     boothFee: share.costs.boothFee,
     supplies: share.costs.consumables + share.costs.assets,
+    spend: feedSpend(i),
     people: feedPeople(i),
     tradingProfit: share.tradingProfit,
     joshworksNet: share.joshworksNet,

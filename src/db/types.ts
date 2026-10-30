@@ -635,11 +635,31 @@ export interface StudioEventFeed {
   boothFee: Cents;
   /** Used-up supplies plus this event's share of reusable assets. */
   supplies: Cents;
+  /** The booth fee, supplies and asset shares above, one line per item (newer POS versions). */
+  spend?: StudioFeedSpend[];
   people: StudioFeedPerson[];
   tradingProfit: Cents;
   joshworksNet: Cents;
   /** Deposits for orders not yet picked up: money in, not sales yet. */
   depositsHeld: Cents;
+}
+
+/** One cost counted against the event. Materials aren't here: they reach it through the production cost of what sold. */
+export interface StudioFeedSpend {
+  /** The spend item's id. */
+  id: string;
+  type: 'booth_fee' | 'consumable' | 'asset';
+  name: string;
+  qty: number;
+  unitCost: Cents;
+  /** Counted against this event (for a reusable asset, this event's share). */
+  amount: Cents;
+  /** Reusable assets: what it cost, how many events share it, this event's place, paid off so far, and the event it was bought for. */
+  total?: Cents;
+  of?: number;
+  index?: number;
+  paidOff?: Cents;
+  boughtFor?: string;
 }
 
 export interface StudioOrderPayment {

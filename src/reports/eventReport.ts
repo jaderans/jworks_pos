@@ -10,6 +10,7 @@ import { toCSV } from '../lib/files';
 import { SPEND_TYPE_LABEL, SPEND_STATUS_LABEL } from '../services/spend';
 import type { EventProduct, JWEvent, Member, Payout, Product, RosterEntry, Sale, Session, SpendItem } from '../db/types';
 import type { CostLookup } from '../domain/cost';
+import type { AssetCharge } from '../domain/assets';
 
 export interface ReportInput {
   business: string;
@@ -23,6 +24,8 @@ export interface ReportInput {
   roster: RosterEntry[];
   members: Map<string, Member>;
   spend: SpendItem[];
+  /** Reusable assets this event pays toward (its own and carried); see domain/assets. */
+  assetCharges: AssetCharge[];
   payouts: Payout[];
   costOf: (productId: string, at: number) => CostLookup;
 }
@@ -234,18 +237,30 @@ export async function buildEventReport(i: ReportInput) {
   // Booth spend
   content.push(sectionTitle('Booth spend'));
   const spendRows = i.spend.slice().sort((a, b) => a.type.localeCompare(b.type));
+  const chargeOf = new Map(i.assetCharges.map((x) => [x.item.id, x]));
+  const carried = i.assetCharges.filter((x) => x.carried);
   content.push(
     table(
       ['auto', '*', 'auto', 'auto', 'auto', 'auto'],
       [th('Type'), th('Item'), th('Qty × cost', true), th('Total', true), th('Status'), th('Paid by')],
       spendRows.map((x) => [
         td(SPEND_TYPE_LABEL[x.type]),
-        td(x.type === 'asset' ? `${x.name} (1/${x.amortizeEvents} this event)` : x.name),
+        td(x.type === 'asset' ? `${x.name} (${chargeOf.get(x.id)?.index ?? 1}/${chargeOf.get(x.id)?.of ?? x.amortizeEvents} this event)` : x.name),
         td(`${x.qty} × ${peso(x.unitCost)}`, true),
         td(peso(Math.round(x.qty * x.unitCost)), true),
         td(SPEND_STATUS_LABEL[x.status]),
         td(x.paidBy ? `${nameOf(i, x.paidBy)}${x.reimbursed ? ' (paid back)' : ' (to reimburse)'}` : 'JoshWorks'),
-      ]),
+      ]).concat(
+        // Reusable assets bought for earlier events: this event's share.
+        carried.map((x) => [
+          td(SPEND_TYPE_LABEL.asset),
+          td(`${x.item.name} (${x.index}/${x.of}, bought for ${x.boughtForName}${x.paidOff >= x.total ? ', paid off' : ''})`),
+          td(`${peso(x.total)} ÷ ${x.of}`, true),
+          td(peso(x.amount), true),
+          td('Carried'),
+          td('—'),
+        ]),
+      ),
     ),
   );
   content.push(

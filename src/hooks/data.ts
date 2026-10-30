@@ -32,6 +32,8 @@ export const useProductCosts = () => useLiveQuery(async () => new Map(alive(awai
 export const useCostPoints = () => useLiveQuery(async () => alive(await db.costPoints.toArray()), []);
 export const useStockMoves = () => useLiveQuery(async () => alive(await db.stockMoves.toArray()), []);
 export const useBatches = () => useLiveQuery(async () => alive(await db.batches.toArray()).sort((a, b) => b.at - a.at), []);
+/** Every reusable asset bought, for the events still paying them off. */
+export const useAssetSpend = () => useLiveQuery(async () => alive(await db.spend.where('type').equals('asset').toArray()), []);
 export const useSpend = (eventId: string | null | undefined) =>
   useLiveQuery(async () => (eventId ? alive(await db.spend.where('eventId').equals(eventId).toArray()).sort((a, b) => a.createdAt - b.createdAt) : []), [eventId]);
 export const useRoster = (eventId: string | null | undefined) =>

@@ -45,6 +45,7 @@ export default function ReportTab({ ev }: { ev: JWEvent }) {
     roster: d.roster,
     members: d.memberMap,
     spend: d.spend,
+    assetCharges: d.assetCharges,
     payouts,
     costOf: d.costOf,
   });

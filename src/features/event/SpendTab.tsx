@@ -10,6 +10,7 @@ import { Badge, Button, Callout, IconButton, Loading, Stat } from '../../compone
 import { Check, Field, MoneyInput, NumberInput, Select, TextArea, TextInput } from '../../components/form';
 import { peso, sum, type Cents } from '../../lib/money';
 import { deleteSpend, saveSpend, savePhoto, setReimbursed, setSpendStatus, SPEND_STATUS_LABEL, SPEND_TYPE_HINT, SPEND_TYPE_LABEL } from '../../services/spend';
+import { payoffText } from '../../domain/assets';
 import type { JWEvent, SpendItem, SpendStatus, SpendType } from '../../db/types';
 
 const TYPES: SpendType[] = ['booth_fee', 'consumable', 'asset', 'material'];
@@ -34,6 +35,9 @@ export default function SpendTab({ ev }: { ev: JWEvent }) {
   const owedBy = new Map<string, Cents>();
   for (const s of owed) owedBy.set(s.paidBy!, (owedBy.get(s.paidBy!) ?? 0) + line(s));
   const boughtTotal = sum(d.spend.filter((s) => s.status === 'bought').map(line));
+  // Reusable assets: this event's share of each, and those bought for earlier events still being paid off.
+  const chargeOf = new Map(d.assetCharges.map((x) => [x.item.id, x]));
+  const carried = d.assetCharges.filter((x) => x.carried);
 
   return (
     <div className="stack loose">
@@ -50,7 +54,7 @@ export default function SpendTab({ ev }: { ev: JWEvent }) {
         <Stat label="Counted against the event" value={peso(c.total)} hint={ev.share.poolMode === 'supplies' ? 'Booth fee, used up, assets, materials used' : 'Booth fee + used up + assets’ share'} />
         <Stat label="Booth fee" value={peso(c.boothFee)} />
         <Stat label="Used up at the event" value={peso(c.consumables)} />
-        <Stat label="Reusable assets (this event’s share)" value={peso(c.assets)} />
+        <Stat label="Reusable assets (this event’s share)" value={peso(c.assets)} hint={carried.length ? `Includes ${carried.length} carried from earlier events` : undefined} />
         <Stat label="Materials to stock" value={peso(c.materialsBought)} hint="Counted when products sell" />
         <Stat label="Still to buy" value={peso(c.planned)} hint={`${peso(boughtTotal)} bought so far`} />
       </div>
@@ -93,7 +97,7 @@ export default function SpendTab({ ev }: { ev: JWEvent }) {
                         <td>
                           <b>{s.name}</b>
                           <div className="muted tiny">
-                            {t === 'asset' ? `Spread over ${s.amortizeEvents} events · ${peso(Math.round(line(s) / Math.max(1, s.amortizeEvents)))} here` : null}
+                            {t === 'asset' ? (chargeOf.has(s.id) ? `${payoffText(chargeOf.get(s.id)!, peso)} · ${peso(chargeOf.get(s.id)!.amount)} here` : `Spread over ${s.amortizeEvents} events · ${peso(Math.round(line(s) / Math.max(1, s.amortizeEvents)))} each`) : null}
                             {t === 'material' && s.materialId ? `Restocks the materials list${s.stocked ? ' (added)' : ''}` : null}
                             {t === 'material' && ev.share.poolMode === 'supplies' ? ` · ${s.pctUsed}% used` : null}
                             {s.notes ? ` ${s.notes}` : ''}
@@ -151,9 +155,44 @@ export default function SpendTab({ ev }: { ev: JWEvent }) {
                   </tbody>
                 </table>
               </div>
-            ) : (
+            ) : t === 'asset' && carried.length ? null : (
               <p className="muted small">Nothing here yet.</p>
             )}
+            {t === 'asset' && carried.length ? (
+              <div className="stack tight">
+                <h3 className="small strong">Carried from earlier events</h3>
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Item</th>
+                        <th className="hide-phone">Bought for</th>
+                        <th className="r">This event</th>
+                        <th>Paid off</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {carried.map((x) => (
+                        <tr key={x.item.id}>
+                          <td>
+                            <b>{x.item.name}</b>
+                            <div className="muted tiny">
+                              {x.item.qty} × {peso(x.item.unitCost)} = {peso(x.total)}
+                            </div>
+                          </td>
+                          <td className="hide-phone">{x.boughtForName}</td>
+                          <td className="r strong">{peso(x.amount)}</td>
+                          <td>
+                            {x.paidOff >= x.total ? <Badge tone="good">Paid off</Badge> : null} <span className="small">{payoffText(x, peso)}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="muted tiny">Edit these on the event they were bought for. Each event after it pays an equal share until it&rsquo;s paid off.</p>
+              </div>
+            ) : null}
           </section>
         );
       })}

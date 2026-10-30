@@ -2,6 +2,7 @@ import { allocate, percentOf, sum, type Cents } from '../lib/money';
 import { shiftHours } from '../lib/time';
 import { lineRevenue } from './cart';
 import type { CostLookup } from './cost';
+import type { AssetCharge } from './assets';
 import type { EventProduct, JWEvent, Member, PartnerDeal, Product, RosterEntry, Sale, SpendItem } from '../db/types';
 
 export interface ShareInput {
@@ -14,6 +15,8 @@ export interface ShareInput {
   deals: readonly PartnerDeal[];
   eventProducts: readonly EventProduct[];
   spend: readonly SpendItem[];
+  /** Reusable assets this event pays toward, its own and those carried from earlier events (assetCharges). Without it, only its own. */
+  assetCharges?: readonly AssetCharge[];
 }
 
 export interface PartnerLine {
@@ -91,13 +94,14 @@ export function rosterHours(r: RosterEntry): number {
   return Math.round(sum(r.shifts.map((s) => shiftHours(s.start, s.end))) * 100) / 100;
 }
 
-export function eventCosts(spend: readonly SpendItem[], poolMode: JWEvent['share']['poolMode']): EventCosts {
+export function eventCosts(spend: readonly SpendItem[], poolMode: JWEvent['share']['poolMode'], charges?: readonly AssetCharge[]): EventCosts {
   const live = spend.filter((s) => s.deleted !== 1);
   const bought = live.filter((s) => s.status === 'bought');
   const line = (s: SpendItem) => Math.round(s.qty * s.unitCost);
   const boothFee = sum(bought.filter((s) => s.type === 'booth_fee').map(line));
   const consumables = sum(bought.filter((s) => s.type === 'consumable').map(line));
-  const assets = sum(bought.filter((s) => s.type === 'asset').map((s) => Math.round(line(s) / Math.max(1, s.amortizeEvents || 1))));
+  // Reusable assets: this event's shares (carried ones included) when known; otherwise its own first share.
+  const assets = charges ? sum(charges.map((c) => c.amount)) : sum(bought.filter((s) => s.type === 'asset').map((s) => Math.round(line(s) / Math.max(1, s.amortizeEvents || 1))));
   const materialsBought = sum(bought.filter((s) => s.type === 'material').map(line));
   const materialsUsed = sum(bought.filter((s) => s.type === 'material').map((s) => Math.round((line(s) * Math.max(0, Math.min(100, s.pctUsed))) / 100)));
   const planned = sum(live.filter((s) => s.status === 'to_buy').map(line));
@@ -216,7 +220,7 @@ export function computeShare(input: ShareInput): ShareResult {
   const royalties: RoyaltyLine[] = [...royaltyBy.entries()].map(([memberId, r]) => ({ memberId, name: nameOf(memberId), ...r }));
   const royaltyTotal = sum(royalties.map((r) => r.amount));
 
-  const costs = eventCosts(input.spend, cfg.poolMode);
+  const costs = eventCosts(input.spend, cfg.poolMode, input.assetCharges);
   // In old-sheet mode the materials used stand in for production cost.
   const productionCost = cfg.poolMode === 'supplies' ? costs.materialsUsed : cogs;
   const beforePool = cfg.royaltiesBeforePool ? partnerTotal + royaltyTotal : 0;
