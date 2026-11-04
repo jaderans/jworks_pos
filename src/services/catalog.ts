@@ -63,6 +63,31 @@ export async function updateProduct(id: string, changes: Partial<Product>): Prom
   if (changes.name && changes.name !== before.name) await audit('update', 'product', id, `Renamed ${before.name} to ${changes.name}`);
 }
 
+/** The order products show in, here and at the register: each id's position becomes its sort. Writes only what moved. */
+export async function reorderProducts(orderedIds: readonly string[]): Promise<number> {
+  return db.transaction('rw', [db.products, db.audit], async () => {
+    let moved = 0;
+    for (const [i, id] of orderedIds.entries()) {
+      const p = await db.products.get(id);
+      if (!p || p.deleted === 1 || p.sort === i) continue;
+      await patch(db.products, id, { sort: i });
+      moved++;
+    }
+    if (moved) await audit('update', 'product', null, `Arranged the products (${moved} moved)`);
+    return moved;
+  });
+}
+
+/**
+ * The full order after arranging only some of the products (one category):
+ * the arranged ones take the places that group had, everything else stays put.
+ */
+export function mergeOrder(all: readonly string[], arranged: readonly string[]): string[] {
+  const group = new Set(arranged);
+  const next = [...arranged];
+  return all.map((id) => (group.has(id) ? (next.shift() as string) : id));
+}
+
 export async function deleteProduct(id: string): Promise<void> {
   const p = await db.products.get(id);
   await remove(db.products, id);

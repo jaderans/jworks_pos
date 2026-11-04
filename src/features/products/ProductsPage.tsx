@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Barcode, Minus, Package, Pencil, Plus, Printer, Tag, Trash2 } from 'lucide-react';
+import { ArrowUpDown, Barcode, Minus, Package, Pencil, Plus, Printer, Tag, Trash2 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { useBundleRules, useCategories, useEvents, useMembers, useProductCosts, useProducts, useSettingRows, useStockMoves } from '../../hooks/data';
 import { settingValue } from '../../db/settings';
@@ -13,6 +13,7 @@ import {
   createCategory, createProduct, deleteBundleRule, deleteCategory, deleteProduct, nextBarcode, renameCategory, saveBundleRule, updateProduct,
 } from '../../services/catalog';
 import { adjustStock } from '../../services/production';
+import { ArrangeProducts } from './ArrangeProducts';
 import { safeFileName } from '../../lib/files';
 import type { BundleRule, BusinessSettings, Product } from '../../db/types';
 
@@ -48,6 +49,7 @@ function ProductList() {
   const [cat, setCat] = useState('all');
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
   const [labels, setLabels] = useState(false);
+  const [arranging, setArranging] = useState(false);
   const onHand = useMemo(() => onHandByProduct(moves ?? []), [moves]);
   const catName = useMemo(() => new Map((categories ?? []).map((c) => [c.id, c.name])), [categories]);
   const shown = useMemo(() => {
@@ -57,6 +59,10 @@ function ProductList() {
     );
   }, [products, q, cat]);
   if (!products || !categories || !costs || !moves) return <Loading />;
+  if (arranging) {
+    const group = cat === 'all' ? products : products.filter((p) => (cat === 'none' ? !p.categoryId : p.categoryId === cat));
+    return <ArrangeProducts all={products} shown={group} catName={catName} category={cat === 'all' || cat === 'none' ? null : cat} onDone={() => setArranging(false)} />;
+  }
   return (
     <div className="stack">
       <div className="row wrap">
@@ -72,6 +78,15 @@ function ProductList() {
           ))}
           <option value="none">No category</option>
         </Select>
+        <Button
+          onClick={() => {
+            setQ('');
+            setArranging(true);
+          }}
+          disabled={products.length < 2}
+        >
+          <ArrowUpDown size={18} /> Arrange
+        </Button>
         <Button onClick={() => setLabels(true)}>
           <Printer size={18} /> Barcode labels
         </Button>
