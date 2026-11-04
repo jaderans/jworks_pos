@@ -240,31 +240,39 @@ img { max-width: 100%; display: block; }
   .shell[data-nav='full'] .nav-collapse { justify-content: flex-start; margin-inline: 12px; padding-inline: 12px; }
 }
 /* Shorter screens: tighter items, then icons only (each link keeps its name for screen readers).
-   Sized for up to 11 items with the Collapse button; e2e/layout.spec.ts sweeps 520–1000px tall. */
+   Sized for up to 12 items with the Collapse button; e2e/layout.spec.ts sweeps 520–1000px tall. */
 .nav-label.short { line-height: 1.2; }
+/* The collapsed menu on a wide screen also holds the Expand button: keep it small. */
+@media (min-width: 1280px) {
+  .shell:not([data-nav='full']) .nav-collapse { min-height: 30px; margin: 2px 10px 6px; }
+}
+@media (max-height: 800px) {
+  .nav-item { padding-block: 7px; }
+}
 /* The wide menu trades its group headings for thin dividers first. */
 @media (max-height: 780px) {
+  .nav-item { padding-block: 6px; }
   .shell[data-nav='full'] .side-nav { gap: 6px; }
   .shell[data-nav='full'] .nav-group-label { display: none; }
   .shell[data-nav='full'] .nav-group + .nav-group { border-top: 1px solid var(--line); padding-top: 6px; }
 }
 @media (max-height: 760px) {
   .side-nav { gap: 4px; }
-  .nav-item { padding-block: 6px; gap: 1px; }
+  .nav-item { padding-block: 5px; gap: 1px; }
 }
 @media (max-height: 700px) {
-  .nav-item { padding-block: 10px; }
+  .nav-item { padding-block: 9px; }
   .nav-label.short { display: none; }
-  .shell[data-nav='full'] .nav-item { min-height: 36px; }
+  .shell[data-nav='full'] .nav-item { min-height: 34px; }
 }
 @media (max-height: 620px) {
-  .nav-item { padding-block: 8px; }
+  .nav-item { padding-block: 6px; }
   .side-brand { min-height: 52px; }
-  .shell[data-nav='full'] .nav-item { min-height: 34px; }
+  .shell[data-nav='full'] .nav-item { min-height: 30px; }
 }
 @media (max-height: 560px) {
   .side-nav { gap: 4px; }
-  .nav-item { padding-block: 6px; }
+  .nav-item { padding-block: 5px; }
   .shell[data-nav='full'] .side-nav { gap: 4px; }
   .shell[data-nav='full'] .nav-item { min-height: 30px; }
   .nav-group + .nav-group, .shell[data-nav='full'] .nav-group + .nav-group { padding-top: 4px; }
@@ -683,3 +691,4 @@ img { max-width: 100%; display: block; }
 .arrange-name { flex: 1; min-width: 0; display: grid; }
 .arrange-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sticky-actions { position: sticky; bottom: 0; padding: 10px 0; background: var(--bg); justify-content: flex-end; z-index: 3; }
+.card.soft { background: var(--surface-2); box-shadow: none; }

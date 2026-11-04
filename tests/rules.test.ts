@@ -15,4 +15,9 @@ describe('Firestore rules', () => {
     for (const t of ['t_categories', 't_products', 't_bundleRules', 't_eventProducts']) expect(ruleFor(t), t).toContain('allow write: if isTeam(ws)');
     for (const t of ['t_productCosts', 't_costPoints', 't_materials', 't_spend']) expect(ruleFor(t), t).toContain('allow read, write: if isOwner(ws);');
   });
+
+  it('let the whole team work print orders and read the print rate card', () => {
+    expect(ruleFor('t_printOrders')).toContain('allow read: if isTeam(ws); allow write: if isTeam(ws)');
+    expect(rules).toContain("(isTeam(ws) && key == 'printRates')");
+  });
 });

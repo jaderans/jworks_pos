@@ -11,6 +11,7 @@ import { clearLanding, peekLanding } from './landing';
 import { startSync } from '../sync/engine';
 import { startOutbox } from '../email/outbox';
 import { startDailySummary } from '../email/automation';
+import { startPrintFeed } from '../services/printFeed';
 import { JoinPage } from '../features/join/JoinPage';
 
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
@@ -26,6 +27,7 @@ const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 const ActivityPage = lazy(() => import('../features/activity/ActivityPage'));
 const CustomersPage = lazy(() => import('../features/customers/CustomersPage'));
 const OrdersPage = lazy(() => import('../features/orders/OrdersPage'));
+const PrintPage = lazy(() => import('../features/print/PrintPage'));
 const ComparePage = lazy(() => import('../features/events/ComparePage'));
 
 export function App() {
@@ -50,6 +52,7 @@ function Gate() {
     void startSync();
     startOutbox();
     startDailySummary();
+    startPrintFeed();
   }, [done]);
   if (done === null) return <Loading />;
   if (location.pathname === '/join')
@@ -69,6 +72,7 @@ function Gate() {
         <Route path="sell" element={<Guard perm="sell"><RegisterPage /></Guard>} />
         <Route path="sales" element={<Guard perm="viewSales"><Lazy><SalesLogPage /></Lazy></Guard>} />
         <Route path="orders" element={<Guard perm="orders"><Lazy><OrdersPage /></Lazy></Guard>} />
+        <Route path="print" element={<Guard perm="printOrders"><Lazy><PrintPage /></Lazy></Guard>} />
         <Route path="event/*" element={<Guard perm="viewEvent"><Lazy><EventPage /></Lazy></Guard>} />
         <Route path="events" element={<Guard perm="manageEvents"><Lazy><EventsPage /></Lazy></Guard>} />
         <Route path="events/compare" element={<Guard perm="viewProfit"><Lazy><ComparePage /></Lazy></Guard>} />

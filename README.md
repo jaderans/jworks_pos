@@ -14,6 +14,7 @@ The menu is grouped: **Selling** (Sell, Sales log, Orders), **Events** (This eve
 | **Sell** | Product tiles, search, barcode scanning (camera or USB/Bluetooth scanner), automatic bundle deals ("4 for ₱75"), preset and typed discounts, free items, Cash / GCash / Maribank / bank transfer with reference numbers and split payments, held sales, digital receipts with a QR code, opening float, cash in/out, and closing the register with a denomination count. Add the customer to a sale for stamps; type voucher codes. Email the receipt (JoshWorks-branded) from the receipt screen. |
 | **Sales** | Every sale with the price it sold at. Void with a reason (owner PIN), fix a wrong payment method. |
 | **Orders** | Pre-orders and commissions: catalog items or custom pieces, who makes it, ready-by time, a queue number per register (QA-01). A deposit is money in (drawer, GCash) but becomes a sale only at pickup, when the real items come out of stock with their production cost; cancel to refund it (owner PIN) or keep it. "Ready" emails the customer or copies a message for Messenger. Event summary shows deposits held. The owner can send a commission to JoshWorks Studio as a job (customer, maker, price and every payment). |
+| **Printing** | The sticker printing service, priced from the JoshWorks rate card (per A4 sheet by material, die cut and peel-off add-ons, peel-off sheets shared per A4, packaging by size, food labels). Quote and proof, 50% down, print, then pickup or courier with the balance; the quote PDF is on the letterhead with your payment QR codes. Who prints gets a share; JoshWorks Studio books each job (client, payments, the printer's earnings, courier and materials). See [docs/PRINTING.md](docs/PRINTING.md). |
 | **Event** | **Plan** (a checklist in four parts: before, pack, on the day, after; a JoshWorks starter list on every new event, copied from past events; stock to bring and what is still to buy; progress on the Dashboard), Summary (sales by hour, payments, top products, break-even, the three layers: Trading, Event result, Cash), **Edit prices** (base vs event prices, bulk +₱/+%/round to ₱5, booth-aware floor and suggested prices), **Stock** (brought, sold, left, sell-through), **Booth spend** (booth fee, used-up items, reusable assets spread over events (each later event in date order pays its share until the item is paid off, shown as "event 2 of 6 · ₱104 of ₱312 paid off"), materials to stock, receipts photos, reimbursements), **Team & payouts** (roster and shifts, 40/60 split by role weight × hours, minimum guarantee, partner deals fixed or tiered by sell-through, design royalties, mark paid), **Report** (full PDF, one-page summary, payout slips, end of day, CSV, and **Send to Studio**: the event's sales by payment method, everyone's payout and who's been paid, booth costs, production cost and partner shares, for JoshWorks Studio → Money → Booth events on this device, or as a file for Studio on another). |
 | **Events** | Create, or start from a past event (prices, team, deals and the checklist carry over). **Compare events**: up to five side by side, with sales, sales per open hour, sales per peso of booth fee, profit before and after event costs, cash share, sell-through, discounts and best sellers, and the best in each row highlighted. |
 | **Products** | Catalog, categories, bundle deals, design credit and royalties, barcode labels for your A4 sticker paper. **Arrange**: drag products (or use the arrows) into the order they show at the register, all at once or one category at a time; the order syncs to every phone. |
@@ -29,6 +30,7 @@ The menu is grouped: **Selling** (Sell, Sales log, Orders), **Events** (This eve
 ## Day to day
 
 - [Event day checklist](docs/EVENT_DAY.md)
+- [Sticker printing: the process and where the money goes](docs/PRINTING.md)
 - [Turning on cloud sync and inviting the team](docs/CLOUD_SETUP.md)
 
 ## Putting it online (free)
@@ -51,7 +53,7 @@ npm run dev          # local development server
 npm run build        # type-check and production build into dist/
 npm run preview      # serve the production build (offline caching works here)
 npm test             # unit and service tests (Vitest)
-npm run e2e          # browser tests with the installed Chrome: smoke, two-phone offline dry run, tour, layout on 14 screen sizes, owner recovery, restore, customers, email, orders, plan and compare, restock plan, Studio link, documents on the letterhead
+npm run e2e          # browser tests with the installed Chrome: smoke, two-phone offline dry run, tour, layout on 14 screen sizes, owner recovery, restore, customers, email, orders, plan and compare, restock plan, Studio link, documents on the letterhead, arranging products, sticker printing
 npm run emulators    # Firebase Auth + Firestore emulators (needs Java 11+)
 npm run e2e:cloud    # owner, cashier and designer syncing through the emulators
 ```

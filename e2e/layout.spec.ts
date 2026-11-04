@@ -20,7 +20,7 @@ const SIZES = [
   { name: 'tv-4k', width: 3840, height: 2160 },
 ];
 
-const PAGES = ['/', '/sell', '/sales', '/orders', '/event', '/event/plan', '/events', '/events/compare', '/products', '/production', '/production?tab=plan', '/calculator', '/team', '/customers', '/settings', '/activity'];
+const PAGES = ['/', '/sell', '/sales', '/orders', '/print', '/event', '/event/plan', '/events', '/events/compare', '/products', '/production', '/production?tab=plan', '/calculator', '/team', '/customers', '/settings', '/activity'];
 
 async function layoutProblems(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -121,8 +121,10 @@ test('the menu fits at every window height, wide and narrow', async ({ page }) =
   await createEvent(page, 'Komiket Iloilo');
   await page.goto('/#/');
   const problems: string[] = [];
+  // Every 20px, plus 1px above each height step in app.css (the tightest point of each band).
+  const heights = [...new Set([...Array.from({ length: 25 }, (_, i) => 520 + i * 20), 561, 621, 701, 761, 781, 801])].sort((a, b) => a - b);
   const sweep = async (label: string, width: number) => {
-    for (let height = 520; height <= 1000; height += 20) {
+    for (const height of heights) {
       await page.setViewportSize({ width, height });
       await page.waitForTimeout(40);
       for (const p of await layoutProblems(page)) problems.push(`${label} ${width}×${height}: ${p}`);

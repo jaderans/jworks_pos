@@ -2,7 +2,8 @@ import { sum, type Cents } from '../lib/money';
 import { isoDate } from '../lib/time';
 import { isRevenueSale, orderTotal } from './orders';
 import type { ReportInput } from '../reports/eventReport';
-import type { Customer, Member, Order, Payout, Sale, StudioEventFeed, StudioFeed, StudioFeedMethod, StudioFeedPerson, StudioFeedSpend, StudioOrderFeed, StudioOrderPayment } from '../db/types';
+import { lineTotal, printTotals } from './print';
+import type { Customer, Member, Order, Payout, PrintOrder, Sale, StudioEventFeed, StudioFeed, StudioFeedMethod, StudioFeedPerson, StudioFeedSpend, StudioOrderFeed, StudioOrderPayment, StudioPrintFeed } from '../db/types';
 
 /**
  * The summaries JoshWorks Studio imports: an event's money as the event report
@@ -13,6 +14,7 @@ import type { Customer, Member, Order, Payout, Sale, StudioEventFeed, StudioFeed
 export const STUDIO_FEED_ID = {
   event: (eventId: string) => `event:${eventId}`,
   order: (orderId: string) => `order:${orderId}`,
+  print: (printId: string) => `print:${printId}`,
 };
 
 const kindOf = (k: string): StudioFeedMethod['kind'] => (k === 'cash' || k === 'ewallet' || k === 'bank' || k === 'card' ? k : 'other');
@@ -189,3 +191,33 @@ export interface StudioFile {
 }
 
 export const studioFile = (feeds: StudioFeed[], at = Date.now()): StudioFile => ({ app: 'jworks-pos', kind: 'studio-feed', v: 1, exportedAt: at, feeds });
+
+/** A print order for Studio, kept up to date as the order moves along. */
+export function buildPrintFeed(o: { order: PrintOrder; downPct: number; customer: Customer | undefined; printer: Member | undefined }): StudioPrintFeed {
+  const { order } = o;
+  const t = printTotals(order, o.downPct);
+  const c = o.customer;
+  return {
+    type: 'print',
+    v: 1,
+    orderId: order.id,
+    number: order.number,
+    status: order.status,
+    customer: { name: c?.name || order.customerName, email: c?.email ?? '', phone: c?.phone || order.contact, handle: c?.handle ?? '' },
+    printer: o.printer ? { memberId: o.printer.id, name: o.printer.name, email: o.printer.email } : null,
+    printerPct: order.printerPct,
+    printerShare: o.printer ? t.printerShare : 0,
+    lines: order.lines.map((l) => ({ label: l.label, qty: l.qty, unitPrice: l.unitPrice, amount: lineTotal(l) })),
+    subtotal: t.subtotal,
+    delivery: { method: order.delivery.method, courier: order.delivery.courier, fee: t.delivery, tracking: order.delivery.tracking },
+    total: t.total,
+    materialCost: t.materialCost,
+    a4: t.a4,
+    payments: order.payments.map((p) => ({ id: p.id, date: isoDate(p.at), name: p.name, kind: kindOf(p.kind), amount: p.amount, stage: p.stage, ref: p.ref })),
+    createdAt: order.createdAt,
+    approvedAt: order.approvedAt,
+    dueDate: order.dueDate,
+    doneAt: order.doneAt,
+    notes: order.notes,
+  };
+}

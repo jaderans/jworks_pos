@@ -88,3 +88,6 @@ export function useOnline(): boolean {
   }, []);
   return online;
 }
+
+/** Sticker printing jobs, newest first. */
+export const usePrintOrders = () => useLiveQuery(async () => alive(await db.printOrders.toArray()).sort((a, b) => b.createdAt - a.createdAt), []);

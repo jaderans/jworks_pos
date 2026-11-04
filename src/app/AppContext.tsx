@@ -28,17 +28,18 @@ export type Permission =
   | 'settings'
   | 'activity'
   | 'customers'
-  | 'orders';
+  | 'orders'
+  | 'printOrders';
 
 const ALL: Permission[] = [
   'dashboard', 'sell', 'viewSales', 'voidSale', 'viewEvent', 'viewProfit', 'editPrices', 'editProducts', 'viewCosts', 'production', 'spend',
-  'manageEvents', 'manageTeam', 'calculator', 'settings', 'activity', 'customers', 'orders',
+  'manageEvents', 'manageTeam', 'calculator', 'settings', 'activity', 'customers', 'orders', 'printOrders',
 ];
 
 export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
   owner: ALL,
-  cashier: ['sell', 'viewSales', 'viewEvent', 'customers', 'orders', 'editProducts', 'editPrices'],
-  designer: ['viewEvent', 'editProducts', 'editPrices'],
+  cashier: ['sell', 'viewSales', 'viewEvent', 'customers', 'orders', 'printOrders', 'editProducts', 'editPrices'],
+  designer: ['viewEvent', 'printOrders', 'editProducts', 'editPrices'],
   partner: [],
 };
 

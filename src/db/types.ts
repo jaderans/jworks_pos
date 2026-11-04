@@ -692,10 +692,152 @@ export interface StudioOrderFeed {
   notes: string;
 }
 
-export type StudioFeed = StudioEventFeed | StudioOrderFeed;
+/** A sticker printing job for Studio (a 'Sticker Printing' job): the printer's share is their earnings. */
+export interface StudioPrintFeed {
+  type: 'print';
+  v: 1;
+  orderId: string;
+  number: string;
+  status: PrintStatus;
+  customer: { name: string; email: string; phone: string; handle: string };
+  printer: { memberId: string; name: string; email: string } | null;
+  printerPct: number;
+  /** The printer's share of the print work, worked out in the POS. */
+  printerShare: Cents;
+  lines: { label: string; qty: number; unitPrice: Cents; amount: Cents }[];
+  subtotal: Cents;
+  delivery: { method: 'pickup' | 'courier'; courier: string; fee: Cents; tracking: string };
+  total: Cents;
+  /** Materials at the rate card's cost per sheet; 0 when costs aren't set. */
+  materialCost: Cents;
+  a4: number;
+  payments: { id: string; date: string; name: string; kind: PayKind | 'other'; amount: Cents; stage: 'down' | 'balance'; ref: string }[];
+  createdAt: number;
+  approvedAt: number | null;
+  dueDate: string;
+  doneAt: number | null;
+  notes: string;
+}
 
-/** Id: `event:<eventId>` or `order:<orderId>`. Written by "Send to Studio". */
+export type StudioFeed = StudioEventFeed | StudioOrderFeed | StudioPrintFeed;
+
+/** Id: `event:<eventId>`, `order:<orderId>` or `print:<printOrderId>`. Events and orders: "Send to Studio"; print orders: kept up to date by themselves. */
 export interface StudioFeedRow extends Syncable {
   feed: StudioFeed;
   sentBy: string;
+}
+
+// ----- Sticker printing service -----
+
+/** The printing rate card (Settings key 'printRates'), from the JoshWorks Sticker Printing rate sheet. */
+export interface PrintMaterial {
+  key: string;
+  group: 'Standard' | 'Premium' | 'Paper';
+  name: string;
+  /** Per A4 sheet, kiss cut included. */
+  price: Cents;
+  /** What one sheet costs the studio (paper, laminate, ink), for Studio's expenses. null = not set. */
+  cost: Cents | null;
+}
+export interface PrintCut {
+  key: string;
+  name: string;
+  /** Added to the sheet price. */
+  price: Cents;
+}
+export type PackSize = 'small' | 'medium' | 'large';
+/** A peel-off sheet size and how many are cut from one A4. */
+export interface PeelSize {
+  key: string;
+  name: string;
+  perA4: number;
+  /** The packaging size it fits, if any. */
+  pack: PackSize | null;
+}
+export interface PackOption {
+  key: string;
+  name: string;
+  small: Cents;
+  medium: Cents;
+  large: Cents;
+}
+export interface PrintRates {
+  materials: PrintMaterial[];
+  cuts: PrintCut[];
+  peelSizes: PeelSize[];
+  packs: PackOption[];
+  /** The size guide: how many fit on one A4 sheet. */
+  stickerSizes: { name: string; perA4: number }[];
+  minSheets: number;
+  minPacks: number;
+  leadDays: { min: number; max: number };
+  /** Down payment to start, % of the total. */
+  downPct: number;
+  /** The printer's share of the print work (before the courier fee), % — their earnings in Studio. */
+  printerPct: number;
+}
+
+export type PrintStatus = 'quote' | 'printing' | 'ready' | 'done' | 'cancelled';
+
+export interface PrintLine {
+  kind: 'sheets' | 'peel' | 'pack' | 'custom';
+  label: string;
+  /** A4 sheets, peel-off sheets, packs or pieces. */
+  qty: number;
+  unitPrice: Cents;
+  /** Studio's cost per unit when known (materials), for Studio's expenses. */
+  unitCost: Cents | null;
+  /** A4 sheets this line prints. */
+  a4: number;
+  /** Rate-card picks, to edit the line again. */
+  material?: string;
+  cut?: string;
+  size?: string;
+  pack?: string;
+  packSize?: PackSize;
+}
+
+export interface PrintPayment {
+  id: string;
+  at: number;
+  methodId: string;
+  name: string;
+  kind: PayKind;
+  amount: Cents;
+  ref: string;
+  stage: 'down' | 'balance';
+  by: string | null;
+}
+
+export interface PrintDelivery {
+  method: 'pickup' | 'courier';
+  courier: string;
+  address: string;
+  /** Charged to the customer; the studio pays the courier. */
+  fee: Cents;
+  tracking: string;
+}
+
+/** A sticker printing job: quote and proof, 50% down, print, then pickup or courier with the balance. */
+export interface PrintOrder extends Syncable {
+  /** PA-001: the device letter keeps two phones from giving the same number. */
+  number: string;
+  customerId: string | null;
+  customerName: string;
+  contact: string;
+  lines: PrintLine[];
+  delivery: PrintDelivery;
+  status: PrintStatus;
+  statusAt: number;
+  proofAt: number | null;
+  approvedAt: number | null;
+  /** Ready by, from the approval date and the lead time (working days). */
+  dueDate: string;
+  printerId: string | null;
+  printerPct: number;
+  payments: PrintPayment[];
+  /** Where the customer's files are (Drive or Messenger link). */
+  files: string;
+  notes: string;
+  doneAt: number | null;
 }

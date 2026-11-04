@@ -1,6 +1,7 @@
 import { db } from './db';
 import { save } from './write';
 import { toCents } from '../lib/money';
+import { DEFAULT_PRINT_RATES } from '../domain/print';
 import type { BusinessSettings, CalcSettings, LoyaltySettings, SecuritySettings, SettingRow } from './types';
 
 /** Settings shared by every device (they sync). */
@@ -55,9 +56,10 @@ const DEFAULTS: Record<string, unknown> = {
   security: DEFAULT_SECURITY,
   calc: SHEET_CALC_SETTINGS,
   loyalty: DEFAULT_LOYALTY,
+  printRates: DEFAULT_PRINT_RATES,
 };
 
-export type SettingKey = 'business' | 'security' | 'calc' | 'loyalty';
+export type SettingKey = 'business' | 'security' | 'calc' | 'loyalty' | 'printRates';
 
 export async function getSetting<T>(key: SettingKey): Promise<T> {
   const row = await db.settings.get(key);
