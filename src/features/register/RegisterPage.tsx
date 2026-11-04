@@ -27,7 +27,7 @@ import { PaymentDialog } from './PaymentDialog';
 import { ReceiptDialog } from './ReceiptDialog';
 import { CashMoveDialog, CloseRegisterDialog } from './SessionDialogs';
 import { CustomerPicker } from './CustomerPicker';
-import { PriceReview } from './PriceReview';
+import { DealsReview, PriceReview } from './PriceReview';
 import { CameraScanner } from '../../barcode/CameraScanner';
 import { useWedgeScanner } from '../../barcode/useWedgeScanner';
 import type { BusinessSettings, Customer, JWEvent, LoyaltySettings, Product, Sale, Session } from '../../db/types';
@@ -665,20 +665,24 @@ function OpenRegister({ ev }: { ev: JWEvent }) {
     setBusy(false);
   };
   return (
-    <div className="page open-reg">
-      <div className="card pad-lg stack open-reg-card">
-        <span className="eyebrow">{ev.name}</span>
-        <h1>Open register {app.device.letter}</h1>
-        <p className="muted">Check the prices, then count the cash you&rsquo;re starting with. It&rsquo;s the float the drawer is checked against when you close.</p>
-        {ev.status === 'planning' ? <Callout tone="info">Opening the register marks {ev.name} as Live.</Callout> : null}
-        <Field label="Opening cash float" htmlFor="float">
-          <MoneyInput id="float" large value={float} onChange={setFloat} onEnter={open} autoFocus />
-        </Field>
-        <Button variant="primary" size="lg" disabled={busy} onClick={open}>
-          Open register
-        </Button>
+    // /sell turns off page scrolling for the register's own panels, so this screen scrolls itself.
+    <div className="open-reg-scroll">
+      <div className="page open-reg">
+        <div className="card pad-lg stack open-reg-card">
+          <span className="eyebrow">{ev.name}</span>
+          <h1>Open register {app.device.letter}</h1>
+          <p className="muted">Check the prices, then count the cash you&rsquo;re starting with. It&rsquo;s the float the drawer is checked against when you close.</p>
+          {ev.status === 'planning' ? <Callout tone="info">Opening the register marks {ev.name} as Live.</Callout> : null}
+          <Field label="Opening cash float" htmlFor="float">
+            <MoneyInput id="float" large value={float} onChange={setFloat} onEnter={open} autoFocus />
+          </Field>
+          <Button variant="primary" size="lg" disabled={busy} onClick={open}>
+            Open register
+          </Button>
+        </div>
+        <PriceReview ev={ev} />
+        <DealsReview ev={ev} />
       </div>
-      <PriceReview ev={ev} />
     </div>
   );
 }

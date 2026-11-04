@@ -99,10 +99,54 @@
 .email-receipt { display: grid; gap: 8px; }
 .email-receipt .row .input { flex: 1; min-width: 0; }
 
-/* Open register: the price list to check first */
+/* Open register: the price list to check first. /sell's main doesn't scroll, so this screen does; the price
+   list's search and categories stay at the top while it scrolls. */
+.open-reg-scroll { height: 100%; overflow-y: auto; overflow-x: hidden; }
 .open-reg { display: grid; gap: 16px; align-items: start; }
-@media (min-width: 960px) {
-  .open-reg { grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); }
-  .open-reg-card { position: sticky; top: 0; }
+.price-review { display: flex; flex-direction: column; gap: 0; padding: 0; }
+.price-head { display: grid; gap: 8px; padding: 16px 18px 0; }
+.price-tools {
+  display: grid; gap: 10px; padding: 10px 18px 12px; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 2; background: var(--surface);
 }
-.price-row .price-now { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.price-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 0.88rem; color: var(--muted); }
+.price-facts b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.chip-count { font-size: 0.8em; opacity: 0.65; font-variant-numeric: tabular-nums; }
+.price-body { display: grid; gap: 18px; align-content: start; padding: 14px 18px 18px; }
+.price-group { display: grid; gap: 8px; }
+.price-group h3 { display: flex; align-items: baseline; gap: 8px; }
+.price-group h3 .muted { font-size: 0.85rem; font-weight: 700; }
+.price-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 8px; }
+.price-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-width: 0;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2);
+}
+.price-row.none { border-style: dashed; border-color: var(--warn); }
+.price-name { display: grid; gap: 2px; min-width: 0; }
+.price-name b { line-height: 1.25; overflow-wrap: anywhere; }
+.price-name .mono { font-size: 0.74rem; color: var(--muted); overflow-wrap: anywhere; }
+.price-name .deal { font-size: 0.76rem; font-weight: 800; color: var(--teal); }
+.price-now { display: grid; justify-items: end; white-space: nowrap; }
+.price-now b { font-size: 1.1rem; font-weight: 800; }
+.price-now s { font-size: 0.84rem; font-weight: 700; color: var(--muted); }
+@media (max-width: 899px) {
+  .price-head { padding: 14px 14px 0; }
+  .price-tools { padding: 8px 14px 10px; }
+  .price-tools .chip-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -14px; padding-inline: 14px; }
+  .price-tools .chip { flex: none; }
+  .price-body { padding: 12px 14px 14px; }
+}
+/* Side by side: the open card with the deals under it, and the price list beside them. */
+@media (min-width: 960px) {
+  .open-reg { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .price-review { grid-column: 2; grid-row: 1 / span 2; }
+  .deals-review { grid-column: 1; grid-row: 2; }
+}
+/* Tall enough for one screen: each side scrolls on its own and the open button never moves. */
+@media (min-width: 960px) and (min-height: 600px) {
+  .open-reg-scroll { overflow: hidden; }
+  .open-reg { height: 100%; padding-bottom: 22px; grid-template-rows: auto minmax(0, 1fr); }
+  .price-review { max-height: 100%; }
+  .price-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .deals-review { max-height: 100%; overflow-y: auto; }
+}

@@ -115,6 +115,30 @@ test('menu fits and nothing scrolls sideways on every device size', async ({ pag
   expect(errors).toEqual([]);
 });
 
+test('before the register opens, the price list scrolls to its last product on every device size', async ({ page }) => {
+  test.setTimeout(240_000);
+  await setupOwner(page, 'Joshua Ranin', '1111');
+  await createEvent(page, 'Komiket Iloilo');
+  await setEventPrice(page, 'Cat Meme (Solo)', 25);
+  const problems: string[] = [];
+  for (const size of SIZES) {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await page.goto('/#/');
+    await page.goto('/#/sell');
+    const rows = page.getByRole('region', { name: 'Prices' }).locator('.price-row');
+    await rows.first().waitFor();
+    for (const p of await layoutProblems(page)) problems.push(`${size.name}: ${p}`);
+    if (['phone', 'laptop', 'monitor'].includes(size.name)) await page.screenshot({ path: `${SHOTS}/layout-open-register-${size.name}.png` });
+    // Scroll with the mouse wheel over the list, as a person would (/sell's main doesn't scroll).
+    await rows.first().hover();
+    for (let i = 0; i < 24; i++) await page.mouse.wheel(0, 500);
+    await expect(rows.last(), `${size.name}: the last product is reachable`).toBeInViewport();
+    // On phones the search and categories stay on screen while the list scrolls.
+    await expect(page.getByRole('searchbox', { name: 'Find a product' }), `${size.name}: the search stays on screen`).toBeInViewport();
+  }
+  expect(problems).toEqual([]);
+});
+
 test('the menu fits at every window height, wide and narrow', async ({ page }) => {
   test.setTimeout(180_000);
   await setupOwner(page, 'Joshua Ranin', '1111');
