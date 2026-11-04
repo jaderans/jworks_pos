@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import { execSync } from 'node:child_process';
 import { expect, test, type Page } from '@playwright/test';
 import { SHOTS, createEvent, payCash, setEventPrice, setupOwner, tapProduct } from './helpers';
 
@@ -21,6 +23,12 @@ async function emulatorsUp() {
   } catch {
     return false;
   }
+}
+
+/** Load security rules into the Firestore emulator, as publishing them in the Firebase console does. */
+async function loadRules(content: string) {
+  const r = await fetch(`http://127.0.0.1:8080/emulator/v1/projects/${PROJECT}:securityRules`, { method: 'PUT', body: JSON.stringify({ rules: { files: [{ name: 'firestore.rules', content }] } }) });
+  if (!r.ok) throw new Error(`Could not load rules: ${r.status} ${await r.text()}`);
 }
 
 async function verifyEmail(email: string) {
@@ -121,10 +129,17 @@ test('owner, cashier and designer sync through the cloud', async ({ browser }) =
   await payCash(cashier);
   await cashier.getByRole('button', { name: 'New sale' }).click();
 
-  // The cashier's phone has no costs and no owner screens
+  // The cashier's phone has no costs and no production screens, but edits the catalog
   expect(await countLocal(cashier, 'productCosts')).toBe(0);
   expect(await countLocal(cashier, 'costPoints')).toBe(0);
-  await expect(cashier.getByRole('link', { name: 'Products' })).toHaveCount(0);
+  await expect(cashier.getByRole('link', { name: 'Production' })).toHaveCount(0);
+  await cashier.goto('/#/products');
+  await cashier.getByRole('row', { name: /58mm Pins/ }).click();
+  await cashier.getByRole('dialog').getByLabel('Base price').fill('45');
+  await cashier.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+  await owner.goto('/#/products');
+  await expect(owner.getByRole('row', { name: /58mm Pins/ })).toContainText('₱45', { timeout: 30_000 });
+  await cashier.goto('/#/sell');
 
   // ---- The owner sees the cashier's sale arrive
   await owner.goto('/#/sales');
@@ -163,6 +178,47 @@ test('owner, cashier and designer sync through the cloud', async ({ browser }) =
   expect(await countLocal(designer, 'productCosts')).toBe(0);
   expect(await countLocal(designer, 'spend')).toBe(0);
   await designer.screenshot({ path: `${SHOTS}/22-designer-my-page.png`, fullPage: true });
+
+  // ---- The designer edits and deletes products from their phone; every phone follows
+  await designer.goto('/#/products');
+  await expect(designer.getByRole('row', { name: /58mm Pins/ })).toContainText('₱45', { timeout: 30_000 });
+  await designer.getByRole('row', { name: /Pawer Litters \(Big\)/ }).click();
+  await designer.getByRole('dialog').getByLabel('Name', { exact: true }).fill('Pawer Litters XL');
+  await designer.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+  await designer.getByRole('row', { name: /Pawer Litters \(Small\)/ }).click();
+  await designer.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+  await designer.getByRole('dialog', { name: /Delete Pawer Litters/ }).getByRole('button', { name: 'Delete' }).click();
+  await expect(designer.getByRole('row', { name: /Pawer Litters \(Small\)/ })).toHaveCount(0);
+  for (const p of [owner, cashier]) {
+    await p.goto('/#/products');
+    await expect(p.getByRole('row', { name: /Pawer Litters XL/ })).toBeVisible({ timeout: 30_000 });
+    await expect(p.getByRole('row', { name: /Pawer Litters \(Small\)/ })).toHaveCount(0, { timeout: 30_000 });
+  }
+
+  // ---- Firebase still has older rules: the owner is told, and a designer's edit waits instead of vanishing
+  const current = fs.readFileSync('firebase/firestore.rules', 'utf8');
+  await loadRules(execSync('git show f555e73:firebase/firestore.rules').toString());
+  try {
+    await designer.getByRole('row', { name: /Cat Meme Pack \(4 pcs\)/ }).click();
+    await designer.getByRole('dialog').getByLabel('Name', { exact: true }).fill('Cat Meme Pack (new)');
+    await designer.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+    await owner.goto('/#/settings?section=sync');
+    await owner.getByRole('button', { name: 'Sync now' }).click();
+    await expect(owner.getByText('Firebase still has older security rules')).toBeVisible({ timeout: 20_000 });
+    await expect(owner.getByText('Update the security rules')).toBeVisible();
+    await owner.screenshot({ path: `${SHOTS}/23-rules-outdated.png`, fullPage: true });
+    await owner.goto('/#/products');
+    await expect(owner.getByRole('row', { name: /Cat Meme Pack \(new\)/ })).toHaveCount(0);
+  } finally {
+    await loadRules(current);
+  }
+  // The owner publishes the new rules; the designer's waiting change goes through
+  await designer.goto('/#/settings?section=sync');
+  await designer.getByRole('button', { name: 'Sync now' }).click();
+  await expect(owner.getByRole('row', { name: /Cat Meme Pack \(new\)/ })).toBeVisible({ timeout: 45_000 });
+  await owner.goto('/#/settings?section=sync');
+  await owner.getByRole('button', { name: 'Sync now' }).click();
+  await expect(owner.getByText('Firebase still has older security rules')).toHaveCount(0, { timeout: 20_000 });
 
   expect(errors).toEqual([]);
 });

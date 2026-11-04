@@ -10,8 +10,10 @@ import {
 import { liveQuery, type Subscription } from 'dexie';
 import { alive, db, SYNCED_TABLES, syncedTable, type SyncedTableName } from '../db/db';
 import { getLocal, setLocal } from '../db/local';
+import { currentDevice } from '../db/write';
 import { isNewer } from '../services/backup';
-import { setSyncStatus, type CloudAccess } from './useSync';
+import { RULES_VERSION } from './rulesVersion';
+import { getSyncStatus, setSyncStatus, type CloudAccess } from './useSync';
 import type { CloudConfig } from './config';
 import type { AppRole, Member, Syncable } from '../db/types';
 
@@ -26,15 +28,22 @@ import type { AppRole, Member, Syncable } from '../db/types';
 const READ: Record<AppRole, readonly SyncedTableName[]> = {
   owner: SYNCED_TABLES.filter((t) => t !== 'settings'),
   cashier: ['categories', 'members', 'paymentMethods', 'customers', 'vouchers', 'products', 'bundleRules', 'events', 'eventProducts', 'eventTasks', 'roster', 'sessions', 'sales', 'stockMoves', 'payouts', 'orders'],
-  designer: ['categories', 'members', 'products', 'bundleRules', 'events', 'eventProducts', 'eventTasks', 'roster', 'sales', 'payouts'],
+  designer: ['categories', 'members', 'products', 'bundleRules', 'events', 'eventProducts', 'eventTasks', 'roster', 'sales', 'stockMoves', 'payouts'],
   partner: ['categories', 'products', 'events', 'payouts'],
 };
 const WRITE: Record<AppRole, readonly SyncedTableName[]> = {
   owner: SYNCED_TABLES,
-  cashier: ['customers', 'orders', 'eventTasks', 'events', 'sessions', 'sales', 'stockMoves', 'audit'],
-  designer: [],
+  cashier: ['categories', 'products', 'bundleRules', 'eventProducts', 'customers', 'orders', 'eventTasks', 'events', 'sessions', 'sales', 'stockMoves', 'audit'],
+  designer: ['categories', 'products', 'bundleRules', 'eventProducts', 'stockMoves', 'audit'],
   partner: [],
 };
+
+/**
+ * Tables cashiers and designers could only change on their own device before
+ * the whole team could edit the catalog. Their edits made back then are sent
+ * once (see resendOwnEdits); anything older than the cloud copy is skipped.
+ */
+const NOW_SHARED: readonly SyncedTableName[] = ['categories', 'products', 'bundleRules', 'eventProducts', 'stockMoves', 'audit'];
 const SETTINGS_READ: Record<AppRole, readonly string[]> = {
   owner: [],
   cashier: ['business', 'security', 'loyalty'],
@@ -263,7 +272,8 @@ async function onUser(user: User | null) {
     if (a.memberId) await setLocal('currentMemberId', a.memberId);
     await setLocal('setupDone', true);
   }
-  setSyncStatus({ access: a, message: 'Syncing…' });
+  setSyncStatus({ access: a, message: 'Syncing…', rulesOutdated: !(await rulesCurrent()) });
+  await resendOwnEdits(a.role);
   startListeners(a);
   pendingSub?.unsubscribe();
   let lastCount = -1;
@@ -276,6 +286,37 @@ async function onUser(user: User | null) {
   if (interval) window.clearInterval(interval);
   interval = window.setInterval(() => schedulePush(0), 30_000);
   schedulePush(200);
+}
+
+/**
+ * Are the cloud's security rules the ones this app was built for? Firebase lets
+ * us read rulesCheck/<version> only when they are; offline or unsure counts as yes.
+ */
+async function rulesCurrent(): Promise<boolean> {
+  if (!fs || !cfg) return true;
+  try {
+    await getDoc(doc(fs, 'ws', cfg.ws, 'rulesCheck', RULES_VERSION));
+    return true;
+  } catch (e) {
+    return !isDenied(e);
+  }
+}
+
+const RULES_MESSAGE = 'The cloud’s security rules are older than this app, so some changes can’t sync yet. The owner pastes the new rules: Settings → Cloud sync → Update the rules.';
+
+/** Once per rules version: queue again what this device changed in the shared catalog while it could only keep it locally. */
+async function resendOwnEdits(role: AppRole) {
+  const key = `resent:${RULES_VERSION}`;
+  if (role === 'owner' || (await getLocal<boolean>(key, false))) return;
+  const me = currentDevice();
+  // Not known yet (the device loads at start-up): try again at the next sign-in.
+  if (!me || me === 'local') return;
+  for (const t of NOW_SHARED.filter((x) => WRITE[role].includes(x))) {
+    const table = syncedTable(t);
+    const mine = ((await table.toArray()) as Syncable[]).filter((r) => r._dev === me && r._sync !== 1);
+    if (mine.length) await table.bulkPut(mine.map((r) => ({ ...r, _sync: 1 as const })));
+  }
+  await setLocal(key, true);
 }
 
 async function countPending(): Promise<number> {
@@ -297,7 +338,11 @@ function startListeners(a: CloudAccess) {
       onSnapshot(
         q,
         (snap) => void applyRemote(t, snap.docChanges().filter((c) => c.type !== 'removed').map((c) => ({ id: c.doc.id, data: c.doc.data() }))),
-        (err) => setSyncStatus({ state: 'error', message: `${friendlyError(err)} (${t})` }),
+        (err) =>
+          void (async () => {
+            const outdated = isDenied(err) && !(await rulesCurrent());
+            setSyncStatus({ state: 'error', rulesOutdated: outdated, message: outdated ? RULES_MESSAGE : `${friendlyError(err)} (${t})` });
+          })(),
       ),
     );
   }
@@ -367,6 +412,18 @@ async function markSynced(table: SyncedTableName, rows: Syncable[]) {
   });
 }
 
+/** A refused upload: older than the cloud copy (drop it, the newer one is coming), or blocked by the rules (keep it waiting). */
+async function refusedBecause(ref: ReturnType<typeof doc>, r: Syncable): Promise<'stale' | 'blocked'> {
+  try {
+    const remote = (await getDoc(ref)).data() as Syncable | undefined;
+    return remote && (remote.updatedAt ?? 0) > (r.updatedAt ?? 0) ? 'stale' : 'blocked';
+  } catch {
+    return (await rulesCurrent()) ? 'stale' : 'blocked';
+  }
+}
+
+let blocked = 0;
+
 async function pushOnce(): Promise<number> {
   const { fs, cfg, auth } = need();
   const a = access;
@@ -374,6 +431,7 @@ async function pushOnce(): Promise<number> {
   if (!a || !uid) return 0;
   const writable = new Set(WRITE[a.role]);
   let pushed = 0;
+  blocked = 0;
   for (const t of SYNCED_TABLES) {
     const table = syncedTable(t);
     const rows = (await table.where('_sync').equals(1).limit(200).toArray()) as Syncable[];
@@ -391,13 +449,18 @@ async function pushOnce(): Promise<number> {
       await markSynced(t, rows);
     } catch (e) {
       if (!isDenied(e)) throw e;
-      // One record was older than the cloud copy, or not allowed: send them one by one.
+      // One record was older than the cloud copy, or not allowed yet: send them one by one.
       for (const r of rows) {
+        const ref = doc(fs, 'ws', cfg.ws, `t_${t}`, r.id);
         try {
-          await setDoc(doc(fs, 'ws', cfg.ws, `t_${t}`, r.id), toRemote(r, uid));
+          await setDoc(ref, toRemote(r, uid));
           pushed++;
         } catch (e2) {
           if (!isDenied(e2)) throw e2;
+          if ((await refusedBecause(ref, r)) === 'blocked') {
+            blocked++;
+            continue;
+          }
         }
         await markSynced(t, [r]);
       }
@@ -424,11 +487,17 @@ async function push() {
   pushing = true;
   setSyncStatus({ state: 'syncing', message: 'Uploading…' });
   try {
+    // Waiting on new rules: look again each round, so every device notices soon after the owner publishes them.
+    if (getSyncStatus().rulesOutdated) setSyncStatus({ rulesOutdated: !(await rulesCurrent()) });
     for (let i = 0; i < 50; i++) {
       const n = await pushOnce();
       if (n === 0 || (await countPending()) === 0) break;
     }
-    setSyncStatus({ state: 'ok', lastSyncAt: Date.now(), message: 'Up to date' });
+    const outdated = getSyncStatus().rulesOutdated || (blocked > 0 && !(await rulesCurrent()));
+    if (blocked) {
+      setSyncStatus({ state: 'error', rulesOutdated: outdated, message: outdated ? RULES_MESSAGE : `${blocked} change${blocked === 1 ? '' : 's'} can’t upload with this account’s role. Check the role in Team.` });
+    } else if (outdated) setSyncStatus({ state: 'error', lastSyncAt: Date.now(), message: RULES_MESSAGE });
+    else setSyncStatus({ state: 'ok', lastSyncAt: Date.now(), message: 'Up to date' });
   } catch (e) {
     setSyncStatus({ state: 'error', message: friendlyError(e) });
   } finally {
@@ -442,7 +511,10 @@ async function push() {
 
 export async function syncNow(): Promise<void> {
   if (auth?.currentUser && !access) await onUser(auth.currentUser);
-  else await push();
+  else {
+    setSyncStatus({ rulesOutdated: !(await rulesCurrent()) });
+    await push();
+  }
 }
 
 // ----- team access (owner) -----

@@ -17,6 +17,8 @@ export interface SyncStatus {
   needsVerification: boolean;
   access: CloudAccess | null;
   ws: string | null;
+  /** Firebase still has security rules older than this app (the owner pastes the new ones). */
+  rulesOutdated: boolean;
 }
 
 let status: SyncStatus = {
@@ -28,6 +30,7 @@ let status: SyncStatus = {
   needsVerification: false,
   access: null,
   ws: null,
+  rulesOutdated: false,
 };
 const listeners = new Set<() => void>();
 

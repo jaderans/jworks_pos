@@ -37,8 +37,8 @@ const ALL: Permission[] = [
 
 export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
   owner: ALL,
-  cashier: ['sell', 'viewSales', 'viewEvent', 'customers', 'orders'],
-  designer: ['viewEvent'],
+  cashier: ['sell', 'viewSales', 'viewEvent', 'customers', 'orders', 'editProducts', 'editPrices'],
+  designer: ['viewEvent', 'editProducts', 'editPrices'],
   partner: [],
 };
 

@@ -22,6 +22,7 @@ import { applyTheme, getTheme, setTheme, type ThemeMode } from '../lib/theme';
 import { useSyncStatus } from '../sync/useSync';
 import { ACTIVITY_LABELS, activityTone } from '../features/activity/labels';
 import { ErrorBoundary } from './ErrorBoundary';
+import { applyUpdate, useUpdateReady } from './usePwa';
 import type { AppRole, SecuritySettings } from '../db/types';
 
 interface NavItem {
@@ -268,12 +269,15 @@ export function Shell() {
                   <Settings size={18} aria-hidden="true" /> Settings
                 </button>
               </div>
+              <p className="menu-version muted tiny">Version {__APP_VERSION__}</p>
             </div>
           )}
         </Popover>
       </header>
 
       <main className={location.pathname === '/sell' ? 'main flush' : 'main'} id="main">
+        {/* Not on the register: it fills the screen, and an update waits for the sale anyway. */}
+        {location.pathname !== '/sell' ? <AppNotices /> : null}
         <ErrorBoundary key={location.pathname}>
           <Outlet />
         </ErrorBoundary>
@@ -563,6 +567,36 @@ function RestoreOwner({ onDone }: { onDone: () => void }) {
           </Button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** Things every device should act on: a new version to load, and (for the owner) cloud rules to update. */
+function AppNotices() {
+  const app = useApp();
+  const navigate = useNavigate();
+  const updateReady = useUpdateReady();
+  const sync = useSyncStatus();
+  const rules = sync.rulesOutdated && app.can('settings');
+  if (!updateReady && !rules) return null;
+  return (
+    <div className="app-notices" role="status">
+      {updateReady ? (
+        <div className="app-notice">
+          <span>A new version of JoshWorks POS is ready.</span>
+          <Button size="sm" variant="primary" onClick={applyUpdate}>
+            Update now
+          </Button>
+        </div>
+      ) : null}
+      {rules ? (
+        <div className="app-notice warn">
+          <span>Firebase still has older security rules, so some changes can’t sync to the team.</span>
+          <Button size="sm" onClick={() => navigate('/settings?section=sync')}>
+            Update the rules
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 Optional. Without it, every device works on its own and moves sales by merge files. With it:
 
+- the whole team keeps one catalog: products, prices and bundle deals edited on any phone show up on every phone,
 - designers see their payouts and the event dashboard on their own phones,
 - several phones can sell at once and their sales combine by themselves,
 - everything is backed up in the cloud.
@@ -30,13 +31,18 @@ It runs on **your own free Firebase project** (Google's Spark plan, no card need
 ## 3. Invite the team
 
 1. **Team → Add person**: name, **email**, and app role:
-   - **Cashier**: sells and counts the drawer; no costs or payouts; voids and big discounts need your PIN.
-   - **Designer**: sees event dashboards, their own shifts and payout, and how their designs sold.
+   - **Cashier**: sells and counts the drawer; adds, edits, arranges and deletes products and sets prices; no costs or payouts; voids and big discounts need your PIN.
+   - **Designer**: adds, edits, arranges and deletes products, sets prices and counts stock; sees event dashboards, their own shifts and payout, and how their designs sold.
    - **Partner**: sees their own payouts only.
 2. Tap the **link** icon next to them to send an invite (Messenger, Viber…).
 3. They open it on their phone, **Create account** with that same email, verify it, and they're in. Cashiers pick a register letter (B, C…).
 
 To stop someone's access, mark them inactive or remove them in Team.
+
+## When the app is updated
+
+- **The app** updates itself on every phone: it checks every half hour and whenever it's opened, and installs the new version when no sale is in the cart. Otherwise a bar says *A new version is ready* until someone taps **Update now**. The version is shown in the profile menu (top right), so two phones can be compared.
+- **The security rules** sometimes change with a new version (new features need new permissions). When Firebase still has the older rules, the app says so: a yellow bar on the owner's screens and *Sync problem* in the top bar. Changes made on any phone meanwhile wait on that phone; nothing is lost. To fix it, the owner opens **Settings → Cloud sync**, taps **Copy the new rules**, opens **Firestore → Rules** from the link there, replaces everything, and taps **Publish**. Every phone notices within a minute and sends what was waiting.
 
 ## What stays private
 

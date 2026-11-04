@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Cloud, Copy, LogOut, RefreshCw, Unplug } from 'lucide-react';
 import { Link } from 'react-router';
 import rulesText from '../../../firebase/firestore.rules?raw';
@@ -29,6 +29,14 @@ export function CloudSection() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [projectId, setProjectId] = useState('');
+  useEffect(() => {
+    void import('../../sync/cloud').then(async ({ getCloudConfig }) => setProjectId((await getCloudConfig())?.firebase.projectId ?? ''));
+  }, [sync.enabled]);
+  const copyRules = async () => {
+    if (await copy(rulesText)) app.toast('Rules copied. Paste them in Firestore → Rules, then Publish.', { tone: 'good' });
+    else setShowRules(true);
+  };
 
   const connect = async () => {
     setError('');
@@ -123,6 +131,30 @@ export function CloudSection() {
                 <span className="muted small">{sync.lastSyncAt ? `Last sync ${relativeTime(sync.lastSyncAt)}` : ''}</span>
               </div>
               <p className="small muted">{sync.message}</p>
+              {sync.rulesOutdated ? (
+                <Callout tone="warn" title="Update the security rules">
+                  {owner ? (
+                    <ol style={{ margin: 0, paddingLeft: 18 }}>
+                      <li>
+                        <button type="button" className="linklike" onClick={copyRules}>
+                          Copy the new rules
+                        </button>
+                        .
+                      </li>
+                      <li>
+                        Open{' '}
+                        <a href={projectId ? `https://console.firebase.google.com/project/${projectId}/firestore/rules` : 'https://console.firebase.google.com/'} target="_blank" rel="noreferrer">
+                          Firestore → Rules
+                        </a>
+                        , select everything there and paste.
+                      </li>
+                      <li>Tap Publish, then Sync now here. Every device picks up the change by itself.</li>
+                    </ol>
+                  ) : (
+                    'Firebase still has older rules, so some of your changes are waiting on this device. Ask the owner to update them in Settings → Cloud sync; they upload by themselves after that.'
+                  )}
+                </Callout>
+              ) : null}
               <div className="actions">
                 <Button
                   size="sm"
@@ -180,7 +212,8 @@ export function CloudSection() {
               </Button>
             </div>
           ) : null}
-          <p className="muted tiny">Receipt photos stay on the device that took them. Everything else syncs.</p>
+          {showRules && sync.enabled ? <TextArea readOnly rows={10} value={rulesText} className="mono" aria-label="Firestore security rules" /> : null}
+          <p className="muted tiny">Receipt photos stay on the device that took them. Everything else syncs. This device runs version {__APP_VERSION__}.</p>
         </div>
       )}
     </section>
