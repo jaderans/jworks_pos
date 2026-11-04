@@ -13,9 +13,10 @@ import { fmtDate, fmtIsoDate, todayISO } from '../../lib/time';
 import { downloadBlob, toCSV } from '../../lib/files';
 import { loyaltyState, normalizeCode, rewardText, voucherUses } from '../../domain/loyalty';
 import { deleteCustomer, deleteVoucher, saveCustomer, saveVoucher } from '../../services/customers';
+import { CouponsView } from '../coupons/CouponsView';
 import type { Customer, LoyaltySettings, Sale, Voucher } from '../../db/types';
 
-type Tab = 'customers' | 'vouchers' | 'loyalty';
+type Tab = 'customers' | 'vouchers' | 'coupons' | 'loyalty';
 
 export default function CustomersPage() {
   const app = useApp();
@@ -23,7 +24,7 @@ export default function CustomersPage() {
   const [tab, setTab] = useState<Tab>('customers');
   return (
     <div className="page">
-      <PageHeader title="Customers" subtitle="The people who buy from the booth: their visits, stamp cards and voucher codes. Kept on this device and in backups, never online." />
+      <PageHeader title="Customers" subtitle="The people who buy from the booth: their visits, stamp cards, voucher codes and service coupons. Kept on this device and in backups, never online." />
       {owner ? (
         <Segmented<Tab>
           label="Section"
@@ -32,11 +33,12 @@ export default function CustomersPage() {
           options={[
             { value: 'customers', label: 'Customers' },
             { value: 'vouchers', label: 'Vouchers' },
+            { value: 'coupons', label: 'Coupons' },
             { value: 'loyalty', label: 'Stamp card' },
           ]}
         />
       ) : null}
-      {tab === 'customers' || !owner ? <CustomerList /> : tab === 'vouchers' ? <VoucherList /> : <LoyaltyRules />}
+      {tab === 'customers' || !owner ? <CustomerList /> : tab === 'vouchers' ? <VoucherList /> : tab === 'coupons' ? <CouponsView eventId={null} /> : <LoyaltyRules />}
     </div>
   );
 }

@@ -127,6 +127,8 @@ export const lineTotal = (l: Pick<PrintLine, 'qty' | 'unitPrice'>): Cents => Mat
 export interface PrintTotals {
   /** The print work: sheets, peel-off sheets, packaging and extras. */
   subtotal: Cents;
+  /** A service coupon, off the print work. */
+  discount: Cents;
   delivery: Cents;
   total: Cents;
   paid: Cents;
@@ -138,19 +140,21 @@ export interface PrintTotals {
   a4: number;
   /** What the materials cost the studio, where the rate card has costs. */
   materialCost: Cents;
-  /** The printer's share of the print work. */
+  /** The printer's share of the print work after the coupon. */
   printerShare: Cents;
 }
 
-export function printTotals(o: Pick<PrintOrder, 'lines' | 'delivery' | 'payments' | 'printerPct'>, downPct: number): PrintTotals {
+export function printTotals(o: Pick<PrintOrder, 'lines' | 'delivery' | 'payments' | 'printerPct' | 'coupon'>, downPct: number): PrintTotals {
   const subtotal = sum(o.lines.map(lineTotal));
+  const discount = Math.min(subtotal, Math.max(0, o.coupon?.discount ?? 0));
   const delivery = o.delivery.method === 'courier' ? Math.max(0, o.delivery.fee) : 0;
-  const total = subtotal + delivery;
+  const total = subtotal - discount + delivery;
   const paid = sum(o.payments.map((p) => p.amount));
   // Half, rounded up to the next ₱5 (never more than the total).
   const down = total > 0 ? Math.min(total, roundUpTo(Math.round((total * downPct) / 100), 5)) : 0;
   return {
     subtotal,
+    discount,
     delivery,
     total,
     paid,
@@ -159,7 +163,8 @@ export function printTotals(o: Pick<PrintOrder, 'lines' | 'delivery' | 'payments
     downPaid: paid >= down,
     a4: sum(o.lines.map((l) => l.a4)),
     materialCost: sum(o.lines.map((l) => (l.unitCost === null ? 0 : Math.round(l.unitCost * (l.kind === 'peel' ? l.qty : l.a4 || l.qty))))),
-    printerShare: Math.round((subtotal * Math.max(0, o.printerPct)) / 100),
+    // Everyone shares the coupon: the printer's % is of the print work after it.
+    printerShare: Math.round(((subtotal - discount) * Math.max(0, o.printerPct)) / 100),
   };
 }
 

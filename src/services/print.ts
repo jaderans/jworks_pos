@@ -2,11 +2,13 @@ import { db, alive } from '../db/db';
 import { audit, create, patch } from '../db/write';
 import { getLocal, setLocal, type DeviceInfo } from '../db/local';
 import { getSetting } from '../db/settings';
-import { peso, type Cents } from '../lib/money';
+import { peso, sum, type Cents } from '../lib/money';
 import { todayISO } from '../lib/time';
 import { uid } from '../lib/ids';
-import { PRINT_STATUS_LABEL, addWorkingDays, printTotals } from '../domain/print';
+import { PRINT_STATUS_LABEL, addWorkingDays, lineTotal, printTotals } from '../domain/print';
+import { claimId } from '../domain/coupons';
 import { addCashMove } from './sales';
+import { resolveCoupon, syncClaim } from './coupons';
 import type { PayKind, PrintDelivery, PrintLine, PrintOrder, PrintRates, PrintStatus, Session } from '../db/types';
 
 /**
@@ -34,6 +36,8 @@ export interface NewPrintOrder {
   printerId: string | null;
   files: string;
   notes: string;
+  /** A service coupon code; checked against the print work when the order is saved. */
+  couponCode?: string;
 }
 
 export const blankDelivery = (): PrintDelivery => ({ method: 'pickup', courier: '', address: '', fee: 0, tracking: '' });
@@ -49,7 +53,7 @@ function check(o: Pick<NewPrintOrder, 'lines' | 'customerId' | 'customerName' | 
   if (o.delivery.method === 'courier' && !o.delivery.address.trim()) throw new Error('Add the delivery address for the courier.');
 }
 
-const clean = (o: NewPrintOrder): NewPrintOrder => ({
+const clean = ({ couponCode: _code, ...o }: NewPrintOrder): Omit<NewPrintOrder, 'couponCode'> => ({
   ...o,
   customerName: o.customerName.trim(),
   contact: o.contact.trim(),
@@ -59,12 +63,21 @@ const clean = (o: NewPrintOrder): NewPrintOrder => ({
   delivery: { ...o.delivery, courier: o.delivery.courier.trim(), address: o.delivery.address.trim(), tracking: o.delivery.tracking.trim(), fee: o.delivery.method === 'courier' ? Math.max(0, o.delivery.fee) : 0 },
 });
 
+/** The print work's price, before the coupon and the delivery fee. */
+const printWork = (lines: readonly PrintLine[]): Cents => sum(lines.map(lineTotal));
+
+const claimFor = (o: PrintOrder) => ({ source: 'print' as const, sourceId: o.id, service: `Print order ${o.number}`, customerId: o.customerId, customerName: o.customerName, price: printWork(o.lines) });
+
 export async function createPrintOrder(o: NewPrintOrder, device: DeviceInfo): Promise<PrintOrder> {
   check(o);
   const rates = await getSetting<PrintRates>('printRates');
+  const id = uid();
+  const coupon = await resolveCoupon(o.couponCode, printWork(o.lines), claimId('print', id));
   const number = await nextPrintNumber(device.letter);
   const order = await create<PrintOrder>(db.printOrders, {
+    id,
     ...clean(o),
+    coupon,
     number,
     status: 'quote',
     statusAt: Date.now(),
@@ -75,6 +88,7 @@ export async function createPrintOrder(o: NewPrintOrder, device: DeviceInfo): Pr
     payments: [],
     doneAt: null,
   });
+  await syncClaim(claimFor(order), coupon);
   const t = printTotals(order, rates.downPct);
   await audit('create', 'print', order.id, `Print order ${number} for ${order.customerName || 'a customer'}: ${peso(t.total)}`);
   return order;
@@ -90,7 +104,11 @@ export async function updatePrintOrder(id: string, changes: NewPrintOrder & { pr
   const o = await get(id);
   if (o.status === 'done' || o.status === 'cancelled') throw new Error(`${o.number} is closed.`);
   check(changes);
-  await patch(db.printOrders, id, { ...clean(changes), ...(changes.printerPct !== undefined ? { printerPct: changes.printerPct } : {}) });
+  const coupon = await resolveCoupon(changes.couponCode, printWork(changes.lines), claimId('print', id));
+  const { printerPct, ...rest } = changes;
+  const next = { ...clean(rest), coupon, ...(printerPct !== undefined ? { printerPct } : {}) };
+  await patch(db.printOrders, id, next);
+  await syncClaim(claimFor({ ...o, ...next }), coupon);
 }
 
 export async function markProofSent(id: string): Promise<void> {
@@ -152,6 +170,7 @@ export async function takePrintPayment(id: string, p: PrintPaymentInput, session
 
 export async function cancelPrint(id: string, reason: string): Promise<void> {
   const o = await get(id);
+  await syncClaim(claimFor(o), null);
   await patch(db.printOrders, id, { status: 'cancelled', statusAt: Date.now(), notes: reason.trim() ? `${o.notes ? `${o.notes}\n` : ''}Cancelled: ${reason.trim()}` : o.notes });
   await audit('status', 'print', id, `${o.number}: cancelled${reason.trim() ? ` (${reason.trim()})` : ''}`);
 }

@@ -58,6 +58,21 @@ export const useOrders = () => useLiveQuery(async () => alive(await db.orders.to
 /** Deposits and pickups: every sale tied to an order. */
 export const useOrderSales = () => useLiveQuery(async () => alive(await db.sales.where('orderId').above('').toArray()), []);
 export const useSettingRows = () => useLiveQuery(async () => (await db.settings.toArray()) as SettingRow[], []);
+/** Service coupons, their sets and claims: one event's, or every event's when there's no id. */
+export const useCouponData = (eventId?: string | null) =>
+  useLiveQuery(async () => {
+    const [batches, coupons, claims] = eventId
+      ? await Promise.all([db.couponBatches.where('eventId').equals(eventId).toArray(), db.coupons.where('eventId').equals(eventId).toArray(), db.couponClaims.where('eventId').equals(eventId).toArray()])
+      : await Promise.all([db.couponBatches.toArray(), db.coupons.toArray(), db.couponClaims.toArray()]);
+    return { batches: alive(batches).sort((a, b) => a.createdAt - b.createdAt), coupons: alive(coupons).sort((a, b) => a.createdAt - b.createdAt || a.code.localeCompare(b.code)), claims: alive(claims).sort((a, b) => b.at - a.at) };
+  }, [eventId]);
+/** The coupon a booth sale earned, with its terms. */
+export const useSaleCoupon = (saleId: string | null | undefined) =>
+  useLiveQuery(async () => {
+    const coupon = saleId ? alive(await db.coupons.where('saleId').equals(saleId).toArray()).find((c) => c.void !== 1) : undefined;
+    const batch = coupon ? await db.couponBatches.get(coupon.batchId) : undefined;
+    return coupon && batch ? { coupon, batch } : null;
+  }, [saleId]);
 export const useLocal = <T,>(key: string, fallback: T) =>
   useLiveQuery(async () => {
     const row = await db.local.get(key);

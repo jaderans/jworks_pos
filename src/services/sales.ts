@@ -5,6 +5,7 @@ import { receiptNumber, uid } from '../lib/ids';
 import { peso, type Cents } from '../lib/money';
 import { checkPayments, toAppliedDiscounts, toSaleLines, type PricedCart } from '../domain/cart';
 import { countTotal, drawerState } from '../domain/summary';
+import { voidEarnedCoupons } from './coupons';
 import type { CashMove, Sale, SalePayment, Session, StockMove } from '../db/types';
 
 export async function openSessionFor(eventId: string, deviceId: string): Promise<Session | undefined> {
@@ -131,6 +132,8 @@ export async function voidSale(saleId: string, reason: string, by: string | null
     }
     await audit('void', 'sale', saleId, `Voided ${sale.receiptNo} (${peso(sale.total)})${reason.trim() ? `: ${reason.trim()}` : ''}`);
   });
+  // A coupon the sale earned goes with it, unless it was already used.
+  await voidEarnedCoupons(saleId);
 }
 
 /** Fix a payment recorded under the wrong method (e.g. Cash that was really GCash). */

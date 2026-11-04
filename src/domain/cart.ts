@@ -21,8 +21,8 @@ export interface CartDiscount {
   value: number;
   /** A discount typed at the register (as opposed to an event preset). */
   manual?: boolean;
-  /** A voucher code or a loyalty reward, recorded as such on the sale. */
-  source?: 'voucher' | 'loyalty';
+  /** A voucher code, a loyalty reward or an order's service coupon, recorded as such on the sale. */
+  source?: 'voucher' | 'loyalty' | 'coupon';
 }
 
 export interface BundleLike {

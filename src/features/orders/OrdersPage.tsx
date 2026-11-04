@@ -12,7 +12,9 @@ import { Check, Field, MoneyInput, NumberInput, Select, TextArea, TextInput } fr
 import { peso, type Cents } from '../../lib/money';
 import { fmtDateTime } from '../../lib/time';
 import { effectivePrice, isOnSale } from '../../services/catalog';
-import { ORDER_STATUS_LABEL, dueText, isOpenOrder, orderMoney, orderTotal, suggestedDeposit, type OrderMoney } from '../../domain/orders';
+import { ORDER_STATUS_LABEL, dueText, isOpenOrder, orderDiscount, orderMoney, orderServicePrice, orderTotal, suggestedDeposit, type OrderMoney } from '../../domain/orders';
+import { claimId } from '../../domain/coupons';
+import { CouponField, appliedFrom, useCouponCheck } from '../coupons/CouponField';
 import { cancelOrder, createOrder, pickUpOrder, setOrderStatus, takeDeposit, updateOrder } from '../../services/orders';
 import { sendOrderToStudio } from '../../services/studio';
 import { getMailer, isEmail, mailerReady } from '../../email/send';
@@ -342,6 +344,7 @@ function OrderCard({
         {due ? <Badge tone={late && o.status !== 'ready' ? 'warn' : undefined}>Due {due}</Badge> : null}
         {maker ? <Badge tone="teal">{maker}</Badge> : null}
         {otherEvent ? <Badge>Earlier event</Badge> : null}
+        {o.coupon ? <Badge tone="yellow">Coupon {o.coupon.code}</Badge> : null}
       </div>
       <div className="row between small">
         <span className="muted">
@@ -402,6 +405,7 @@ function OrderDialog({
   const [deposit, setDeposit] = useState<Cents | null>(null);
   const [depositEdited, setDepositEdited] = useState(false);
   const [takeNow, setTakeNow] = useState(true);
+  const [couponCode, setCouponCode] = useState('');
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -419,12 +423,16 @@ function OrderDialog({
     setDeposit(null);
     setDepositEdited(false);
     setTakeNow(true);
+    setCouponCode(o?.coupon?.code ?? '');
     setError('');
   }, [order]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const epMap = useMemo(() => new Map((eps ?? []).map((e) => [e.productId, e])), [eps]);
   const onSale = useMemo(() => (products ?? []).filter((p) => isOnSale(p, epMap.get(p.id))), [products, epMap]);
-  const total = orderTotal({ lines });
+  const couponCheck = useCouponCheck(couponCode, orderServicePrice({ lines }), order && order !== 'new' ? claimId('order', order.id) : null);
+  const coupon = appliedFrom(couponCheck);
+  const off = orderDiscount({ lines, coupon });
+  const total = orderTotal({ lines, coupon });
   const suggested = suggestedDeposit(total);
   const depositAmount = depositEdited ? (deposit ?? 0) : suggested;
 
@@ -441,7 +449,7 @@ function OrderDialog({
     setBusy(true);
     setError('');
     try {
-      const fields = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact, lines, designerId: designerId || null, dueAt, notes };
+      const fields = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact, lines, designerId: designerId || null, dueAt, notes, couponCode };
       if (isNew) {
         const o = await createOrder({ eventId: ev.id, ...fields }, app.device);
         onCreated(o, canTakeMoney && takeNow ? Math.min(depositAmount, total) : 0);
@@ -532,8 +540,13 @@ function OrderDialog({
             <Plus size={15} /> Custom piece
           </Button>
           <span className="grow" />
-          <b>Total {peso(total)}</b>
+          <b>
+            {off ? <span className="muted small">{peso(total + off)} − coupon {peso(off)} = </span> : null}Total {peso(total)}
+          </b>
         </div>
+        {lines.some((l) => !l.productId) || couponCode ? (
+          <CouponField id="or-coupon" code={couponCode} onCode={setCouponCode} check={couponCheck} hint="From a JoshWorks event. It comes off the custom pieces (₱2,500 or more), not catalog products." />
+        ) : null}
       </div>
 
       <div className="form-grid">

@@ -20,12 +20,14 @@ import { onHandByProduct, soldByProduct } from '../../domain/stock';
 import { checkVoucher, loyaltyDiscount, loyaltyState, normalizeCode, rewardText, type LoyaltyState, type VoucherCheck } from '../../domain/loyalty';
 import { effectivePrice, findByCode, isOnSale, setEventProduct, updateProduct } from '../../services/catalog';
 import { completeSale, openSession } from '../../services/sales';
+import { issueEarnedCoupon } from '../../services/coupons';
 import { updateEvent } from '../../services/events';
 import { useCart, type CartApi, type CartState } from './useCart';
 import { PaymentDialog } from './PaymentDialog';
 import { ReceiptDialog } from './ReceiptDialog';
 import { CashMoveDialog, CloseRegisterDialog } from './SessionDialogs';
 import { CustomerPicker } from './CustomerPicker';
+import { PriceReview } from './PriceReview';
 import { CameraScanner } from '../../barcode/CameraScanner';
 import { useWedgeScanner } from '../../barcode/useWedgeScanner';
 import type { BusinessSettings, Customer, JWEvent, LoyaltySettings, Product, Sale, Session } from '../../db/types';
@@ -234,6 +236,8 @@ function Register({ ev }: { ev: JWEvent }) {
       customerId: cart.state.customerId,
       voucherCode: voucherCheck?.ok ? cart.state.voucherCode : undefined,
     });
+    // A big enough sale earns a service coupon; it shows on the receipt. It never holds up the sale.
+    await issueEarnedCoupon(sale).catch(() => null);
     if (ev.status === 'planning') await updateEvent(ev.id, { status: 'live' });
     cart.clear();
     setPaying(false);
@@ -661,11 +665,11 @@ function OpenRegister({ ev }: { ev: JWEvent }) {
     setBusy(false);
   };
   return (
-    <div className="page narrow">
-      <div className="card pad-lg stack">
+    <div className="page open-reg">
+      <div className="card pad-lg stack open-reg-card">
         <span className="eyebrow">{ev.name}</span>
         <h1>Open register {app.device.letter}</h1>
-        <p className="muted">Count the cash you&rsquo;re starting with. It&rsquo;s the float the drawer is checked against when you close.</p>
+        <p className="muted">Check the prices, then count the cash you&rsquo;re starting with. It&rsquo;s the float the drawer is checked against when you close.</p>
         {ev.status === 'planning' ? <Callout tone="info">Opening the register marks {ev.name} as Live.</Callout> : null}
         <Field label="Opening cash float" htmlFor="float">
           <MoneyInput id="float" large value={float} onChange={setFloat} onEnter={open} autoFocus />
@@ -674,6 +678,7 @@ function OpenRegister({ ev }: { ev: JWEvent }) {
           Open register
         </Button>
       </div>
+      <PriceReview ev={ev} />
     </div>
   );
 }

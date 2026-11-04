@@ -8,7 +8,7 @@ import { useCustomers, useMembers, usePaymentMethods, usePrintOrders, useSetting
 import { Dialog } from '../../components/Dialog';
 import { Badge, Button, Callout, EmptyState, IconButton, Loading, PageHeader, Segmented } from '../../components/ui';
 import { Field, MoneyInput, NumberInput, Select, TextArea, TextInput } from '../../components/form';
-import { peso, type Cents } from '../../lib/money';
+import { peso, sum, type Cents } from '../../lib/money';
 import { fmtDateTime, fmtIsoDate } from '../../lib/time';
 import { safeFileName } from '../../lib/files';
 import {
@@ -18,6 +18,8 @@ import {
   approvePrint, blankDelivery, cancelPrint, createPrintOrder, markProofSent, setPrintStatus, takePrintPayment, updatePrintOrder, type NewPrintOrder,
 } from '../../services/print';
 import { CustomerPicker } from '../register/CustomerPicker';
+import { CouponField, appliedFrom, useCouponCheck } from '../coupons/CouponField';
+import { claimId } from '../../domain/coupons';
 import type { BusinessSettings, Customer, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../../db/types';
 import '../orders/orders.css';
 
@@ -215,6 +217,7 @@ function PrintCard(p: {
         {o.dueDate ? <Badge tone={late ? 'warn' : undefined}>Ready by {fmtIsoDate(o.dueDate)}</Badge> : null}
         {o.delivery.method === 'courier' ? <Badge>Courier{o.delivery.courier ? `: ${o.delivery.courier}` : ''}</Badge> : null}
         {p.printer ? <Badge tone="teal">{p.printer}</Badge> : null}
+        {o.coupon ? <Badge tone="yellow">Coupon {o.coupon.code}</Badge> : null}
       </div>
       <div className="row between small">
         <span className="muted">
@@ -276,6 +279,7 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
   const [printerPct, setPrinterPct] = useState<number | null>(rates.printerPct);
   const [files, setFiles] = useState('');
   const [notes, setNotes] = useState('');
+  const [couponCode, setCouponCode] = useState('');
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -306,6 +310,7 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
     setPrinterPct(o?.printerPct ?? rates.printerPct);
     setFiles(o?.files ?? '');
     setNotes(o?.notes ?? '');
+    setCouponCode(o?.coupon?.code ?? '');
     setError('');
     // Each time it opens, the line builder starts over on sticker sheets.
     setKind('sheets');
@@ -318,9 +323,10 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
     setCustomQty(1);
     setCustomPrice(null);
   }, [order]); // eslint-disable-line react-hooks/exhaustive-deps
+  const couponCheck = useCouponCheck(couponCode, sum(lines.map(lineTotal)), order && order !== 'new' ? claimId('print', order.id) : null);
 
   if (!order) return null;
-  const draft = { lines, delivery, payments: order === 'new' ? [] : order.payments, printerPct: printerPct ?? 0 };
+  const draft = { lines, delivery, payments: order === 'new' ? [] : order.payments, printerPct: printerPct ?? 0, coupon: appliedFrom(couponCheck) };
   const t = printTotals(draft, rates.downPct);
   const warnings = printWarnings({ lines }, rates);
   const preview: PrintLine | null =
@@ -337,7 +343,7 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
   const save = async () => {
     setError('');
     setBusy(true);
-    const o: NewPrintOrder = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact: customer ? customer.phone || customer.email || contact : contact, lines, delivery, printerId: printerId || null, files, notes };
+    const o: NewPrintOrder = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact: customer ? customer.phone || customer.email || contact : contact, lines, delivery, printerId: printerId || null, files, notes, couponCode };
     try {
       if (isNew) {
         const created = await createPrintOrder(o, app.device);
@@ -603,7 +609,7 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
           </Select>
         </Field>
         {app.can('viewProfit') ? (
-          <Field label="Printer’s share" htmlFor="po-pct" hint={`Of the print work, not the delivery fee: ${peso(Math.round((t.subtotal * (printerPct ?? 0)) / 100))}.`}>
+          <Field label="Printer’s share" htmlFor="po-pct" hint={`Of the print work${t.discount ? ' after the coupon' : ''}, not the delivery fee: ${peso(t.printerShare)}.`}>
             <NumberInput id="po-pct" min={0} value={printerPct} onChange={setPrinterPct} suffix="%" />
           </Field>
         ) : null}
@@ -615,11 +621,19 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
         </Field>
       </div>
 
+      <CouponField id="po-coupon" code={couponCode} onCode={setCouponCode} check={couponCheck} hint="From a JoshWorks event. It comes off the print work (₱2,500 or more), not the delivery fee." />
+
       <div className="waterfall card">
         <div className="wf-row">
           <span>Printing and packaging</span>
           <span className="v">{peso(t.subtotal)}</span>
         </div>
+        {t.discount ? (
+          <div className="wf-row">
+            <span>Coupon {couponCode}</span>
+            <span className="v">−{peso(t.discount)}</span>
+          </div>
+        ) : null}
         {t.delivery ? (
           <div className="wf-row">
             <span>Delivery</span>

@@ -27,14 +27,14 @@ import type { AppRole, Member, Syncable } from '../db/types';
 
 const READ: Record<AppRole, readonly SyncedTableName[]> = {
   owner: SYNCED_TABLES.filter((t) => t !== 'settings'),
-  cashier: ['categories', 'members', 'paymentMethods', 'customers', 'vouchers', 'products', 'bundleRules', 'events', 'eventProducts', 'eventTasks', 'roster', 'sessions', 'sales', 'stockMoves', 'payouts', 'orders', 'printOrders'],
-  designer: ['categories', 'members', 'paymentMethods', 'products', 'bundleRules', 'events', 'eventProducts', 'eventTasks', 'roster', 'sales', 'stockMoves', 'payouts', 'printOrders'],
+  cashier: ['categories', 'members', 'paymentMethods', 'customers', 'vouchers', 'products', 'bundleRules', 'events', 'eventProducts', 'eventTasks', 'roster', 'sessions', 'sales', 'stockMoves', 'payouts', 'orders', 'printOrders', 'couponBatches', 'coupons', 'couponClaims'],
+  designer: ['categories', 'members', 'paymentMethods', 'products', 'bundleRules', 'events', 'eventProducts', 'eventTasks', 'roster', 'sales', 'stockMoves', 'payouts', 'printOrders', 'couponBatches', 'coupons', 'couponClaims'],
   partner: ['categories', 'products', 'events', 'payouts'],
 };
 const WRITE: Record<AppRole, readonly SyncedTableName[]> = {
   owner: SYNCED_TABLES,
-  cashier: ['categories', 'products', 'bundleRules', 'eventProducts', 'customers', 'orders', 'printOrders', 'eventTasks', 'events', 'sessions', 'sales', 'stockMoves', 'audit'],
-  designer: ['categories', 'products', 'bundleRules', 'eventProducts', 'printOrders', 'stockMoves', 'audit'],
+  cashier: ['categories', 'products', 'bundleRules', 'eventProducts', 'customers', 'orders', 'printOrders', 'coupons', 'couponClaims', 'eventTasks', 'events', 'sessions', 'sales', 'stockMoves', 'audit'],
+  designer: ['categories', 'products', 'bundleRules', 'eventProducts', 'printOrders', 'couponClaims', 'stockMoves', 'audit'],
   partner: [],
 };
 

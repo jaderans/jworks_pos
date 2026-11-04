@@ -25,6 +25,7 @@ export async function buildPrintPdf(o: PrintOrder, ctx: { business: string; rate
     ),
     waterfall([
       { label: 'Printing and packaging', value: peso(t.subtotal) },
+      ...(t.discount ? [{ label: `Coupon ${o.coupon?.code ?? ''}`, value: `−${peso(t.discount)}`, kind: 'sub' as const }] : []),
       ...(t.delivery ? [{ label: `Delivery${o.delivery.courier ? ` (${o.delivery.courier})` : ''}`, value: peso(t.delivery), kind: 'sub' as const }] : []),
       { label: 'Total', value: peso(t.total), kind: 'final' },
       { label: `${ctx.rates.downPct}% down payment to start`, value: peso(t.down), kind: 'sub' },

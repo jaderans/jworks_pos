@@ -98,6 +98,9 @@ export interface EventComparison {
   cashPct: number | null;
   sellThrough: number | null;
   discounts: Cents;
+  /** Service coupons from this event that were used, and the services they booked (before the coupons). */
+  couponUses: number;
+  couponSales: Cents;
   top: { name: string; qty: number; revenue: Cents }[];
 }
 
@@ -133,6 +136,8 @@ export function compareEvent(i: ReportInput): EventComparison {
     cashPct: money > 0 ? Math.round((cash / money) * 100) : null,
     sellThrough: broughtTotal > 0 ? Math.round((soldOfBrought / broughtTotal) * 100) : null,
     discounts: i.metrics.discounts,
+    couponUses: i.coupons?.claims ?? 0,
+    couponSales: i.coupons?.price ?? 0,
     top: i.metrics.byProduct.slice(0, 3).map((p) => ({ name: p.name, qty: p.qty, revenue: p.revenue })),
   };
 }

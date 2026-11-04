@@ -20,4 +20,15 @@ describe('Firestore rules', () => {
     expect(ruleFor('t_printOrders')).toContain('allow read: if isTeam(ws); allow write: if isTeam(ws)');
     expect(rules).toContain("(isTeam(ws) && key == 'printRates')");
   });
+
+  it('let only the owner make coupon sets; booth sales earn codes and any service records a use', () => {
+    expect(ruleFor('t_couponBatches')).toContain('allow read: if isTeam(ws); allow write: if isOwner(ws)');
+    expect(ruleFor('t_coupons')).toContain('allow read: if isTeam(ws); allow write: if isStaff(ws)');
+    expect(ruleFor('t_couponClaims')).toContain('allow read: if isTeam(ws); allow write: if isTeam(ws)');
+  });
+
+  it('cover every synced table', async () => {
+    const { SYNCED_TABLES } = await import('../src/db/db');
+    for (const t of SYNCED_TABLES.filter((x) => x !== 'settings')) expect(ruleFor(`t_${t}`), t).not.toBe('');
+  });
 });

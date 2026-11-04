@@ -98,3 +98,11 @@
 .receipt-lockup { height: 40px; width: auto; max-width: 70%; object-fit: contain; margin-bottom: 4px; }
 .email-receipt { display: grid; gap: 8px; }
 .email-receipt .row .input { flex: 1; min-width: 0; }
+
+/* Open register: the price list to check first */
+.open-reg { display: grid; gap: 16px; align-items: start; }
+@media (min-width: 960px) {
+  .open-reg { grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); }
+  .open-reg-card { position: sticky; top: 0; }
+}
+.price-row .price-now { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }

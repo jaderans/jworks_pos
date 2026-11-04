@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { CheckCircle2, Clock, Mail, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Mail, Ticket, XCircle } from 'lucide-react';
 import lockupLight from '../../assets/brand/lockup-on-light.png';
 import lockupDark from '../../assets/brand/lockup-on-dark.png';
 import { useApp } from '../../app/AppContext';
@@ -15,12 +15,13 @@ import { saleReceiptEmail } from '../../email/templates';
 import { saveCustomer } from '../../services/customers';
 import { peso } from '../../lib/money';
 import { fmtDateTime } from '../../lib/time';
-import { useCustomerSales, useCustomers, useSettingRows } from '../../hooks/data';
+import { useCustomerSales, useCustomers, useSaleCoupon, useSettingRows } from '../../hooks/data';
 import { settingValue } from '../../db/settings';
 import { loyaltyState, rewardText, stampsForSale } from '../../domain/loyalty';
+import { termsText } from '../../domain/coupons';
 import type { BusinessSettings, LoyaltySettings, Sale } from '../../db/types';
 
-export function receiptText(sale: Sale, business: BusinessSettings, eventName: string): string {
+export function receiptText(sale: Sale, business: BusinessSettings, eventName: string, couponLine?: string): string {
   const lines = [
     business.name,
     eventName,
@@ -31,6 +32,7 @@ export function receiptText(sale: Sale, business: BusinessSettings, eventName: s
     `TOTAL ${peso(sale.total)}`,
     ...sale.payments.map((p) => `${p.name} ${peso(p.amount)}${p.ref ? ` ref ${p.ref}` : ''}`),
     ...(sale.change ? [`Change ${peso(sale.change)}`] : []),
+    ...(couponLine ? ['', couponLine] : []),
     '',
     business.receiptFooter,
   ];
@@ -63,6 +65,8 @@ export function ReceiptDialog({
   const [sending, setSending] = useState(false);
   const [mailerOk, setMailerOk] = useState<boolean | null>(null);
   const emails = useLiveQuery(async () => (sale ? db.outbox.where('saleId').equals(sale.id).sortBy('at') : []), [sale?.id]);
+  const earned = useSaleCoupon(sale?.id);
+  const couponLine = earned ? `Service coupon ${earned.coupon.code}: ${termsText(earned.batch, business.name || 'JoshWorks')}` : undefined;
 
   useEffect(() => {
     setEmailTo(customer?.email ?? '');
@@ -75,16 +79,16 @@ export function ReceiptDialog({
   useEffect(() => {
     setShowQr(false);
     if (!sale) return;
-    QRCode.toDataURL(receiptText(sale, business, eventName), { margin: 1, width: 360, errorCorrectionLevel: 'L' })
+    QRCode.toDataURL(receiptText(sale, business, eventName, couponLine), { margin: 1, width: 360, errorCorrectionLevel: 'L' })
       .then(setQr)
       .catch(() => setQr(''));
-  }, [sale, business, eventName]);
+  }, [sale, business, eventName, couponLine]);
 
   if (!sale) return null;
   const cash = sale.payments.find((p) => p.kind === 'cash');
   const card = customer && rules.enabled ? loyaltyState(customer.id, customerSales ?? [], rules) : null;
-  const earned = card ? stampsForSale(sale, rules) : 0;
-  const stampLine = card ? `+${earned} stamp${earned === 1 ? '' : 's'}, ${card.balance} on the card${card.rewards ? ` · ${rewardText(rules)} ready next time` : ` · ${card.toNext} more for ${rewardText(rules)}`}` : undefined;
+  const stamps = card ? stampsForSale(sale, rules) : 0;
+  const stampLine = card ? `+${stamps} stamp${stamps === 1 ? '' : 's'}, ${card.balance} on the card${card.rewards ? ` · ${rewardText(rules)} ready next time` : ` · ${card.toNext} more for ${rewardText(rules)}`}` : undefined;
   const last = emails?.[emails.length - 1];
 
   const sendReceipt = async () => {
@@ -93,7 +97,7 @@ export function ReceiptDialog({
     setSending(true);
     try {
       if (customer && !customer.email && saveEmail) await saveCustomer({ ...customer, email: to });
-      await queueEmail({ kind: 'receipt', saleId: sale.id, to, toName: customer?.name ?? '', mail: saleReceiptEmail(business, sale, { eventName, customerName: customer?.name, stampLine }) });
+      await queueEmail({ kind: 'receipt', saleId: sale.id, to, toName: customer?.name ?? '', mail: saleReceiptEmail(business, sale, { eventName, customerName: customer?.name, stampLine, couponLine }) });
       const r = await flushOutbox();
       app.toast(r.sent ? `Receipt emailed to ${to}` : 'Receipt saved; it goes out when there’s a connection.', { tone: r.sent ? 'good' : 'info' });
     } finally {
@@ -183,13 +187,23 @@ export function ReceiptDialog({
             {card ? (
               <span className="muted">
                 {' '}
-                · +{earned} stamp{earned === 1 ? '' : 's'}, {card.balance} on the card
+                · +{stamps} stamp{stamps === 1 ? '' : 's'}, {card.balance} on the card
                 {card.rewards ? ` · ${rewardText(rules)} ready next time` : ` · ${card.toNext} more for ${rewardText(rules)}`}
               </span>
             ) : null}
           </p>
         ) : null}
         {sale.note ? <p className="small muted">Note: {sale.note}</p> : null}
+        {earned ? (
+          <div className="coupon-earned" role="status">
+            <Ticket size={20} />
+            <div>
+              <span className="eyebrow">Service coupon earned</span>
+              <b className="mono">{earned.coupon.code}</b>
+              <span className="small">{termsText(earned.batch, business.name || 'JoshWorks')}</span>
+            </div>
+          </div>
+        ) : null}
         <p className="center small muted">{business.receiptFooter}</p>
       </div>
       <div className="email-receipt">

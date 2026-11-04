@@ -1,6 +1,6 @@
 import { sum, type Cents } from '../lib/money';
 import { isoDate } from '../lib/time';
-import { isRevenueSale, orderTotal } from './orders';
+import { isRevenueSale, orderDiscount, orderTotal } from './orders';
 import type { ReportInput } from '../reports/eventReport';
 import { lineTotal, printTotals } from './print';
 import type { Customer, Member, Order, Payout, PrintOrder, Sale, StudioEventFeed, StudioFeed, StudioFeedMethod, StudioFeedPerson, StudioFeedSpend, StudioOrderFeed, StudioOrderPayment, StudioPrintFeed } from '../db/types';
@@ -170,6 +170,7 @@ export function buildOrderFeed(o: {
     designer: o.designer ? { memberId: o.designer.id, name: o.designer.name, email: o.designer.email } : null,
     lines: order.lines.map((l) => ({ name: l.name, qty: l.qty, unitPrice: l.unitPrice })),
     total: orderTotal(order),
+    ...(orderDiscount(order) && order.coupon ? { discount: orderDiscount(order), couponCode: order.coupon.code } : {}),
     dueAt: order.dueAt,
     status: order.status,
     createdAt: order.createdAt,
@@ -209,6 +210,7 @@ export function buildPrintFeed(o: { order: PrintOrder; downPct: number; customer
     printerShare: o.printer ? t.printerShare : 0,
     lines: order.lines.map((l) => ({ label: l.label, qty: l.qty, unitPrice: l.unitPrice, amount: lineTotal(l) })),
     subtotal: t.subtotal,
+    ...(t.discount && order.coupon ? { discount: t.discount, couponCode: order.coupon.code } : {}),
     delivery: { method: order.delivery.method, courier: order.delivery.courier, fee: t.delivery, tracking: order.delivery.tracking },
     total: t.total,
     materialCost: t.materialCost,

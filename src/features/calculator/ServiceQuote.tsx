@@ -8,8 +8,9 @@ import { Field, MoneyInput, NumberInput, Select, TextInput } from '../../compone
 import { formatPct, peso, type Cents } from '../../lib/money';
 import { todayISO } from '../../lib/time';
 import { materialUnitCost } from '../../domain/cost';
-import { computeServiceQuote, type LaborLine, type MaterialLine, type OtherLine, type OutsourcedLine, type PricingMethod } from '../../domain/quote';
+import { computeServiceQuote, type LaborLine, type MaterialLine, type OtherLine, type OutsourcedLine, type PricingMethod, type ServiceQuoteInput } from '../../domain/quote';
 import { saveQuote } from '../../services/quotes';
+import { CouponField, useCouponCheck } from '../coupons/CouponField';
 import type { CalcSettings } from '../../db/types';
 
 export function ServiceQuote() {
@@ -33,10 +34,10 @@ export function ServiceQuote() {
   const [addons, setAddons] = useState({ rush: false, revision: 0, sourceFiles: false, ipBuyout: false });
   const [vat, setVat] = useState(calc.vatRegistered);
   const [ewt, setEwt] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
 
-  const r = useMemo(
-    () =>
-      computeServiceQuote({
+  const input = useMemo<ServiceQuoteInput>(
+    () => ({
         qty: qty ?? 1,
         materials: mats,
         outsourced,
@@ -58,9 +59,19 @@ export function ServiceQuote() {
       }),
     [qty, mats, outsourced, labor, other, overhead, method, markup, margin, manual, calc, addons, vat, ewt],
   );
+  const before = useMemo(() => computeServiceQuote(input), [input]);
+  // A service coupon is checked against the price before VAT, then comes off it.
+  const couponCheck = useCouponCheck(couponCode, before.totalPrice, null);
+  const r = useMemo(() => (couponCheck?.ok ? computeServiceQuote({ ...input, couponOff: couponCheck.discount }) : before), [input, before, couponCheck]);
 
   const save = async () => {
+    if (couponCode && !couponCheck?.ok) {
+      app.toast(couponCheck ? couponCheck.reason : 'Checking the coupon…', { tone: 'bad' });
+      return;
+    }
     const q = await saveQuote({
+      couponCode: couponCode || undefined,
+      servicePrice: r.totalPrice,
       date: todayISO(),
       client: client.trim(),
       project: project.trim() || 'Untitled job',
@@ -73,15 +84,18 @@ export function ServiceQuote() {
       status: 'quoted',
       notes: '',
       inputs: { mats, outsourced, labor, other, overhead, method, markup, margin, manual, addons, vat, ewt, result: r },
+    }).catch((e: unknown) => {
+      app.toast(e instanceof Error ? e.message : 'Couldn’t save the quote', { tone: 'bad' });
+      return null;
     });
-    app.toast(`Saved as ${q.quoteNo}. Find it under Quotes.`, { tone: 'good' });
+    if (q) app.toast(`Saved as ${q.quoteNo}. Find it under Quotes.`, { tone: 'good' });
   };
 
   const exportPdf = async () => {
     const { buildQuotePdf, quotePayMethods } = await import('../../reports/quotePdf');
     const { deliverPdf } = await import('../../reports/pdf');
     const business = settingValue<{ name: string; contact: string; address: string }>(settingRows, 'business');
-    await deliverPdf(await buildQuotePdf({ business, quoteNo: 'DRAFT', date: todayISO(), client, project, category, qty: qty ?? 1, result: r, labor, outsourced, vat, ewt, payMethods: await quotePayMethods() }), `Quote - ${client || 'client'} - ${project || 'job'}.pdf`);
+    await deliverPdf(await buildQuotePdf({ business, quoteNo: 'DRAFT', date: todayISO(), client, project, category, qty: qty ?? 1, result: r, labor, outsourced, vat, ewt, couponCode: r.coupon ? couponCode : undefined, payMethods: await quotePayMethods() }), `Quote - ${client || 'client'} - ${project || 'job'}.pdf`);
   };
 
   const healthTone = r.health === 'healthy' ? 'good' : r.health === 'thin' ? 'warn' : r.health === 'loss' ? 'bad' : undefined;
@@ -323,6 +337,12 @@ export function ServiceQuote() {
               <span>{r.vat ? 'Price before VAT' : 'Total price'}</span>
               <b className="num">{peso(r.totalPrice)}</b>
             </div>
+            {r.coupon ? (
+              <div className="row between small">
+                <span>− Coupon {couponCode}</span>
+                <span className="num">{peso(r.coupon)}</span>
+              </div>
+            ) : null}
             {r.vat ? (
               <div className="row between small">
                 <span>+ VAT</span>
@@ -359,6 +379,7 @@ export function ServiceQuote() {
               <Badge tone={healthTone}>{r.health === 'healthy' ? 'Healthy' : r.health === 'thin' ? `Too thin (under ${calc.minMarginPct}%)` : r.health === 'loss' ? 'Losing money' : 'Fill in the job'}</Badge>
             </div>
             {r.breakEvenQty ? <p className="muted tiny">Break-even quantity at this price: {r.breakEvenQty}</p> : null}
+            <CouponField id="sq-coupon" code={couponCode} onCode={setCouponCode} check={couponCheck} hint="From a JoshWorks event: off the price before VAT, for services of ₱2,500 or more. Profit is after it." />
           </div>
           <div className="actions">
             <Button variant="primary" onClick={save} disabled={r.totalPrice <= 0}>

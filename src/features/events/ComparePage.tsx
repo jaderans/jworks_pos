@@ -34,6 +34,8 @@ const METRICS: Metric[] = [
   { label: 'Paid in cash', value: (c) => c.cashPct, format: (v) => `${v}%` },
   { label: 'Sell-through', hint: 'Of the stock counted in', value: (c) => c.sellThrough, format: (v) => `${v}%`, better: 'high' },
   { label: 'Discounts given', value: (c) => c.discounts, format: peso, better: 'low' },
+  { label: 'Service coupons used', hint: 'Codes from this event used on a service', value: (c) => c.couponUses, format: String, better: 'high' },
+  { label: 'Services booked with coupons', hint: 'Before the coupons; not in the booth sales', value: (c) => c.couponSales, format: peso, better: 'high' },
 ];
 
 /** Past events side by side: which booth was worth it, per hour and per peso of booth fee. */

@@ -36,7 +36,7 @@ export function QuotesArchive() {
     const { deliverPdf } = await import('../../reports/pdf');
     const business = settingValue<{ name: string; contact: string; address: string }>(settingRows, 'business');
     await deliverPdf(
-      await buildQuotePdf({ business, quoteNo: quote.quoteNo, date: quote.date, client: quote.client, project: quote.project, category: quote.category, qty: quote.qty, result: inputs.result, labor: inputs.labor ?? [], outsourced: inputs.outsourced ?? [], vat: !!inputs.vat, ewt: !!inputs.ewt, payMethods: await quotePayMethods() }),
+      await buildQuotePdf({ business, quoteNo: quote.quoteNo, date: quote.date, client: quote.client, project: quote.project, category: quote.category, qty: quote.qty, result: inputs.result, labor: inputs.labor ?? [], outsourced: inputs.outsourced ?? [], vat: !!inputs.vat, ewt: !!inputs.ewt, couponCode: quote.coupon?.code, payMethods: await quotePayMethods() }),
       `${quote.quoteNo} - ${quote.client || 'client'}.pdf`,
     );
   };
@@ -91,6 +91,7 @@ export function QuotesArchive() {
                     <b>{x.client || 'No client'}</b>
                     <div className="muted tiny">
                       {x.project} · {x.category}
+                      {x.coupon ? ` · coupon ${x.coupon.code}` : ''}
                     </div>
                   </td>
                   <td className="r strong">{peso(x.total)}</td>

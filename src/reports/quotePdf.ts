@@ -19,6 +19,8 @@ export interface QuotePdfInput {
   ewt: boolean;
   /** Payment methods with a QR image, shown at the end so the client can pay the down payment. */
   payMethods?: { label: string; qr: string }[];
+  /** The service coupon in result.coupon. */
+  couponCode?: string;
 }
 
 const DOWN_PCT = 50;
@@ -50,6 +52,12 @@ export async function buildQuotePdf(q: QuotePdfInput) {
       ],
     ),
     waterfall([
+      ...(r.coupon
+        ? [
+            { label: 'Price', value: peso(r.totalPrice) },
+            { label: `Coupon ${q.couponCode ?? ''}`.trim(), value: `−${peso(r.coupon)}`, kind: 'sub' as const },
+          ]
+        : []),
       { label: 'Subtotal', value: peso(r.subtotal) },
       ...(q.vat ? [{ label: 'VAT', value: peso(r.vat), kind: 'sub' as const }] : []),
       { label: 'Total', value: peso(r.invoice), kind: 'final' },

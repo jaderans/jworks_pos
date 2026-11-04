@@ -29,11 +29,13 @@ export type Permission =
   | 'activity'
   | 'customers'
   | 'orders'
-  | 'printOrders';
+  | 'printOrders'
+  /** Make and manage service coupons (anyone who takes a service can apply one). */
+  | 'coupons';
 
 const ALL: Permission[] = [
   'dashboard', 'sell', 'viewSales', 'voidSale', 'viewEvent', 'viewProfit', 'editPrices', 'editProducts', 'viewCosts', 'production', 'spend',
-  'manageEvents', 'manageTeam', 'calculator', 'settings', 'activity', 'customers', 'orders', 'printOrders',
+  'manageEvents', 'manageTeam', 'calculator', 'settings', 'activity', 'customers', 'orders', 'printOrders', 'coupons',
 ];
 
 export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {

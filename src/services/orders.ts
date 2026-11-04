@@ -2,9 +2,12 @@ import { db, alive } from '../db/db';
 import { audit, create, patch } from '../db/write';
 import { getLocal, setLocal, type DeviceInfo } from '../db/local';
 import { peso, type Cents } from '../lib/money';
-import { priceCart, type CartItem } from '../domain/cart';
-import { ORDER_LINE, ORDER_STATUS_LABEL, orderMoney, orderTotal } from '../domain/orders';
+import { uid } from '../lib/ids';
+import { priceCart, type CartDiscount, type CartItem } from '../domain/cart';
+import { ORDER_LINE, ORDER_STATUS_LABEL, orderDiscount, orderMoney, orderServicePrice, orderTotal } from '../domain/orders';
+import { claimId } from '../domain/coupons';
 import { completeSale, voidSale } from './sales';
+import { resolveCoupon, syncClaim } from './coupons';
 import type { Order, OrderLine, OrderStatus, Sale, SalePayment, Session } from '../db/types';
 
 const orderSales = async (orderId: string) => alive(await db.sales.where('orderId').equals(orderId).toArray());
@@ -29,7 +32,11 @@ export interface NewOrder {
   designerId: string | null;
   dueAt: string;
   notes: string;
+  /** A service coupon code; checked against the commission pieces when the order is saved. */
+  couponCode?: string;
 }
+
+const claimFor = (o: Order) => ({ source: 'order' as const, sourceId: o.id, service: `Order ${o.number}`, customerId: o.customerId, customerName: o.customerName, price: orderServicePrice(o) });
 
 function check(o: Pick<NewOrder, 'lines' | 'customerId' | 'customerName'>) {
   if (!o.customerId && !o.customerName.trim()) throw new Error('Add who the order is for.');
@@ -41,11 +48,15 @@ function check(o: Pick<NewOrder, 'lines' | 'customerId' | 'customerName'>) {
   }
 }
 
-export async function createOrder(o: NewOrder, device: DeviceInfo): Promise<Order> {
+export async function createOrder({ couponCode, ...o }: NewOrder, device: DeviceInfo): Promise<Order> {
   check(o);
+  const id = uid();
+  const coupon = await resolveCoupon(couponCode, orderServicePrice(o), claimId('order', id));
   const number = await nextOrderNumber(o.eventId, device.letter);
   const order = await create<Order>(db.orders, {
     ...o,
+    id,
+    coupon,
     customerName: o.customerName.trim(),
     contact: o.contact.trim(),
     notes: o.notes.trim(),
@@ -55,17 +66,20 @@ export async function createOrder(o: NewOrder, device: DeviceInfo): Promise<Orde
     statusAt: Date.now(),
     pickupSaleId: null,
   });
+  await syncClaim(claimFor(order), coupon);
   await audit('create', 'order', order.id, `Order ${number} for ${order.customerName || 'a customer'}: ${peso(orderTotal(order))}`);
   return order;
 }
 
-export async function updateOrder(id: string, changes: Partial<NewOrder>): Promise<void> {
+export async function updateOrder(id: string, { couponCode, ...changes }: Partial<NewOrder>): Promise<void> {
   const o = await db.orders.get(id);
   if (!o) return;
   if (o.status === 'picked-up' || o.status === 'cancelled') throw new Error(`Order ${o.number} is closed.`);
   const next = { ...o, ...changes };
   check(next);
-  await patch(db.orders, id, changes);
+  const coupon = await resolveCoupon(couponCode !== undefined ? couponCode : o.coupon?.code, orderServicePrice(next), claimId('order', id));
+  await patch(db.orders, id, { ...changes, coupon });
+  await syncClaim(claimFor({ ...next, coupon }), coupon);
 }
 
 export async function setOrderStatus(id: string, status: OrderStatus): Promise<void> {
@@ -126,7 +140,9 @@ export async function pickUpOrder(order: Order, t: TakeMoney): Promise<Sale> {
     freeReason: '',
     designerId: l.designerId ?? order.designerId,
   }));
-  const priced = priceCart(items, [], []);
+  const off = orderDiscount(order);
+  const coupon: CartDiscount[] = off && order.coupon ? [{ id: 'coupon', label: `Coupon ${order.coupon.code}`, kind: 'amount', value: off, source: 'coupon' }] : [];
+  const priced = priceCart(items, [], coupon);
   const fromDeposit = Math.min(m.paid, priced.total);
   const deposit: SalePayment[] = fromDeposit ? [{ methodId: 'deposit', name: `Order deposit (${order.number})`, kind: 'deposit', amount: fromDeposit, tendered: null, ref: '' }] : [];
   const sale = await completeSale({
@@ -152,6 +168,7 @@ export async function cancelOrder(order: Order, deposits: 'refund' | 'keep', by:
     if (deposits === 'refund') await voidSale(d.id, `Order ${order.number} cancelled; deposit refunded`, by);
     else await patch(db.sales, d.id, { kind: undefined, lines: d.lines.map((l) => ({ ...l, name: `Kept deposit · order ${order.number}` })) });
   }
+  await syncClaim(claimFor(order), null);
   await patch(db.orders, order.id, { status: 'cancelled', statusAt: Date.now() });
   await audit('status', 'order', order.id, `Order ${order.number} cancelled${m.paid ? `; deposit ${peso(m.paid)} ${deposits === 'refund' ? 'refunded' : 'kept'}` : ''}`);
 }

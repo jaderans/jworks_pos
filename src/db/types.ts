@@ -245,7 +245,7 @@ export interface SaleLine {
 export interface AppliedDiscount {
   id: string;
   label: string;
-  kind: 'amount' | 'percent' | 'bundle' | 'manual' | 'voucher' | 'loyalty';
+  kind: 'amount' | 'percent' | 'bundle' | 'manual' | 'voucher' | 'loyalty' | 'coupon';
   amount: Cents;
 }
 
@@ -387,6 +387,8 @@ export interface Quote extends Syncable {
   status: QuoteStatus;
   notes: string;
   inputs: unknown;
+  /** A service coupon; total is already after it. */
+  coupon?: AppliedCoupon | null;
 }
 
 export interface AuditEntry extends Syncable {
@@ -421,7 +423,7 @@ export interface MailerSettings {
 export interface OutboxItem {
   id: string;
   at: number;
-  kind: 'receipt' | 'test' | 'summary';
+  kind: 'receipt' | 'test' | 'summary' | 'coupon';
   saleId: string | null;
   to: string;
   toName: string;
@@ -541,6 +543,8 @@ export interface Order extends Syncable {
   statusAt: number;
   notes: string;
   pickupSaleId: string | null;
+  /** A service coupon; it comes off the commission (custom) lines. */
+  coupon?: AppliedCoupon | null;
 }
 
 /** A discount code, e.g. KOMIKET50. */
@@ -562,6 +566,82 @@ export interface Voucher extends Syncable {
   perCustomer: number | null;
   active: 0 | 1;
   notes: string;
+}
+
+// ----- Service coupons -----
+// Coupons belong to one event and come off JoshWorks services (print orders,
+// commissions, service quotes, Studio jobs), never booth sales; register
+// discounts are vouchers.
+
+/** A set of coupons made together for one event: the terms its codes share. */
+export interface CouponBatch extends Syncable {
+  eventId: string;
+  /** "Booth handout", "Spend ₱500 at the booth". */
+  name: string;
+  kind: 'amount' | 'percent';
+  /** Centavos for amount, a percentage for percent. */
+  value: number;
+  /** Percent coupons: the most one takes off, in centavos; 0 means no cap. */
+  maxOff: Cents;
+  /** The service must cost at least this (₱2,500 at the least). */
+  minSpend: Cents;
+  /** ISO dates: from the event's first day to the expiry. */
+  validFrom: string;
+  validTo: string;
+  /** unique: every code is used once. shared: one code for many people, up to maxUses. */
+  mode: 'unique' | 'shared';
+  /** Shared codes: how many claims in all; null means no limit. */
+  maxUses: number | null;
+  /** Earned at the booth: a sale of at least this gives the customer a new code. 0: handed out instead. */
+  earnMin: Cents;
+  /** Codes start with this, e.g. KI26. */
+  prefix: string;
+  active: 0 | 1;
+  notes: string;
+}
+
+/** One coupon code; its terms are its batch's. */
+export interface Coupon extends Syncable {
+  /** Uppercase, e.g. KI26-7F3QX. */
+  code: string;
+  batchId: string;
+  eventId: string;
+  /** Who it was given to, for the expiry reminder. */
+  customerId: string | null;
+  /** The booth sale that earned it. */
+  saleId: string | null;
+  givenAt: number | null;
+  remindedAt: number | null;
+  /** Turned off by hand, or the sale that earned it was voided. */
+  void: 0 | 1;
+}
+
+export type CouponSource = 'print' | 'order' | 'quote' | 'studio' | 'manual';
+
+/** A coupon used on a service. Its id is `<source>:<sourceId>`, so a service never claims twice. */
+export interface CouponClaim extends Syncable {
+  couponId: string;
+  code: string;
+  batchId: string;
+  eventId: string;
+  source: CouponSource;
+  sourceId: string;
+  /** "Print order PA-004", "Studio job COM-012: Logo". */
+  service: string;
+  customerId: string | null;
+  customerName: string;
+  /** The service's price before the coupon; the minimum is checked against it. */
+  price: Cents;
+  discount: Cents;
+  at: number;
+  by: string | null;
+}
+
+/** The coupon on a print order, order or quote. */
+export interface AppliedCoupon {
+  couponId: string;
+  code: string;
+  discount: Cents;
 }
 
 export interface LaborRole {
@@ -683,7 +763,11 @@ export interface StudioOrderFeed {
   customer: { name: string; email: string; phone: string; handle: string };
   designer: { memberId: string; name: string; email: string } | null;
   lines: { name: string; qty: number; unitPrice: Cents }[];
+  /** After the coupon. */
   total: Cents;
+  /** A service coupon's discount (lines are at full price); added later, so older feeds have none. */
+  discount?: Cents;
+  couponCode?: string;
   /** Local date and time, or ''. */
   dueAt: string;
   status: OrderStatus;
@@ -706,6 +790,9 @@ export interface StudioPrintFeed {
   printerShare: Cents;
   lines: { label: string; qty: number; unitPrice: Cents; amount: Cents }[];
   subtotal: Cents;
+  /** A service coupon's discount off the print work; total is after it. */
+  discount?: Cents;
+  couponCode?: string;
   delivery: { method: 'pickup' | 'courier'; courier: string; fee: Cents; tracking: string };
   total: Cents;
   /** Materials at the rate card's cost per sheet; 0 when costs aren't set. */
@@ -840,4 +927,6 @@ export interface PrintOrder extends Syncable {
   files: string;
   notes: string;
   doneAt: number | null;
+  /** A service coupon; it comes off the print work, not the delivery fee. */
+  coupon?: AppliedCoupon | null;
 }

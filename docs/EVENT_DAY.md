@@ -19,7 +19,7 @@
 ## On the day
 
 1. Open the app (no internet needed) and pick the event at the top.
-2. **Sell → Open register** with the float you counted.
+2. **Sell**: check the event's prices on the price list next to **Open register** (event prices, bundle deals and discounts; anything without a price is flagged), then **Open register** with the float you counted.
 3. Sell. For GCash or bank transfers, type the reference number from the customer's screen and check it arrived before handing over the items.
 4. Regulars and new fans: tap **Customer** in the cart to add them (ask before ticking "OK to message"). They earn stamps, and **Use reward** appears when one is ready. A code from a post goes in **Voucher**.
 5. Custom requests (a name sticker, a commission): **Orders → New order**, take a deposit, give them the order number. When it's done, **Ready** (they get an email or you paste the copied message), then **Hand over** to collect the balance.

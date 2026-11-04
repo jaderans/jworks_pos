@@ -4,6 +4,8 @@ import { eventMetrics } from '../domain/summary';
 import { computeShare } from '../domain/share';
 import { makeCostIndex } from '../domain/cost';
 import { assetCharges } from '../domain/assets';
+import { couponStats } from '../domain/coupons';
+import { todayISO } from '../lib/time';
 import type { BusinessSettings } from '../db/types';
 import type { ReportInput } from './eventReport';
 
@@ -11,7 +13,7 @@ import type { ReportInput } from './eventReport';
 export async function loadReportInput(eventId: string): Promise<ReportInput | null> {
   const ev = await db.events.get(eventId);
   if (!ev || ev.deleted === 1) return null;
-  const [sales, sessions, products, categories, eventProducts, roster, members, deals, spend, costPoints, payouts, business, events, assetSpend] = await Promise.all([
+  const [sales, sessions, products, categories, eventProducts, roster, members, deals, spend, costPoints, payouts, business, events, assetSpend, batches, coupons, claims] = await Promise.all([
     db.sales.where('eventId').equals(eventId).toArray().then((r) => alive(r).sort((a, b) => b.at - a.at)),
     db.sessions.where('eventId').equals(eventId).toArray().then((r) => alive(r)),
     db.products.toArray().then((r) => alive(r)),
@@ -26,6 +28,9 @@ export async function loadReportInput(eventId: string): Promise<ReportInput | nu
     getSetting<BusinessSettings>('business'),
     db.events.toArray().then((r) => alive(r)),
     db.spend.where('type').equals('asset').toArray().then((r) => alive(r)),
+    db.couponBatches.where('eventId').equals(eventId).toArray().then((r) => alive(r)),
+    db.coupons.where('eventId').equals(eventId).toArray().then((r) => alive(r)),
+    db.couponClaims.where('eventId').equals(eventId).toArray().then((r) => alive(r)),
   ]);
   const charges = assetCharges(eventId, events, assetSpend);
   const productMap = new Map(products.map((p) => [p.id, p]));
@@ -46,5 +51,6 @@ export async function loadReportInput(eventId: string): Promise<ReportInput | nu
     assetCharges: charges,
     payouts,
     costOf,
+    coupons: couponStats({ batches, coupons, claims }, todayISO()),
   };
 }

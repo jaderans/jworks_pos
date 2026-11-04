@@ -27,6 +27,13 @@ test('customers earn stamps, use a reward and a voucher at the register', async 
   await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('row', { name: /FAIR20/ })).toBeVisible();
 
+  // Before the register opens, the price list shows the event price over the regular one.
+  await page.goto('/#/sell');
+  const prices = page.getByRole('region', { name: 'Prices' });
+  await expect(prices.locator('.price-row', { hasText: 'Cat Meme (Solo)' }).locator('.price-now')).toContainText('₱20');
+  await prices.getByRole('searchbox', { name: 'Find a product' }).fill('cat meme');
+  await expect(prices.locator('.price-row').first()).toContainText('Cat Meme');
+
   // Sale 1: a new customer added at the register.
   await openRegister(page);
   const cart = page.locator('.reg-cart');

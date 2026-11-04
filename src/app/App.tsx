@@ -12,6 +12,7 @@ import { startSync } from '../sync/engine';
 import { startOutbox } from '../email/outbox';
 import { startDailySummary } from '../email/automation';
 import { startPrintFeed } from '../services/printFeed';
+import { readStudioClaims } from '../services/coupons';
 import { JoinPage } from '../features/join/JoinPage';
 
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
@@ -53,6 +54,8 @@ function Gate() {
     startOutbox();
     startDailySummary();
     startPrintFeed();
+    // Studio jobs on this device that took a service coupon count as uses.
+    void readStudioClaims().catch(() => null);
   }, [done]);
   if (done === null) return <Loading />;
   if (location.pathname === '/join')

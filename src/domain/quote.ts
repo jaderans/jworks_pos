@@ -47,6 +47,8 @@ export interface ServiceQuoteInput {
   ewt: boolean;
   ewtPct: number;
   minMarginPct: number;
+  /** A service coupon's discount, off the total price before VAT. */
+  couponOff?: Cents;
 }
 
 export interface ServiceQuoteResult {
@@ -70,6 +72,9 @@ export interface ServiceQuoteResult {
   markupPct: number | null;
   addons: { label: string; pct: number; amount: Cents }[];
   addonsTotal: Cents;
+  /** A service coupon, off the total price; profit and margin are after it. Older saved quotes have none. */
+  coupon?: Cents;
+  /** The total price less the coupon: VAT and EWT are worked out on this. */
   subtotal: Cents;
   vat: Cents;
   invoice: Cents;
@@ -113,12 +118,13 @@ export function computeServiceQuote(q: ServiceQuoteInput): ServiceQuoteResult {
   const addonsTotal = sum(addons.map((a) => a.amount));
   const totalPrice = baseTotal + addonsTotal;
   const pricePerPc = Math.round(totalPrice / qty);
-  const profit = totalPrice - totalCost;
-  const subtotal = totalPrice;
+  const coupon = Math.min(totalPrice, Math.max(0, q.couponOff ?? 0));
+  const subtotal = totalPrice - coupon;
+  const profit = subtotal - totalCost;
   const vat = q.vatRegistered ? Math.round((subtotal * q.vatPct) / 100) : 0;
   const invoice = subtotal + vat;
   const ewt = q.ewt ? Math.round((subtotal * q.ewtPct) / 100) : 0;
-  const marginPct = totalPrice > 0 ? (profit / totalPrice) * 100 : null;
+  const marginPct = subtotal > 0 ? (profit / subtotal) * 100 : null;
   const health: ServiceQuoteResult['health'] =
     totalPrice <= 0 ? 'empty' : profit < 0 ? 'loss' : marginPct !== null && marginPct < q.minMarginPct ? 'thin' : 'healthy';
   const variablePerPc = (materials + outsourced + other) / qty;
@@ -141,12 +147,13 @@ export function computeServiceQuote(q: ServiceQuoteInput): ServiceQuoteResult {
     baseTotal,
     pricePerPc,
     totalPrice,
-    profitPerPc: pricePerPc - costPerPc,
+    profitPerPc: Math.round(subtotal / qty) - costPerPc,
     profit,
     marginPct,
     markupPct: totalCost > 0 ? (profit / totalCost) * 100 : null,
     addons,
     addonsTotal,
+    coupon,
     subtotal,
     vat,
     invoice,

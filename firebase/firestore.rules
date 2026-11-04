@@ -10,7 +10,7 @@ rules_version = '2';
 // Costs, materials, batches, booth spend and quotes are owner-only.
 // A write can never replace a newer copy of a record (last change wins, even offline).
 //
-// RULES VERSION 2026-11-04b. The app checks it (rulesCheck below) and asks the owner to
+// RULES VERSION 2026-11-04c. The app checks it (rulesCheck below) and asks the owner to
 // paste these rules again when Firebase still has older ones. Change the date with every
 // edit here and in src/sync/rulesVersion.ts.
 
@@ -64,7 +64,7 @@ service cloud.firestore {
       allow update: if isOwner(ws) && request.resource.data.ownerUid == resource.data.ownerUid;
 
       // The app reads rulesCheck/<its version>: allowed only when these rules are the current ones.
-      match /rulesCheck/{v} { allow read: if signedIn() && v == '2026-11-04b'; }
+      match /rulesCheck/{v} { allow read: if signedIn() && v == '2026-11-04c'; }
 
       match /access/{email} {
         allow read: if signedIn() && (email == myEmail() || isOwner(ws));
@@ -102,6 +102,10 @@ service cloud.firestore {
       match /t_orders/{id} { allow read: if isStaff(ws); allow write: if isStaff(ws) && (resource == null || notOlder()); }
       // Sticker printing jobs: whoever takes, prints or hands over the order updates it.
       match /t_printOrders/{id} { allow read: if isTeam(ws); allow write: if isTeam(ws) && (resource == null || notOlder()); }
+      // Service coupons: the owner makes the sets; booth sales earn codes; any service that takes one records the use.
+      match /t_couponBatches/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
+      match /t_coupons/{id} { allow read: if isTeam(ws); allow write: if isStaff(ws) && (resource == null || notOlder()); }
+      match /t_couponClaims/{id} { allow read: if isTeam(ws); allow write: if isTeam(ws) && (resource == null || notOlder()); }
       match /t_eventProducts/{id} { allow read: if isTeam(ws); allow write: if isTeam(ws) && (resource == null || notOlder()); }
       match /t_roster/{id} { allow read: if isTeam(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }
       match /t_partnerDeals/{id} { allow read: if isOwner(ws); allow write: if isOwner(ws) && (resource == null || notOlder()); }

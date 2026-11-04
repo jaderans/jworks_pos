@@ -124,6 +124,11 @@ test('owner, cashier and designer sync through the cloud', async ({ browser }) =
   await cashier.getByRole('button', { name: 'Change event' }).click();
   await cashier.getByRole('dialog', { name: 'Choose the event' }).getByRole('button', { name: /Cloud Fair/ }).click({ timeout: 20_000 });
   await cashier.goto('/#/sell');
+  // Before opening the register, the cashier checks the prices the owner set on another phone.
+  const prices = cashier.getByRole('region', { name: 'Prices' });
+  await expect(prices.locator('.price-row', { hasText: 'Enamel Pins' })).toContainText('₱30', { timeout: 20_000 });
+  await expect(prices.locator('.price-row', { hasText: 'Couple Pack (live)' })).toContainText('₱200');
+  await cashier.screenshot({ path: `${SHOTS}/20b-cashier-prices.png`, fullPage: true });
   await cashier.getByRole('button', { name: 'Open register' }).click();
   await tapProduct(cashier, 'Enamel Pins', 2);
   await payCash(cashier);

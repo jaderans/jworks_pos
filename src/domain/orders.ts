@@ -25,7 +25,16 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
 export const OPEN_STATUSES: readonly OrderStatus[] = ['new', 'in-progress', 'ready'];
 export const isOpenOrder = (o: Pick<Order, 'status'>) => OPEN_STATUSES.includes(o.status);
 
-export const orderTotal = (o: Pick<Order, 'lines'>): Cents => sum(o.lines.map((l) => Math.round(l.unitPrice * l.qty)));
+const lineAmount = (l: Pick<Order['lines'][number], 'unitPrice' | 'qty'>) => Math.round(l.unitPrice * l.qty);
+
+/** The commission pieces (custom lines): what a service coupon counts. Catalog products are booth merch. */
+export const orderServicePrice = (o: Pick<Order, 'lines'>): Cents => sum(o.lines.filter((l) => !l.productId).map(lineAmount));
+
+/** A service coupon's discount, never more than the commission pieces. */
+export const orderDiscount = (o: Pick<Order, 'lines' | 'coupon'>): Cents => Math.min(orderServicePrice(o), Math.max(0, o.coupon?.discount ?? 0));
+
+/** What the customer pays in all, after the coupon. */
+export const orderTotal = (o: Pick<Order, 'lines' | 'coupon'>): Cents => sum(o.lines.map(lineAmount)) - orderDiscount(o);
 
 export interface OrderMoney {
   total: Cents;
@@ -35,7 +44,7 @@ export interface OrderMoney {
 }
 
 /** What an order costs, what's been paid toward it (its deposit sales), and what's left. */
-export function orderMoney(order: Pick<Order, 'id' | 'lines'>, sales: readonly Sale[]): OrderMoney {
+export function orderMoney(order: Pick<Order, 'id' | 'lines' | 'coupon'>, sales: readonly Sale[]): OrderMoney {
   const deposits = sales.filter((s) => s.orderId === order.id && s.kind === 'deposit' && s.status === 'completed' && s.deleted !== 1);
   const paid = sum(deposits.map((s) => s.total));
   const total = orderTotal(order);

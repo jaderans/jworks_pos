@@ -3,9 +3,14 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { FileDown, FileSpreadsheet, FileText, Send, Share2 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { useEventData } from './useEventData';
-import { usePayouts, useSettingRows } from '../../hooks/data';
+import { useCouponData, usePayouts, useSettingRows } from '../../hooks/data';
+import { Link } from 'react-router';
+import { Ticket } from 'lucide-react';
+import { couponStats } from '../../domain/coupons';
+import { formatCount, peso } from '../../lib/money';
+import { todayISO } from '../../lib/time';
 import { settingValue } from '../../db/settings';
-import { Badge, Button, Callout, Loading } from '../../components/ui';
+import { Badge, Button, Callout, Loading, Stat } from '../../components/ui';
 import { Select } from '../../components/form';
 import { canShareFiles, downloadBlob, safeFileName } from '../../lib/files';
 import { daysBetween, fmtDateTime, fmtIsoWeekday, isoDate } from '../../lib/time';
@@ -21,6 +26,7 @@ export default function ReportTab({ ev }: { ev: JWEvent }) {
   const app = useApp();
   const d = useEventData(ev);
   const payouts = usePayouts(ev.id);
+  const couponData = useCouponData(ev.id);
   const settingRows = useSettingRows();
   const business = settingValue<BusinessSettings>(settingRows, 'business');
   const [busy, setBusy] = useState<Kind | null>(null);
@@ -31,9 +37,11 @@ export default function ReportTab({ ev }: { ev: JWEvent }) {
   }, [ev.startDate, ev.endDate, d.sales]);
   const [day, setDay] = useState<string>('');
 
-  if (d.loading || !payouts) return <Loading />;
+  if (d.loading || !payouts || !couponData) return <Loading />;
+  const coupons = couponStats(couponData, todayISO());
 
   const input = () => ({
+    coupons,
     business: business.name,
     ev,
     sales: d.sales,
@@ -140,6 +148,24 @@ export default function ReportTab({ ev }: { ev: JWEvent }) {
           <Button onClick={() => csv('staff')}>Staff split</Button>
         </div>
       </div>
+      {coupons.codes ? (
+        <section className="card" aria-label="Service coupons">
+          <div className="card-head">
+            <h2>
+              <Ticket size={20} className="teal" /> Service coupons
+            </h2>
+            <Link to="/event/coupons" className="small strong">
+              See them all
+            </Link>
+          </div>
+          <p className="sub">What this event’s coupons brought in. Services are paid through print orders, orders, quotes and Studio jobs, so they aren’t in the booth sales. The full report has these numbers too.</p>
+          <div className="stats">
+            <Stat label="Used" value={`${formatCount(coupons.claims)} of ${formatCount(coupons.codes)}`} hint={coupons.claimRate === null ? undefined : `${coupons.claimRate}% of the codes`} />
+            <Stat label="Services booked" value={peso(coupons.price)} hint="Before the coupons" />
+            <Stat label="Discounts given" value={peso(coupons.discount)} hint={`${peso(coupons.net)} came in`} />
+          </div>
+        </section>
+      ) : null}
       <StudioCard ev={ev} business={business.name} />
       <div className="card">
         <div className="card-head">

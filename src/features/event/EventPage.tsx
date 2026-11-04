@@ -13,6 +13,7 @@ const StockTab = lazy(() => import('./StockTab'));
 const SpendTab = lazy(() => import('./SpendTab'));
 const TeamTab = lazy(() => import('./TeamTab'));
 const ReportTab = lazy(() => import('./ReportTab'));
+const CouponsTab = lazy(() => import('./CouponsTab'));
 const EventSettingsTab = lazy(() => import('./EventSettingsTab'));
 
 export default function EventPage() {
@@ -47,6 +48,7 @@ export default function EventPage() {
     { to: '/event/stock', label: 'Stock' },
     ...(app.can('spend') ? [{ to: '/event/spend', label: 'Booth spend' }] : []),
     ...(owner ? [{ to: '/event/team', label: 'Team & payouts' }] : []),
+    ...(app.can('coupons') ? [{ to: '/event/coupons', label: 'Coupons' }] : []),
     ...(owner ? [{ to: '/event/report', label: 'Report' }] : []),
     ...(app.can('manageEvents') ? [{ to: '/event/settings', label: 'Settings' }] : []),
   ];
@@ -72,6 +74,7 @@ export default function EventPage() {
           <Route path="stock" element={<StockTab ev={ev} />} />
           <Route path="spend" element={app.can('spend') ? <SpendTab ev={ev} /> : <Navigate to="/event" replace />} />
           <Route path="team" element={owner ? <TeamTab ev={ev} /> : <Navigate to="/event" replace />} />
+          <Route path="coupons" element={app.can('coupons') ? <CouponsTab ev={ev} /> : <Navigate to="/event" replace />} />
           <Route path="report" element={owner ? <ReportTab ev={ev} /> : <Navigate to="/event" replace />} />
           <Route path="settings" element={app.can('manageEvents') ? <EventSettingsTab ev={ev} /> : <Navigate to="/event" replace />} />
           <Route path="*" element={<Navigate to="/event" replace />} />

@@ -1,5 +1,5 @@
 import { peso, sum } from '../lib/money';
-import { addDays, dayStart, fmtDateTime, fmtIsoWeekday, fmtTime, isoDate } from '../lib/time';
+import { addDays, dayStart, fmtDateTime, fmtIsoDate, fmtIsoWeekday, fmtTime, isoDate } from '../lib/time';
 import { drawerState } from '../domain/summary';
 import { dayStock } from '../domain/stock';
 import type { BusinessSettings, Material, Sale } from '../db/types';
@@ -120,7 +120,7 @@ function plain(l: Layout, b: BusinessSettings): string {
 const build = (b: BusinessSettings, subject: string, l: Layout): EmailContent => ({ subject, html: layout(b, l), text: plain(l, b) });
 
 /** A booth sale's receipt: what they bought, discounts, how they paid, and their stamps. */
-export function saleReceiptEmail(b: BusinessSettings, sale: Sale, o: { eventName: string; customerName?: string; stampLine?: string }): EmailContent {
+export function saleReceiptEmail(b: BusinessSettings, sale: Sale, o: { eventName: string; customerName?: string; stampLine?: string; couponLine?: string }): EmailContent {
   const name = o.customerName?.split(/\s+/)[0];
   return build(b, `Your receipt ${sale.receiptNo} · ${b.name || 'JoshWorks'}`, {
     preheader: `${peso(sale.total)} at ${o.eventName}. Thank you for supporting ${b.name || 'JoshWorks'}!`,
@@ -134,6 +134,7 @@ export function saleReceiptEmail(b: BusinessSettings, sale: Sale, o: { eventName
       ['Receipt no.', sale.receiptNo],
       ['Date', fmtDateTime(sale.at)],
       ...(o.stampLine ? ([['Stamp card', o.stampLine]] as [string, string][]) : []),
+      ...(o.couponLine ? ([['Your coupon', o.couponLine]] as [string, string][]) : []),
     ],
     note: `${b.receiptFooter ? `${esc(b.receiptFooter)} ` : ''}This is an acknowledgment receipt for your records, not a BIR official receipt.`,
   });
@@ -234,4 +235,21 @@ export function orderReadyEmail(b: BusinessSettings, o: { number: string; custom
 export function orderReadyText(b: BusinessSettings, o: { number: string; customerName: string; eventName: string; balance: number }): string {
   const name = o.customerName.split(/\s+/)[0];
   return `Hi ${name || 'there'}! Your ${b.name || 'JoshWorks'} order ${o.number} is ready for pickup at our booth at ${o.eventName}.${o.balance > 0 ? ` Balance: ${peso(o.balance)}.` : ' It is fully paid.'} See you!`;
+}
+
+/** A customer's service coupon runs out soon. */
+export function couponReminderEmail(b: BusinessSettings, o: { customerName: string; code: string; terms: string; validTo: string; eventName: string }): EmailContent {
+  const name = o.customerName.split(/\s+/)[0];
+  return build(b, `Your ${b.name || 'JoshWorks'} coupon ends ${fmtIsoDate(o.validTo)}`, {
+    preheader: `${o.code}: ${o.terms}`,
+    heading: 'Your coupon ends soon',
+    paragraphs: [
+      `Hi ${esc(name || 'there')}, here’s the ${esc(b.name || 'JoshWorks')} coupon you got${o.eventName ? ` at <strong>${esc(o.eventName)}</strong>` : ''}. Reply to this email or message us to book stickers, a logo or a commission before it runs out.`,
+    ],
+    highlight: { label: 'Coupon code', value: o.code },
+    rows: [
+      ['What it gives', o.terms],
+      ['Good until', fmtIsoDate(o.validTo)],
+    ],
+  });
 }

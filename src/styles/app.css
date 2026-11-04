@@ -692,3 +692,14 @@ img { max-width: 100%; display: block; }
 .arrange-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sticky-actions { position: sticky; bottom: 0; padding: 10px 0; background: var(--bg); justify-content: flex-end; z-index: 3; }
 .card.soft { background: var(--surface-2); box-shadow: none; }
+
+/* Service coupons */
+.coupon-on { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--yellow-soft); color: var(--ink); }
+.coupon-on.bad { background: var(--bad-soft); }
+.coupon-on .grow { min-width: 0; overflow-wrap: anywhere; }
+.coupon-earned { display: flex; gap: 10px; align-items: flex-start; margin-top: 4px; padding: 10px 12px; border: 1px dashed var(--yellow-hover); border-radius: var(--r-sm); background: var(--yellow-soft); color: var(--ink); }
+.coupon-earned > div { display: grid; gap: 2px; min-width: 0; }
+.coupon-earned b { font-size: 1.15rem; letter-spacing: 0.04em; }
+.coupon-sets { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; }
+.coupon-set { display: grid; gap: 10px; align-content: start; }
+.coupon-set.muted { opacity: 0.75; }

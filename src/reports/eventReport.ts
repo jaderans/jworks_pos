@@ -11,6 +11,7 @@ import { SPEND_TYPE_LABEL, SPEND_STATUS_LABEL } from '../services/spend';
 import type { EventProduct, JWEvent, Member, Payout, Product, RosterEntry, Sale, Session, SpendItem } from '../db/types';
 import type { CostLookup } from '../domain/cost';
 import type { AssetCharge } from '../domain/assets';
+import type { CouponStats } from '../domain/coupons';
 
 export interface ReportInput {
   business: string;
@@ -28,6 +29,8 @@ export interface ReportInput {
   assetCharges: AssetCharge[];
   payouts: Payout[];
   costOf: (productId: string, at: number) => CostLookup;
+  /** This event's service coupons: how many were used and what they brought in. */
+  coupons?: CouponStats;
 }
 
 const nameOf = (i: ReportInput, id: string | null) => (id ? (i.members.get(id)?.name ?? 'Unknown') : '—');
@@ -274,6 +277,21 @@ export async function buildEventReport(i: ReportInput) {
       { label: 'Still marked To buy (not counted)', value: peso(s.costs.planned), kind: 'sub' as const },
     ]),
   );
+
+  // Service coupons: what this event's codes brought in, often after the event.
+  if (i.coupons && i.coupons.codes > 0) {
+    const c = i.coupons;
+    content.push(sectionTitle('Service coupons'));
+    content.push(
+      kpis([
+        { label: 'Codes', value: String(c.codes), hint: `${c.given} given out` },
+        { label: 'Used', value: String(c.claims), hint: c.claimRate === null ? undefined : `${c.claimRate}% of the codes` },
+        { label: 'Services booked', value: peso(c.price), hint: 'Before the coupons' },
+        { label: 'Discounts given', value: peso(c.discount), hint: `${peso(c.net)} came in` },
+      ]),
+    );
+    content.push({ text: 'Services are paid through print orders, orders, quotes and Studio jobs, so they aren’t in the booth sales above.', style: 'muted' });
+  }
 
   // Profit share
   content.push(sectionTitle('Profit share'));

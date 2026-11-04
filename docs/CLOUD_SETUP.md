@@ -31,8 +31,8 @@ It runs on **your own free Firebase project** (Google's Spark plan, no card need
 ## 3. Invite the team
 
 1. **Team → Add person**: name, **email**, and app role:
-   - **Cashier**: sells and counts the drawer; adds, edits, arranges and deletes products and sets prices; no costs or payouts; voids and big discounts need your PIN.
-   - **Designer**: adds, edits, arranges and deletes products, sets prices and counts stock; sees event dashboards, their own shifts and payout, and how their designs sold.
+   - **Cashier**: sells and counts the drawer; adds, edits, arranges and deletes products and sets prices; takes orders and print orders and applies service coupons to them (booth sales they ring up can earn coupons); no costs or payouts; voids and big discounts need your PIN.
+   - **Designer**: adds, edits, arranges and deletes products, sets prices and counts stock; works print orders, service coupons included; sees event dashboards, their own shifts and payout, and how their designs sold.
    - **Partner**: sees their own payouts only.
 2. Tap the **link** icon next to them to send an invite (Messenger, Viber…).
 3. They open it on their phone, **Create account** with that same email, verify it, and they're in. Cashiers pick a register letter (B, C…).
