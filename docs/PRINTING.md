@@ -36,3 +36,9 @@ Anyone on the team can work print orders: the owner, cashiers and designers. Onl
     - **Expenses:** the courier fee (Transport), and the materials (Printing) when the rate card has costs.
   - **The studio keeps the rest.** For a ₱970 order with a ₱120 courier fee and 20% for the printer: the printer earns ₱170 (20% of ₱850), the courier gets ₱120, and the studio keeps ₱680, less material costs.
   - When the order changes in the POS (a payment, shipped), Studio shows **Changed in the POS**. **Update** brings it in line.
+
+## Fixing or deleting an order
+
+- **Edit:** the pencil works on any order. Once it's done or cancelled, what was printed, the delivery and the price stay as they are, but the customer, who printed it, the files and the notes can still be fixed.
+- **Delete (owner only):** the bin on the order. Any payments on it go too, so refund the customer first if you need to. Cash already in a drawer stays counted there. A commission order under **Orders** can't be deleted while it holds money: cancel and refund a deposit, or void a pickup sale in the Sales log, first.
+- **In Studio:** a deleted order leaves **Money → Booth events**. If it was already added as a job, it shows under **Deleted in the POS**; **Delete from Studio** removes the job with what came from the POS. Payments entered by hand in Studio stop this, so nothing is lost by accident. On another device, open a new **Studio file** to see what was deleted.

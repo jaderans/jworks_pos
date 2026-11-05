@@ -51,6 +51,13 @@ export function orderMoney(order: Pick<Order, 'id' | 'lines' | 'coupon'>, sales:
   return { total, paid, balance: Math.max(0, total - paid), deposits };
 }
 
+/** Why an order can't be deleted yet: its deposits and pickup are sales, and sales stay in the records. Null when it can. */
+export function orderDeleteBlock(order: Pick<Order, 'id' | 'number' | 'status'>, sales: readonly Sale[]): string | null {
+  const live = sales.filter((s) => s.orderId === order.id && s.status === 'completed' && s.deleted !== 1);
+  if (!live.length) return null;
+  return isOpenOrder(order) ? `${order.number} has a deposit. Cancel the order and refund it first.` : `${order.number} has a sale. Void ${live.map((s) => s.receiptNo).join(' and ')} in the Sales log first.`;
+}
+
 /** Deposits taken for orders that haven't been picked up or cancelled yet: money held for customers. */
 export function depositsHeld(orders: readonly Order[], sales: readonly Sale[]): Cents {
   return sum(orders.filter((o) => o.deleted !== 1 && isOpenOrder(o)).map((o) => orderMoney(o, sales).paid));

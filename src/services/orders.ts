@@ -1,13 +1,14 @@
 import { db, alive } from '../db/db';
-import { audit, create, patch } from '../db/write';
+import { audit, create, patch, remove } from '../db/write';
 import { getLocal, setLocal, type DeviceInfo } from '../db/local';
 import { peso, type Cents } from '../lib/money';
 import { uid } from '../lib/ids';
 import { priceCart, type CartDiscount, type CartItem } from '../domain/cart';
-import { ORDER_LINE, ORDER_STATUS_LABEL, orderDiscount, orderMoney, orderServicePrice, orderTotal } from '../domain/orders';
+import { ORDER_LINE, ORDER_STATUS_LABEL, isOpenOrder, orderDeleteBlock, orderDiscount, orderMoney, orderServicePrice, orderTotal } from '../domain/orders';
 import { claimId } from '../domain/coupons';
 import { completeSale, voidSale } from './sales';
 import { resolveCoupon, syncClaim } from './coupons';
+import { dropOrderFeed, refreshOrderFeed } from './studio';
 import type { Order, OrderLine, OrderStatus, Sale, SalePayment, Session } from '../db/types';
 
 const orderSales = async (orderId: string) => alive(await db.sales.where('orderId').equals(orderId).toArray());
@@ -74,12 +75,39 @@ export async function createOrder({ couponCode, ...o }: NewOrder, device: Device
 export async function updateOrder(id: string, { couponCode, ...changes }: Partial<NewOrder>): Promise<void> {
   const o = await db.orders.get(id);
   if (!o) return;
-  if (o.status === 'picked-up' || o.status === 'cancelled') throw new Error(`Order ${o.number} is closed.`);
+  if (!isOpenOrder(o)) return updateClosedOrder(o, changes);
   const next = { ...o, ...changes };
   check(next);
   const coupon = await resolveCoupon(couponCode !== undefined ? couponCode : o.coupon?.code, orderServicePrice(next), claimId('order', id));
   await patch(db.orders, id, { ...changes, coupon });
   await syncClaim(claimFor({ ...next, coupon }), coupon);
+  await refreshOrderFeed(id);
+}
+
+/** A closed order keeps its items and price. Who it's for, who made it and the notes can still be fixed. */
+async function updateClosedOrder(o: Order, changes: Partial<NewOrder>): Promise<void> {
+  const { customerId, customerName, contact, designerId, dueAt, notes } = { ...o, ...changes };
+  const details = { customerId, customerName, contact, designerId, dueAt, notes };
+  check({ ...o, ...details });
+  await patch(db.orders, o.id, details);
+  if (o.status === 'picked-up') await syncClaim(claimFor({ ...o, ...details }), o.coupon);
+  await refreshOrderFeed(o.id);
+}
+
+/**
+ * Delete an order with no money on it, along with its coupon use and its
+ * summary for Studio. Deposits and pickups are sales, so they're refunded or
+ * voided first.
+ */
+export async function deleteOrder(id: string): Promise<void> {
+  const o = await db.orders.get(id);
+  if (!o || o.deleted === 1) return;
+  const blocked = orderDeleteBlock(o, await orderSales(id));
+  if (blocked) throw new Error(blocked);
+  await syncClaim(claimFor(o), null);
+  await remove(db.orders, id);
+  await dropOrderFeed(id);
+  await audit('delete', 'order', id, `Deleted order ${o.number} for ${o.customerName || 'a customer'}`);
 }
 
 export async function setOrderStatus(id: string, status: OrderStatus): Promise<void> {

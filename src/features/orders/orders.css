@@ -7,6 +7,13 @@
 .order-card { display: grid; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 12px 10px; box-shadow: var(--shadow-sm); }
 .order-no { font-family: var(--f-display); font-weight: 700; font-size: 1.15rem; color: var(--teal); letter-spacing: 0.01em; }
 .order-lines { margin: 0; padding-left: 18px; font-size: 0.9rem; color: var(--ink-2); }
+.order-closed-actions { gap: 2px; flex: none; }
+/* Closed orders on phones: the name on its own line, the status under it, and the buttons together on the right. */
+@media (max-width: 620px) {
+  .order-closed { flex-wrap: wrap; }
+  .order-closed .main-text { flex-basis: calc(100% - 80px); }
+  .order-closed-actions { margin-left: auto; }
+}
 .order-line-edit { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .order-line-edit .grow { min-width: 160px; }
 .order-ticket { display: grid; justify-items: center; gap: 4px; padding: 18px; border: 2px dashed var(--teal); border-radius: var(--r); text-align: center; }

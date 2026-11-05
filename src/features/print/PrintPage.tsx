@@ -15,7 +15,7 @@ import {
   DEFAULT_PRINT_RATES, PACK_SIZE_LABEL, PRINT_STATUS_LABEL, customLine, isOpenPrint, lineTotal, packLine, peelLine, printTotals, printWarnings, sheetsLine,
 } from '../../domain/print';
 import {
-  approvePrint, blankDelivery, cancelPrint, createPrintOrder, markProofSent, setPrintStatus, takePrintPayment, updatePrintOrder, type NewPrintOrder,
+  approvePrint, blankDelivery, cancelPrint, createPrintOrder, deletePrintOrder, markProofSent, setPrintStatus, takePrintPayment, updatePrintOrder, type NewPrintOrder,
 } from '../../services/print';
 import { CustomerPicker } from '../register/CustomerPicker';
 import { CouponField, appliedFrom, useCouponCheck } from '../coupons/CouponField';
@@ -64,6 +64,17 @@ export default function PrintPage() {
     } catch (e) {
       app.toast(e instanceof Error ? e.message : 'Couldn’t do that', { tone: 'bad' });
     }
+  };
+  const owner = app.can('viewProfit');
+  const removeOrder = async (o: PrintOrder) => {
+    const { paid } = printTotals(o, rates.downPct);
+    const ok = await app.confirm({
+      title: `Delete ${o.number}?`,
+      message: `${paid ? `The ${peso(paid)} paid on it goes too, so refund the customer first if you need to. Cash already in a drawer stays counted there. ` : ''}It comes off this list and off Booth events in JoshWorks Studio. If it’s already a job there, Studio shows it under Deleted in the POS for you to delete. You can’t undo this.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (ok) await act(`${o.number} deleted`, () => deletePrintOrder(o.id));
   };
   const startPrinting = async (o: PrintOrder) => {
     const t = printTotals(o, rates.downPct);
@@ -121,6 +132,7 @@ export default function PrintPage() {
                     onPrint={() => void startPrinting(o)}
                     onReady={() => void act(`${o.number} is ready`, () => setPrintStatus(o.id, 'ready'))}
                     onHandOver={() => setHanding(o)}
+                    onDelete={owner ? () => void removeOrder(o) : undefined}
                   />
                 ))}
               </section>
@@ -134,7 +146,7 @@ export default function PrintPage() {
           <summary className="strong">Done and cancelled ({closed.length})</summary>
           <div className="list" style={{ marginTop: 8 }}>
             {closed.map((o) => (
-              <div key={o.id} className="list-item">
+              <div key={o.id} className="list-item order-closed">
                 <b className="mono">{o.number}</b>
                 <span className="main-text">
                   <b>{nameOf(o)}</b>
@@ -142,9 +154,19 @@ export default function PrintPage() {
                 </span>
                 <Badge tone={o.status === 'done' ? 'good' : undefined}>{o.status === 'done' ? (o.delivery.method === 'courier' ? 'Shipped' : 'Picked up') : 'Cancelled'}</Badge>
                 <span className="muted tiny nowrap">{fmtDateTime(o.statusAt)}</span>
-                <IconButton label={`PDF of ${o.number}`} size="sm" plain onClick={() => void pdf(o)}>
-                  <FileDown size={15} />
-                </IconButton>
+                <span className="row order-closed-actions">
+                  <IconButton label={`PDF of ${o.number}`} size="sm" plain onClick={() => void pdf(o)}>
+                    <FileDown size={15} />
+                  </IconButton>
+                  <IconButton label={`Edit ${o.number}`} size="sm" plain onClick={() => setEditing(o)}>
+                    <Pencil size={15} />
+                  </IconButton>
+                  {owner ? (
+                    <IconButton label={`Delete ${o.number}`} size="sm" plain onClick={() => void removeOrder(o)}>
+                      <Trash2 size={15} />
+                    </IconButton>
+                  ) : null}
+                </span>
               </div>
             ))}
           </div>
@@ -182,6 +204,8 @@ function PrintCard(p: {
   onPrint: () => void;
   onReady: () => void;
   onHandOver: () => void;
+  /** Owner only. */
+  onDelete?: () => void;
 }) {
   const o = p.order;
   const t = printTotals(o, p.rates.downPct);
@@ -203,6 +227,11 @@ function PrintCard(p: {
           <IconButton label={`Cancel ${o.number}`} size="sm" plain onClick={p.onCancel}>
             <Ban size={15} />
           </IconButton>
+          {p.onDelete ? (
+            <IconButton label={`Delete ${o.number}`} size="sm" plain onClick={p.onDelete}>
+              <Trash2 size={15} />
+            </IconButton>
+          ) : null}
         </div>
       </div>
       <ul className="order-lines">
@@ -326,7 +355,8 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
   const couponCheck = useCouponCheck(couponCode, sum(lines.map(lineTotal)), order && order !== 'new' ? claimId('print', order.id) : null);
 
   if (!order) return null;
-  const draft = { lines, delivery, payments: order === 'new' ? [] : order.payments, printerPct: printerPct ?? 0, coupon: appliedFrom(couponCheck) };
+  const closed = order !== 'new' && !isOpenPrint(order);
+  const draft = { lines, delivery, payments: order === 'new' ? [] : order.payments, printerPct: printerPct ?? 0, coupon: closed ? order.coupon : appliedFrom(couponCheck) };
   const t = printTotals(draft, rates.downPct);
   const warnings = printWarnings({ lines }, rates);
   const preview: PrintLine | null =
@@ -433,167 +463,177 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
                   </span>
                 </span>
                 <b>{peso(lineTotal(l))}</b>
-                <IconButton label={`Remove ${l.label}`} size="sm" onClick={() => setLines(lines.filter((_, k) => k !== i))}>
-                  <Trash2 size={15} />
-                </IconButton>
+                {!closed ? (
+                  <IconButton label={`Remove ${l.label}`} size="sm" onClick={() => setLines(lines.filter((_, k) => k !== i))}>
+                    <Trash2 size={15} />
+                  </IconButton>
+                ) : null}
               </div>
             ))}
           </div>
         ) : (
           <p className="muted small">Nothing yet. Add sticker sheets, peel-off sheets or packaging below.</p>
         )}
-        <div className="card soft stack tight">
-          <Segmented
-            label="Add"
-            value={kind}
-            onChange={setKind}
-            options={[
-              { value: 'sheets', label: 'Sticker sheets' },
-              { value: 'peel', label: 'Peel-off sheets' },
-              { value: 'pack', label: 'Packaging' },
-              { value: 'custom', label: 'Other' },
-            ]}
-          />
-          <div className="form-grid">
-            {kind === 'sheets' ? (
-              <>
-                <Field label="Material" htmlFor="po-material">
-                  {materialSelect}
-                </Field>
-                <Field label="Cut" htmlFor="po-cut">
-                  <Select id="po-cut" value={cut} onChange={(e) => setCut(e.target.value)}>
-                    {rates.cuts
-                      .filter((c) => c.key !== 'peel')
-                      .map((c) => (
-                        <option key={c.key} value={c.key}>
-                          {c.name}
-                          {c.price ? ` +${peso(c.price)}/sheet` : ' (included)'}
-                        </option>
-                      ))}
-                  </Select>
-                </Field>
-                <Field label="Sticker size (optional)" htmlFor="po-size" hint="Shows about how many fit.">
-                  <Select id="po-size" value={size} onChange={(e) => setSize(e.target.value)}>
-                    <option value="">Mixed designs</option>
-                    {rates.stickerSizes.map((s) => (
-                      <option key={s.name} value={s.name}>
-                        {s.name} · {s.perA4} per sheet
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="A4 sheets" htmlFor="po-sheets">
-                  <NumberInput id="po-sheets" decimals={false} min={1} value={sheets} onChange={setSheets} />
-                </Field>
-              </>
-            ) : kind === 'peel' ? (
-              <>
-                <Field label="Material" htmlFor="po-material">
-                  {materialSelect}
-                </Field>
-                <Field label="Peel-off sheet size" htmlFor="po-peel">
-                  <Select id="po-peel" value={peelSize} onChange={(e) => setPeelSize(e.target.value)}>
-                    {rates.peelSizes.map((s) => (
-                      <option key={s.key} value={s.key}>
-                        {s.name} · {s.perA4} per A4
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Peel-off sheets" htmlFor="po-peel-count">
-                  <NumberInput id="po-peel-count" decimals={false} min={1} value={peelCount} onChange={setPeelCount} />
-                </Field>
-              </>
-            ) : kind === 'pack' ? (
-              <>
-                <Field label="Packaging" htmlFor="po-pack" className="span-2">
-                  <Select id="po-pack" value={pack} onChange={(e) => setPack(e.target.value)}>
-                    {rates.packs.map((x) => (
-                      <option key={x.key} value={x.key}>
-                        {x.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Size" htmlFor="po-pack-size">
-                  <Select id="po-pack-size" value={packSize} onChange={(e) => setPackSize(e.target.value as PackSize)}>
-                    {(['small', 'medium', 'large'] as const).map((s) => (
-                      <option key={s} value={s}>
-                        {PACK_SIZE_LABEL[s]}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Packs" htmlFor="po-packs" hint={`At least ${rates.minPacks} per design.`}>
-                  <NumberInput id="po-packs" decimals={false} min={1} value={packs} onChange={setPacks} />
-                </Field>
-              </>
-            ) : (
-              <>
-                <Field label="What it is" htmlFor="po-custom" className="span-2">
-                  <TextInput id="po-custom" value={customLabel} onChange={(e) => setCustomLabel(e.target.value)} placeholder="e.g. Label layout and design, rush fee" />
-                </Field>
-                <Field label="How many" htmlFor="po-custom-qty">
-                  <NumberInput id="po-custom-qty" decimals={false} min={1} value={customQty} onChange={setCustomQty} />
-                </Field>
-                <Field label="Price each" htmlFor="po-custom-price">
-                  <MoneyInput id="po-custom-price" value={customPrice} onChange={setCustomPrice} />
-                </Field>
-              </>
-            )}
-          </div>
-          <div className="row between wrap">
-            <span className="muted small">{preview ? `${preview.label}: ${preview.qty} × ${peso(preview.unitPrice, { decimals: 2 })} = ${peso(lineTotal(preview))}` : 'Fill in the line to add it.'}</span>
-            <Button
-              size="sm"
-              disabled={!preview}
-              onClick={() => {
-                if (!preview) return;
-                setLines([...lines, preview]);
-                if (kind === 'custom') {
-                  setCustomLabel('');
-                  setCustomPrice(null);
-                }
-              }}
-            >
-              <Plus size={15} /> Add to the order
-            </Button>
-          </div>
-        </div>
-        {warnings.length ? (
-          <Callout tone="warn">
-            {warnings.map((w) => (
-              <div key={w}>{w}</div>
-            ))}
-          </Callout>
-        ) : null}
+        {closed ? (
+          <p className="muted small">A closed order keeps what was printed, its delivery and its price; the rest can still be fixed.</p>
+        ) : (
+          <>
+            <div className="card soft stack tight">
+              <Segmented
+                label="Add"
+                value={kind}
+                onChange={setKind}
+                options={[
+                  { value: 'sheets', label: 'Sticker sheets' },
+                  { value: 'peel', label: 'Peel-off sheets' },
+                  { value: 'pack', label: 'Packaging' },
+                  { value: 'custom', label: 'Other' },
+                ]}
+              />
+              <div className="form-grid">
+                {kind === 'sheets' ? (
+                  <>
+                    <Field label="Material" htmlFor="po-material">
+                      {materialSelect}
+                    </Field>
+                    <Field label="Cut" htmlFor="po-cut">
+                      <Select id="po-cut" value={cut} onChange={(e) => setCut(e.target.value)}>
+                        {rates.cuts
+                          .filter((c) => c.key !== 'peel')
+                          .map((c) => (
+                            <option key={c.key} value={c.key}>
+                              {c.name}
+                              {c.price ? ` +${peso(c.price)}/sheet` : ' (included)'}
+                            </option>
+                          ))}
+                      </Select>
+                    </Field>
+                    <Field label="Sticker size (optional)" htmlFor="po-size" hint="Shows about how many fit.">
+                      <Select id="po-size" value={size} onChange={(e) => setSize(e.target.value)}>
+                        <option value="">Mixed designs</option>
+                        {rates.stickerSizes.map((s) => (
+                          <option key={s.name} value={s.name}>
+                            {s.name} · {s.perA4} per sheet
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="A4 sheets" htmlFor="po-sheets">
+                      <NumberInput id="po-sheets" decimals={false} min={1} value={sheets} onChange={setSheets} />
+                    </Field>
+                  </>
+                ) : kind === 'peel' ? (
+                  <>
+                    <Field label="Material" htmlFor="po-material">
+                      {materialSelect}
+                    </Field>
+                    <Field label="Peel-off sheet size" htmlFor="po-peel">
+                      <Select id="po-peel" value={peelSize} onChange={(e) => setPeelSize(e.target.value)}>
+                        {rates.peelSizes.map((s) => (
+                          <option key={s.key} value={s.key}>
+                            {s.name} · {s.perA4} per A4
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="Peel-off sheets" htmlFor="po-peel-count">
+                      <NumberInput id="po-peel-count" decimals={false} min={1} value={peelCount} onChange={setPeelCount} />
+                    </Field>
+                  </>
+                ) : kind === 'pack' ? (
+                  <>
+                    <Field label="Packaging" htmlFor="po-pack" className="span-2">
+                      <Select id="po-pack" value={pack} onChange={(e) => setPack(e.target.value)}>
+                        {rates.packs.map((x) => (
+                          <option key={x.key} value={x.key}>
+                            {x.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="Size" htmlFor="po-pack-size">
+                      <Select id="po-pack-size" value={packSize} onChange={(e) => setPackSize(e.target.value as PackSize)}>
+                        {(['small', 'medium', 'large'] as const).map((s) => (
+                          <option key={s} value={s}>
+                            {PACK_SIZE_LABEL[s]}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="Packs" htmlFor="po-packs" hint={`At least ${rates.minPacks} per design.`}>
+                      <NumberInput id="po-packs" decimals={false} min={1} value={packs} onChange={setPacks} />
+                    </Field>
+                  </>
+                ) : (
+                  <>
+                    <Field label="What it is" htmlFor="po-custom" className="span-2">
+                      <TextInput id="po-custom" value={customLabel} onChange={(e) => setCustomLabel(e.target.value)} placeholder="e.g. Label layout and design, rush fee" />
+                    </Field>
+                    <Field label="How many" htmlFor="po-custom-qty">
+                      <NumberInput id="po-custom-qty" decimals={false} min={1} value={customQty} onChange={setCustomQty} />
+                    </Field>
+                    <Field label="Price each" htmlFor="po-custom-price">
+                      <MoneyInput id="po-custom-price" value={customPrice} onChange={setCustomPrice} />
+                    </Field>
+                  </>
+                )}
+              </div>
+              <div className="row between wrap">
+                <span className="muted small">{preview ? `${preview.label}: ${preview.qty} × ${peso(preview.unitPrice, { decimals: 2 })} = ${peso(lineTotal(preview))}` : 'Fill in the line to add it.'}</span>
+                <Button
+                  size="sm"
+                  disabled={!preview}
+                  onClick={() => {
+                    if (!preview) return;
+                    setLines([...lines, preview]);
+                    if (kind === 'custom') {
+                      setCustomLabel('');
+                      setCustomPrice(null);
+                    }
+                  }}
+                >
+                  <Plus size={15} /> Add to the order
+                </Button>
+              </div>
+            </div>
+            {warnings.length ? (
+              <Callout tone="warn">
+                {warnings.map((w) => (
+                  <div key={w}>{w}</div>
+                ))}
+              </Callout>
+            ) : null}
+          </>
+        )}
       </div>
 
-      <div className="stack tight">
-        <span className="label strong small">Delivery</span>
-        <Segmented
-          label="Delivery"
-          value={delivery.method}
-          onChange={(method) => setDelivery({ ...delivery, method })}
-          options={[
-            { value: 'pickup', label: 'Pick up in Iloilo City' },
-            { value: 'courier', label: 'Courier' },
-          ]}
-        />
-        {delivery.method === 'courier' ? (
-          <div className="form-grid">
-            <Field label="Courier" htmlFor="po-courier">
-              <TextInput id="po-courier" value={delivery.courier} onChange={(e) => setDelivery({ ...delivery, courier: e.target.value })} placeholder="J&T, LBC, Lalamove…" />
-            </Field>
-            <Field label="Delivery fee" htmlFor="po-fee" hint="Added to the order; the studio pays the courier.">
-              <MoneyInput id="po-fee" value={delivery.fee} onChange={(c) => setDelivery({ ...delivery, fee: c ?? 0 })} />
-            </Field>
-            <Field label="Address" htmlFor="po-address" className="span-2">
-              <TextArea id="po-address" rows={2} value={delivery.address} onChange={(e) => setDelivery({ ...delivery, address: e.target.value })} />
-            </Field>
-          </div>
-        ) : null}
-      </div>
+      {!closed ? (
+        <div className="stack tight">
+          <span className="label strong small">Delivery</span>
+          <Segmented
+            label="Delivery"
+            value={delivery.method}
+            onChange={(method) => setDelivery({ ...delivery, method })}
+            options={[
+              { value: 'pickup', label: 'Pick up in Iloilo City' },
+              { value: 'courier', label: 'Courier' },
+            ]}
+          />
+          {delivery.method === 'courier' ? (
+            <div className="form-grid">
+              <Field label="Courier" htmlFor="po-courier">
+                <TextInput id="po-courier" value={delivery.courier} onChange={(e) => setDelivery({ ...delivery, courier: e.target.value })} placeholder="J&T, LBC, Lalamove…" />
+              </Field>
+              <Field label="Delivery fee" htmlFor="po-fee" hint="Added to the order; the studio pays the courier.">
+                <MoneyInput id="po-fee" value={delivery.fee} onChange={(c) => setDelivery({ ...delivery, fee: c ?? 0 })} />
+              </Field>
+              <Field label="Address" htmlFor="po-address" className="span-2">
+                <TextArea id="po-address" rows={2} value={delivery.address} onChange={(e) => setDelivery({ ...delivery, address: e.target.value })} />
+              </Field>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="form-grid">
         <Field label="Who prints it" htmlFor="po-printer" hint="Their share goes to their earnings in JoshWorks Studio.">
@@ -621,7 +661,9 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
         </Field>
       </div>
 
-      <CouponField id="po-coupon" code={couponCode} onCode={setCouponCode} check={couponCheck} hint="From a JoshWorks event. It comes off the print work (₱2,500 or more), not the delivery fee." />
+      {!closed ? (
+        <CouponField id="po-coupon" code={couponCode} onCode={setCouponCode} check={couponCheck} hint="From a JoshWorks event. It comes off the print work (₱2,500 or more), not the delivery fee." />
+      ) : null}
 
       <div className="waterfall card">
         <div className="wf-row">
@@ -644,12 +686,14 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
           <span>Total</span>
           <span className="v">{peso(t.total)}</span>
         </div>
-        <div className="wf-row">
-          <span>
-            {rates.downPct}% down payment to start{t.a4 ? ` · ${t.a4} A4 sheet${t.a4 === 1 ? '' : 's'} to print` : ''}
-          </span>
-          <span className="v">{peso(t.down)}</span>
-        </div>
+        {!closed ? (
+          <div className="wf-row">
+            <span>
+              {rates.downPct}% down payment to start{t.a4 ? ` · ${t.a4} A4 sheet${t.a4 === 1 ? '' : 's'} to print` : ''}
+            </span>
+            <span className="v">{peso(t.down)}</span>
+          </div>
+        ) : null}
       </div>
       {error ? <Callout tone="bad">{error}</Callout> : null}
       <CustomerPicker

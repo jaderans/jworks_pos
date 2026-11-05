@@ -1,5 +1,5 @@
 import { db, alive } from '../db/db';
-import { audit, create, patch } from '../db/write';
+import { audit, create, patch, remove } from '../db/write';
 import { getLocal, setLocal, type DeviceInfo } from '../db/local';
 import { getSetting } from '../db/settings';
 import { peso, sum, type Cents } from '../lib/money';
@@ -102,13 +102,32 @@ async function get(id: string): Promise<PrintOrder> {
 
 export async function updatePrintOrder(id: string, changes: NewPrintOrder & { printerPct?: number }): Promise<void> {
   const o = await get(id);
-  if (o.status === 'done' || o.status === 'cancelled') throw new Error(`${o.number} is closed.`);
+  if (o.status === 'done' || o.status === 'cancelled') return updateClosedPrint(o, changes);
   check(changes);
   const coupon = await resolveCoupon(changes.couponCode, printWork(changes.lines), claimId('print', id));
   const { printerPct, ...rest } = changes;
   const next = { ...clean(rest), coupon, ...(printerPct !== undefined ? { printerPct } : {}) };
   await patch(db.printOrders, id, next);
   await syncClaim(claimFor({ ...o, ...next }), coupon);
+}
+
+/** A closed order keeps what was printed and its price. Who it's for, who printed it, the files and the notes can still be fixed. */
+async function updateClosedPrint(o: PrintOrder, { printerPct, ...changes }: NewPrintOrder & { printerPct?: number }): Promise<void> {
+  const fixed = clean({ ...changes, lines: o.lines, delivery: o.delivery });
+  check(fixed);
+  const { customerId, customerName, contact, printerId, files, notes } = fixed;
+  const details = { customerId, customerName, contact, printerId, files, notes, ...(printerPct !== undefined ? { printerPct } : {}) };
+  await patch(db.printOrders, o.id, details);
+  if (o.status === 'done') await syncClaim(claimFor({ ...o, ...details }), o.coupon);
+}
+
+/** Delete a print order, with its coupon use and any payments on it. Its summary leaves Studio by itself (see printFeed). */
+export async function deletePrintOrder(id: string): Promise<void> {
+  const o = await get(id);
+  const paid = sum(o.payments.map((p) => p.amount));
+  await syncClaim(claimFor(o), null);
+  await remove(db.printOrders, id);
+  await audit('delete', 'print', id, `Deleted ${o.number} for ${o.customerName || 'a customer'}${paid ? `, with ${peso(paid)} paid` : ''}`);
 }
 
 export async function markProofSent(id: string): Promise<void> {

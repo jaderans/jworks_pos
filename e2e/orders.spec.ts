@@ -77,3 +77,55 @@ test('a pre-order: deposit now (money in, not a sale), hand over later, drawer b
   await expect(close.getByText('Balanced', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('edit a closed order, then delete it, and it leaves JoshWorks Studio’s list', async ({ page }) => {
+  await setupOwner(page, 'Joshua Ranin', '1111');
+  await createEvent(page, 'Komiket Iloilo');
+  await page.goto('/#/orders');
+  await page.getByRole('button', { name: 'New order' }).click();
+  const d = page.getByRole('dialog', { name: 'New order' });
+  await d.getByLabel('Name', { exact: true }).fill('Leanna');
+  await d.getByRole('button', { name: 'Custom piece' }).click();
+  await d.getByLabel('What it is').fill('Couple sticker');
+  await d.getByLabel('Price each of Couple sticker').fill('240');
+  await d.getByRole('button', { name: 'Save order' }).click();
+  await page.getByRole('dialog', { name: 'Order saved' }).getByRole('button', { name: 'Done' }).click();
+
+  const number = (await page.locator('.order-no').first().innerText()).trim();
+  await page.getByRole('button', { name: `Send ${number} to Studio` }).click();
+  await page.getByRole('button', { name: `Cancel ${number}` }).click();
+  await page.getByRole('dialog', { name: `Cancel ${number}?` }).getByRole('button', { name: 'Cancel the order' }).click();
+
+  // Closed: the name can be fixed, the items can't.
+  await page.getByText(/^Picked up and cancelled/).click();
+  await page.getByRole('button', { name: `Edit ${number}` }).click();
+  const e = page.getByRole('dialog', { name: `Order ${number}` });
+  await expect(e.getByText('1 × Couple sticker')).toBeVisible();
+  await expect(e.getByRole('button', { name: 'Custom piece' })).toHaveCount(0);
+  await e.getByLabel('Name', { exact: true }).fill('Leanna Rosales');
+  await e.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.locator('.order-closed')).toContainText('Leanna Rosales');
+  await page.setViewportSize({ width: 360, height: 740 });
+  await expect.poll(() => page.evaluate(() => document.querySelector('main')!.scrollWidth - document.querySelector('main')!.clientWidth)).toBeLessThanOrEqual(1);
+  await page.locator('.order-closed').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${SHOTS}/orders-closed-phone.png`, style: '.toasts { display: none; }' });
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  await page.getByRole('button', { name: `Delete ${number}` }).click();
+  await page.getByRole('dialog', { name: `Delete ${number}?` }).getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByText(`${number} deleted`)).toBeVisible();
+  await expect(page.locator('.order-closed')).toHaveCount(0);
+
+  // What Studio reads on this device: the order's summary is now a tombstone.
+  const rows = await page.evaluate(
+    () =>
+      new Promise<{ id: string; deleted?: number }[]>((done) => {
+        const req = indexedDB.open('jworks-pos');
+        req.onsuccess = () => {
+          const all = req.result.transaction('studioFeed').objectStore('studioFeed').getAll();
+          all.onsuccess = () => done(all.result);
+        };
+      }),
+  );
+  expect(rows.filter((r) => r.id.startsWith('order:')).map((r) => r.deleted)).toEqual([1]);
+});

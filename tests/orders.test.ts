@@ -13,7 +13,10 @@ import { createProduct } from '../src/services/catalog';
 import { createEvent } from '../src/services/events';
 import { openSession } from '../src/services/sales';
 import { adjustStock, setManualCost } from '../src/services/production';
-import { cancelOrder, createOrder, pickUpOrder, takeDeposit } from '../src/services/orders';
+import { cancelOrder, createOrder, deleteOrder, pickUpOrder, takeDeposit, updateOrder } from '../src/services/orders';
+import { voidSale } from '../src/services/sales';
+import { sendOrderToStudio } from '../src/services/studio';
+import { STUDIO_FEED_ID } from '../src/domain/studioFeed';
 import type { SalePayment } from '../src/db/types';
 
 const P = toCents;
@@ -122,5 +125,60 @@ describe('pre-orders', () => {
     m = await metricsNow(ev.id);
     expect(m.gross).toBe(P(150));
     expect(m.depositsTaken).toBe(0);
+  });
+});
+
+describe('editing and deleting orders', () => {
+  const live = async (id: string) => alive(await db.orders.toArray()).find((o) => o.id === id);
+
+  it('deletes an order with no money on it, and its summary leaves Studio but stays as a tombstone', async () => {
+    const { order } = await setup();
+    await sendOrderToStudio(order.id, 'Joshua');
+    await cancelOrder(order, 'refund', null);
+    await deleteOrder(order.id);
+    expect(await live(order.id)).toBeUndefined();
+    const row = await db.studioFeed.get(STUDIO_FEED_ID.order(order.id));
+    expect(row?.deleted).toBe(1);
+    expect(row?.feed).toMatchObject({ type: 'order', orderId: order.id });
+  });
+
+  it('won’t delete an order holding a deposit until it’s refunded', async () => {
+    const { device, session, order } = await setup();
+    await takeDeposit(order, P(250), { session, device, cashierId: null, payments: [cash(250)] });
+    await expect(deleteOrder(order.id)).rejects.toThrow(/has a deposit/);
+    expect(await live(order.id)).toBeDefined();
+    await cancelOrder(order, 'refund', null);
+    await deleteOrder(order.id);
+    expect(await live(order.id)).toBeUndefined();
+  });
+
+  it('won’t delete a picked-up order until its sale is voided', async () => {
+    const { device, session, order } = await setup();
+    const sale = await pickUpOrder(order, { session, device, cashierId: null, payments: [cash(500)] });
+    await expect(deleteOrder(order.id)).rejects.toThrow(new RegExp(`Void ${sale.receiptNo}`));
+    await voidSale(sale.id, 'Test', null);
+    await deleteOrder(order.id);
+    expect(await live(order.id)).toBeUndefined();
+  });
+
+  it('a closed order keeps its items and price; the name and notes can still be fixed', async () => {
+    const { order } = await setup();
+    await sendOrderToStudio(order.id, 'Joshua');
+    await cancelOrder(order, 'refund', null);
+    await updateOrder(order.id, { customerName: 'Kaye Santos', notes: 'Fixed', lines: [] });
+    const saved = await db.orders.get(order.id);
+    expect(saved).toMatchObject({ customerName: 'Kaye Santos', notes: 'Fixed', status: 'cancelled' });
+    expect(saved?.lines).toEqual(order.lines);
+    const row = await db.studioFeed.get(STUDIO_FEED_ID.order(order.id));
+    expect(row?.feed).toMatchObject({ customer: { name: 'Kaye Santos' } });
+  });
+
+  it('editing an order Studio has updates its summary; one it doesn’t have stays unsent', async () => {
+    const { order } = await setup();
+    await updateOrder(order.id, { notes: 'Not sent yet' });
+    expect(await db.studioFeed.get(STUDIO_FEED_ID.order(order.id))).toBeUndefined();
+    await sendOrderToStudio(order.id, 'Joshua');
+    await updateOrder(order.id, { notes: 'Bigger size' });
+    expect((await db.studioFeed.get(STUDIO_FEED_ID.order(order.id)))?.feed).toMatchObject({ notes: 'Bigger size' });
   });
 });

@@ -8,7 +8,7 @@ import { DEFAULT_PRINT_RATES as R, addWorkingDays, customLine, packLine, peelLin
 import { buildPrintFeed } from '../src/domain/studioFeed';
 import { createEvent } from '../src/services/events';
 import { openSession } from '../src/services/sales';
-import { blankDelivery, createPrintOrder, setPrintStatus, takePrintPayment } from '../src/services/print';
+import { blankDelivery, createPrintOrder, deletePrintOrder, setPrintStatus, takePrintPayment, updatePrintOrder } from '../src/services/print';
 import type { Member } from '../src/db/types';
 
 const P = toCents;
@@ -82,6 +82,23 @@ describe('print orders', () => {
     expect(s.cashMoves.map((m) => [m.kind, m.amount, m.reason])).toEqual([['in', P(300), `Print order ${o.number}`]]);
     // Booth sales don't change: print money isn't an event sale
     expect(alive(await db.sales.toArray())).toHaveLength(0);
+  });
+
+  it('deletes an order, with the payments on it', async () => {
+    const { o } = await order();
+    await takePrintPayment(o.id, { ...gcash, amount: P(100) }, null);
+    await deletePrintOrder(o.id);
+    expect(alive(await db.printOrders.toArray())).toEqual([]);
+  });
+
+  it('a closed order keeps what was printed and its price; who printed it can still be set', async () => {
+    const { o } = await order();
+    await setPrintStatus(o.id, 'done');
+    await updatePrintOrder(o.id, { ...o, customerName: 'Mira’s Bakeshop', printerId: 'm1', notes: 'Fixed', lines: [], delivery: { ...blankDelivery(), method: 'courier', address: 'Iloilo', fee: P(100) } });
+    const saved = await db.printOrders.get(o.id);
+    expect(saved).toMatchObject({ customerName: 'Mira’s Bakeshop', printerId: 'm1', notes: 'Fixed', status: 'done' });
+    expect(saved?.lines).toEqual(o.lines);
+    expect(saved?.delivery).toEqual(o.delivery);
   });
 
   it('goes to Studio with the printer’s share and every payment', async () => {

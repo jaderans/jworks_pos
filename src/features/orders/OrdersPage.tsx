@@ -12,10 +12,10 @@ import { Check, Field, MoneyInput, NumberInput, Select, TextArea, TextInput } fr
 import { peso, type Cents } from '../../lib/money';
 import { fmtDateTime } from '../../lib/time';
 import { effectivePrice, isOnSale } from '../../services/catalog';
-import { ORDER_STATUS_LABEL, dueText, isOpenOrder, orderDiscount, orderMoney, orderServicePrice, orderTotal, suggestedDeposit, type OrderMoney } from '../../domain/orders';
+import { ORDER_STATUS_LABEL, dueText, isOpenOrder, orderDeleteBlock, orderDiscount, orderMoney, orderServicePrice, orderTotal, suggestedDeposit, type OrderMoney } from '../../domain/orders';
 import { claimId } from '../../domain/coupons';
 import { CouponField, appliedFrom, useCouponCheck } from '../coupons/CouponField';
-import { cancelOrder, createOrder, pickUpOrder, setOrderStatus, takeDeposit, updateOrder } from '../../services/orders';
+import { cancelOrder, createOrder, deleteOrder, pickUpOrder, setOrderStatus, takeDeposit, updateOrder } from '../../services/orders';
 import { sendOrderToStudio } from '../../services/studio';
 import { getMailer, isEmail, mailerReady } from '../../email/send';
 import { flushOutbox, queueEmail } from '../../email/outbox';
@@ -74,6 +74,22 @@ function Orders({ ev }: { ev: JWEvent }) {
     } catch (e) {
       app.toast(e instanceof Error ? e.message : 'Couldn’t send it', { tone: 'bad' });
     }
+  };
+  const removeOrder = async (o: Order) => {
+    const blocked = orderDeleteBlock(o, orderSales ?? []);
+    if (blocked) {
+      app.toast(blocked, { tone: 'bad' });
+      return;
+    }
+    const ok = await app.confirm({
+      title: `Delete ${o.number}?`,
+      message: 'It comes off this list and off Booth events in JoshWorks Studio. If it’s already a job there, Studio shows it under Deleted in the POS for you to delete. You can’t undo this.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    await deleteOrder(o.id);
+    app.toast(`${o.number} deleted`, { tone: 'good' });
   };
 
   const session = sessions?.find((s) => s.deviceId === app.device.deviceId && s.closedAt === null);
@@ -203,6 +219,7 @@ function Orders({ ev }: { ev: JWEvent }) {
                     onReady={() => markReady(o)}
                     onHandOver={() => handOver(o)}
                     onStudio={owner ? () => toStudio(o) : undefined}
+                    onDelete={owner ? () => void removeOrder(o) : undefined}
                   />
                 ))}
               </section>
@@ -216,7 +233,7 @@ function Orders({ ev }: { ev: JWEvent }) {
           <summary className="strong">Picked up and cancelled ({closed.length})</summary>
           <div className="list" style={{ marginTop: 8 }}>
             {closed.map((o) => (
-              <div key={o.id} className="list-item">
+              <div key={o.id} className="list-item order-closed">
                 <b className="mono">{o.number}</b>
                 <span className="main-text">
                   <b>{nameOf(o)}</b>
@@ -224,11 +241,21 @@ function Orders({ ev }: { ev: JWEvent }) {
                 </span>
                 <Badge tone={o.status === 'picked-up' ? 'good' : undefined}>{ORDER_STATUS_LABEL[o.status]}</Badge>
                 <span className="muted tiny nowrap">{fmtDateTime(o.statusAt)}</span>
-                {owner ? (
-                  <IconButton label={`Send ${o.number} to Studio`} size="sm" plain onClick={() => toStudio(o)}>
-                    <Send size={15} />
+                <span className="row order-closed-actions">
+                  <IconButton label={`Edit ${o.number}`} size="sm" plain onClick={() => setEditing(o)}>
+                    <Pencil size={15} />
                   </IconButton>
-                ) : null}
+                  {owner ? (
+                    <>
+                      <IconButton label={`Send ${o.number} to Studio`} size="sm" plain onClick={() => toStudio(o)}>
+                        <Send size={15} />
+                      </IconButton>
+                      <IconButton label={`Delete ${o.number}`} size="sm" plain onClick={() => void removeOrder(o)}>
+                        <Trash2 size={15} />
+                      </IconButton>
+                    </>
+                  ) : null}
+                </span>
               </div>
             ))}
           </div>
@@ -294,7 +321,7 @@ function Orders({ ev }: { ev: JWEvent }) {
 }
 
 function OrderCard({
-  order: o, money: m, customer, maker, otherEvent, onEdit, onCancel, onDeposit, onStart, onReady, onHandOver, onStudio,
+  order: o, money: m, customer, maker, otherEvent, onEdit, onCancel, onDeposit, onStart, onReady, onHandOver, onStudio, onDelete,
 }: {
   order: Order;
   money: OrderMoney;
@@ -309,6 +336,8 @@ function OrderCard({
   onHandOver: () => void;
   /** Owner only: send it to JoshWorks Studio as a job. */
   onStudio?: () => void;
+  /** Owner only. */
+  onDelete?: () => void;
 }) {
   const due = dueText(o.dueAt);
   const late = !!o.dueAt && new Date(o.dueAt).getTime() < Date.now();
@@ -329,6 +358,11 @@ function OrderCard({
           {onStudio ? (
             <IconButton label={`Send ${o.number} to Studio`} size="sm" plain onClick={onStudio}>
               <Send size={15} />
+            </IconButton>
+          ) : null}
+          {onDelete ? (
+            <IconButton label={`Delete ${o.number}`} size="sm" plain onClick={onDelete}>
+              <Trash2 size={15} />
             </IconButton>
           ) : null}
         </div>
@@ -438,6 +472,7 @@ function OrderDialog({
 
   if (!order) return null;
   const isNew = order === 'new';
+  const closed = !isNew && !isOpenOrder(order);
   const setLine = (i: number, patch: Partial<OrderLine>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)));
   const addProduct = (id: string) => {
     const p = onSale.find((x) => x.id === id);
@@ -508,45 +543,60 @@ function OrderDialog({
 
       <div className="stack tight">
         <span className="label strong small">Items</span>
-        {lines.map((l, i) => (
-          <div key={i} className="order-line-edit">
-            {l.productId ? (
-              <b className="grow">{l.name}</b>
-            ) : (
-              <TextInput aria-label="What it is" className="grow" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder="e.g. Custom name sticker, A5 portrait" autoFocus />
-            )}
-            <div style={{ width: 92 }}>
-              <NumberInput ariaLabel={`How many ${l.name || 'pieces'}`} decimals={false} min={1} value={l.qty} onChange={(n) => setLine(i, { qty: Math.max(1, Math.round(n ?? 1)) })} />
-            </div>
-            <div style={{ width: 130 }}>
-              <MoneyInput ariaLabel={`Price each of ${l.name || 'the piece'}`} value={l.unitPrice} onChange={(c) => setLine(i, { unitPrice: c ?? 0 })} />
-            </div>
-            <IconButton label={`Remove ${l.name || 'item'}`} size="sm" onClick={() => setLines(lines.filter((_, k) => k !== i))}>
-              <Trash2 size={15} />
-            </IconButton>
-          </div>
-        ))}
-        <div className="row wrap">
-          <Select aria-label="Add a product" value="" onChange={(e) => addProduct(e.target.value)} style={{ width: 'auto', minWidth: 220 }}>
-            <option value="">Add a product…</option>
-            {onSale.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-                {effectivePrice(p, epMap.get(p.id)) !== null ? ` · ${peso(effectivePrice(p, epMap.get(p.id)))}` : ''}
-              </option>
+        {closed ? (
+          <>
+            <ul className="order-lines">
+              {lines.map((l, i) => (
+                <li key={i}>
+                  {l.qty} × {l.name}
+                </li>
+              ))}
+            </ul>
+            <p className="muted small">Total {peso(orderTotal(order))}. A closed order keeps its items and price; the rest can still be fixed.</p>
+          </>
+        ) : (
+          <>
+            {lines.map((l, i) => (
+              <div key={i} className="order-line-edit">
+                {l.productId ? (
+                  <b className="grow">{l.name}</b>
+                ) : (
+                  <TextInput aria-label="What it is" className="grow" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder="e.g. Custom name sticker, A5 portrait" autoFocus />
+                )}
+                <div style={{ width: 92 }}>
+                  <NumberInput ariaLabel={`How many ${l.name || 'pieces'}`} decimals={false} min={1} value={l.qty} onChange={(n) => setLine(i, { qty: Math.max(1, Math.round(n ?? 1)) })} />
+                </div>
+                <div style={{ width: 130 }}>
+                  <MoneyInput ariaLabel={`Price each of ${l.name || 'the piece'}`} value={l.unitPrice} onChange={(c) => setLine(i, { unitPrice: c ?? 0 })} />
+                </div>
+                <IconButton label={`Remove ${l.name || 'item'}`} size="sm" onClick={() => setLines(lines.filter((_, k) => k !== i))}>
+                  <Trash2 size={15} />
+                </IconButton>
+              </div>
             ))}
-          </Select>
-          <Button size="sm" onClick={() => setLines([...lines, blankLine()])}>
-            <Plus size={15} /> Custom piece
-          </Button>
-          <span className="grow" />
-          <b>
-            {off ? <span className="muted small">{peso(total + off)} − coupon {peso(off)} = </span> : null}Total {peso(total)}
-          </b>
-        </div>
-        {lines.some((l) => !l.productId) || couponCode ? (
-          <CouponField id="or-coupon" code={couponCode} onCode={setCouponCode} check={couponCheck} hint="From a JoshWorks event. It comes off the custom pieces (₱2,500 or more), not catalog products." />
-        ) : null}
+            <div className="row wrap">
+              <Select aria-label="Add a product" value="" onChange={(e) => addProduct(e.target.value)} style={{ width: 'auto', minWidth: 220 }}>
+                <option value="">Add a product…</option>
+                {onSale.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {effectivePrice(p, epMap.get(p.id)) !== null ? ` · ${peso(effectivePrice(p, epMap.get(p.id)))}` : ''}
+                  </option>
+                ))}
+              </Select>
+              <Button size="sm" onClick={() => setLines([...lines, blankLine()])}>
+                <Plus size={15} /> Custom piece
+              </Button>
+              <span className="grow" />
+              <b>
+                {off ? <span className="muted small">{peso(total + off)} − coupon {peso(off)} = </span> : null}Total {peso(total)}
+              </b>
+            </div>
+            {lines.some((l) => !l.productId) || couponCode ? (
+              <CouponField id="or-coupon" code={couponCode} onCode={setCouponCode} check={couponCheck} hint="From a JoshWorks event. It comes off the custom pieces (₱2,500 or more), not catalog products." />
+            ) : null}
+          </>
+        )}
       </div>
 
       <div className="form-grid">
