@@ -150,7 +150,7 @@ export function buildOrderFeed(o: {
   const payments: StudioOrderPayment[] = [];
   const paidSales = o.sales
     .filter((s) => s.orderId === order.id && s.status === 'completed' && s.deleted !== 1)
-    .sort((a, b) => a.at - b.at);
+    .sort((a, b) => a.at - b.at || Number(a.id === order.pickupSaleId) - Number(b.id === order.pickupSaleId));
   for (const s of paidSales) {
     const stage = s.id === order.pickupSaleId ? 'pickup' : 'deposit';
     for (const p of s.payments) {

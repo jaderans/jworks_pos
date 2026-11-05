@@ -5,7 +5,7 @@ import { ensureDevice } from '../src/db/local';
 import { setWriterDevice } from '../src/db/write';
 import { sum, toCents } from '../src/lib/money';
 import { priceCart } from '../src/domain/cart';
-import { feedPeople } from '../src/domain/studioFeed';
+import { buildOrderFeed, feedPeople } from '../src/domain/studioFeed';
 import { createProduct } from '../src/services/catalog';
 import { createEvent } from '../src/services/events';
 import { completeSale, openSession } from '../src/services/sales';
@@ -13,7 +13,7 @@ import { adjustStock, setManualCost } from '../src/services/production';
 import { createOrder, pickUpOrder, takeDeposit } from '../src/services/orders';
 import { eventFeed, orderFeed, sendEventToStudio } from '../src/services/studio';
 import { loadReportInput } from '../src/reports/loadReport';
-import type { Member, Payout, SalePayment } from '../src/db/types';
+import type { Member, Order, Payout, Sale, SalePayment } from '../src/db/types';
 import type { ShareResult } from '../src/domain/share';
 
 const P = toCents;
@@ -85,6 +85,13 @@ describe('Studio link', () => {
       ['deposit', 'Cash', P(250)],
       ['pickup', 'GCash', P(250)],
     ]);
+  });
+
+  it('a deposit comes before the pickup, even in the same millisecond', () => {
+    const sale = (id: string, name: string) => ({ id, orderId: 'o1', status: 'completed', at: 1000, payments: [{ name, kind: 'cash', amount: P(250) }] }) as unknown as Sale;
+    const order = { id: 'o1', pickupSaleId: 'pickup', lines: [] } as unknown as Order;
+    const feed = buildOrderFeed({ order, eventName: '', customer: undefined, designer: undefined, sales: [sale('pickup', 'GCash'), sale('deposit', 'Cash')] });
+    expect(feed.payments.map((p) => p.stage)).toEqual(['deposit', 'pickup']);
   });
 
   it('sending again updates the one row, and backups carry it', async () => {
