@@ -194,7 +194,7 @@ export interface StudioFile {
 export const studioFile = (feeds: StudioFeed[], at = Date.now()): StudioFile => ({ app: 'jworks-pos', kind: 'studio-feed', v: 1, exportedAt: at, feeds });
 
 /** A print order for Studio, kept up to date as the order moves along. */
-export function buildPrintFeed(o: { order: PrintOrder; downPct: number; customer: Customer | undefined; printer: Member | undefined }): StudioPrintFeed {
+export function buildPrintFeed(o: { order: PrintOrder; downPct: number; customer: Customer | undefined; printer: Member | undefined; illustrator?: Member | undefined }): StudioPrintFeed {
   const { order } = o;
   const t = printTotals(order, o.downPct);
   const c = o.customer;
@@ -208,6 +208,13 @@ export function buildPrintFeed(o: { order: PrintOrder; downPct: number; customer
     printer: o.printer ? { memberId: o.printer.id, name: o.printer.name, email: o.printer.email } : null,
     printerPct: order.printerPct,
     printerShare: o.printer ? t.printerShare : 0,
+    ...(t.illustration
+      ? {
+          illustrator: o.illustrator ? { memberId: o.illustrator.id, name: o.illustrator.name, email: o.illustrator.email } : null,
+          illustratorPct: order.illustratorPct ?? 0,
+          illustratorShare: o.illustrator ? t.illustratorShare : 0,
+        }
+      : {}),
     lines: order.lines.map((l) => ({ label: l.label, qty: l.qty, unitPrice: l.unitPrice, amount: lineTotal(l) })),
     subtotal: t.subtotal,
     ...(t.discount && order.coupon ? { discount: t.discount, couponCode: order.coupon.code } : {}),

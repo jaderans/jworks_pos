@@ -4,7 +4,7 @@ import { nextReceiptSeq, type DeviceInfo } from '../db/local';
 import { receiptNumber, uid } from '../lib/ids';
 import { peso, type Cents } from '../lib/money';
 import { checkPayments, toAppliedDiscounts, toSaleLines, type PricedCart } from '../domain/cart';
-import { countTotal, drawerState } from '../domain/summary';
+import { countTotal, drawerState, moveMethod } from '../domain/summary';
 import { voidEarnedCoupons } from './coupons';
 import type { CashMove, Sale, SalePayment, Session, StockMove } from '../db/types';
 
@@ -35,12 +35,43 @@ export async function openSession(eventId: string, device: DeviceInfo, openingFl
   return s;
 }
 
-export async function addCashMove(sessionId: string, kind: CashMove['kind'], amount: Cents, reason: string, by: string | null): Promise<void> {
+const moveText = (m: Pick<CashMove, 'kind' | 'amount' | 'method'>) => `${m.kind === 'in' ? 'In' : 'Out'} ${peso(m.amount)} (${moveMethod(m as CashMove).name})`;
+
+/** Money in or out of a register that isn't a sale: the drawer's cash, or GCash and the like. */
+export async function addCashMove(sessionId: string, kind: CashMove['kind'], amount: Cents, reason: string, by: string | null, method?: CashMove['method']): Promise<void> {
   const s = await db.sessions.get(sessionId);
   if (!s) return;
-  const move: CashMove = { id: uid(), at: Date.now(), kind, amount, reason: reason.trim(), by };
-  await patch(db.sessions, sessionId, { cashMoves: [...s.cashMoves, move] });
-  await audit('cash', 'session', sessionId, `${kind === 'in' ? 'Cash in' : 'Cash out'} ${peso(amount)}${move.reason ? `: ${move.reason}` : ''}`);
+  const move: CashMove = { id: uid(), at: Date.now(), kind, amount, reason: reason.trim(), by, ...(method ? { method } : {}) };
+  await patch(db.sessions, sessionId, { cashMoves: [...(s.cashMoves ?? []), move] });
+  await audit('cash', 'session', sessionId, `Register ${s.letter}: ${moveText(move)}${move.reason ? `: ${move.reason}` : ''}`);
+}
+
+/**
+ * Fix a cash move recorded wrong (in instead of out, cash instead of GCash, the
+ * amount). A closed register's expected drawer is worked out again.
+ */
+export async function updateCashMove(sessionId: string, moveId: string, changes: Pick<CashMove, 'kind' | 'amount' | 'reason' | 'method'>): Promise<void> {
+  const s = await db.sessions.get(sessionId);
+  const before = s?.cashMoves?.find((m) => m.id === moveId);
+  if (!s || !before) throw new Error('That cash move no longer exists.');
+  if (!(changes.amount > 0)) throw new Error('Enter the amount.');
+  const cashMoves = s.cashMoves.map((m) => (m.id === moveId ? { ...m, ...changes, reason: changes.reason.trim() } : m));
+  await saveMoves(s, cashMoves);
+  await audit('cash', 'session', sessionId, `Register ${s.letter}: changed ${moveText(before)} to ${moveText(changes)}`);
+}
+
+export async function removeCashMove(sessionId: string, moveId: string): Promise<void> {
+  const s = await db.sessions.get(sessionId);
+  const before = s?.cashMoves?.find((m) => m.id === moveId);
+  if (!s || !before) return;
+  await saveMoves(s, s.cashMoves.filter((m) => m.id !== moveId));
+  await audit('cash', 'session', sessionId, `Register ${s.letter}: removed ${moveText(before)}`);
+}
+
+async function saveMoves(s: Session, cashMoves: CashMove[]) {
+  if (s.closedAt === null) return patch(db.sessions, s.id, { cashMoves });
+  const sales = alive(await db.sales.where('sessionId').equals(s.id).toArray());
+  await patch(db.sessions, s.id, { cashMoves, expected: drawerState({ ...s, cashMoves }, sales).expected });
 }
 
 export async function closeSession(sessionId: string, counted: Record<string, number>, notes: string, by: string | null): Promise<Session | undefined> {
@@ -70,8 +101,9 @@ export interface CompleteSaleInput {
   note: string;
   customerId?: string | null;
   voucherCode?: string;
-  kind?: 'deposit';
+  kind?: 'deposit' | 'service';
   orderId?: string;
+  printOrderId?: string;
 }
 
 /** Save a sale and take its items out of stock, in one transaction. */
@@ -105,6 +137,7 @@ export async function completeSale(input: CompleteSaleInput): Promise<Sale> {
       voucherCode: input.voucherCode || undefined,
       kind: input.kind,
       orderId: input.orderId,
+      printOrderId: input.printOrderId,
     });
     await db.sales.put(sale);
     const ids = [...new Set(sale.lines.map((l) => l.productId))];
@@ -120,6 +153,12 @@ export async function completeSale(input: CompleteSaleInput): Promise<Sale> {
 
 /** Void a whole sale: it drops out of every total and its items go back to stock. */
 export async function voidSale(saleId: string, reason: string, by: string | null): Promise<void> {
+  // A print order's payment taken as this sale comes off the order, so its balance is due again.
+  const voiding = await db.sales.get(saleId);
+  if (voiding?.printOrderId && voiding.status === 'completed') {
+    const o = await db.printOrders.get(voiding.printOrderId);
+    if (o) await patch(db.printOrders, o.id, { payments: o.payments.filter((p) => p.saleId !== saleId) });
+  }
   await db.transaction('rw', [db.sales, db.stockMoves, db.audit], async () => {
     const sale = await db.sales.get(saleId);
     if (!sale || sale.status === 'voided') return;
@@ -143,6 +182,13 @@ export async function changeSalePayments(saleId: string, payments: SalePayment[]
   const check = checkPayments(sale.total, payments);
   if (!check.ok) throw new Error(check.message);
   await patch(db.sales, saleId, { payments, change: check.change });
+  // The print order it paid for shows the same method.
+  const o = sale.printOrderId ? await db.printOrders.get(sale.printOrderId) : undefined;
+  const [p] = payments;
+  if (o && payments.length === 1 && p.kind !== 'deposit') {
+    const how = { methodId: p.methodId, name: p.name, kind: p.kind };
+    await patch(db.printOrders, o.id, { payments: o.payments.map((x) => (x.saleId === saleId ? { ...x, ...how } : x)) });
+  }
   const from = sale.payments.map((p) => p.name).join(' + ');
   const to = payments.map((p) => p.name).join(' + ');
   await audit('payment', 'sale', saleId, `Changed payment on ${sale.receiptNo}: ${from} → ${to}`);

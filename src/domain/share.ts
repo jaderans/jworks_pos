@@ -1,6 +1,7 @@
 import { allocate, percentOf, sum, type Cents } from '../lib/money';
 import { shiftHours } from '../lib/time';
 import { lineRevenue } from './cart';
+import { isMoneyOnly } from './orders';
 import type { CostLookup } from './cost';
 import type { AssetCharge } from './assets';
 import type { EventProduct, JWEvent, Member, PartnerDeal, Product, RosterEntry, Sale, SpendItem } from '../db/types';
@@ -119,7 +120,7 @@ export function computeShare(input: ShareInput): ShareResult {
   const { event } = input;
   const cfg = event.share;
   const warnings: string[] = [];
-  const completed = input.sales.filter((s) => s.status === 'completed' && s.deleted !== 1 && s.kind !== 'deposit');
+  const completed = input.sales.filter((s) => s.status === 'completed' && s.deleted !== 1 && !isMoneyOnly(s));
 
   let gross = 0;
   let itemsSold = 0;

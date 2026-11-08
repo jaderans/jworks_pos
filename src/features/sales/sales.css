@@ -1,0 +1,11 @@
+/* Sales log: the money in, by payment method, above the list. */
+.money-panel { gap: 12px; }
+.money-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.money-total { font-family: var(--f-display); font-size: 1.9rem; letter-spacing: -0.01em; }
+.money-methods { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr)); gap: 8px; }
+.money-method { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); min-width: 0; }
+.money-method .name { font-size: 0.82rem; font-weight: 800; color: var(--muted); }
+.money-method b { font-size: 1.2rem; }
+.money-parts { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 0.88rem; color: var(--muted); }
+.money-parts b { color: var(--ink); }
+.cash-move td:first-child b { font-family: var(--f-display); }

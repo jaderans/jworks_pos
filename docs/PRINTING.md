@@ -10,6 +10,10 @@ The steps follow the rate sheet's *How to order* page.
    - **Sticker sheets:** the material, the cut (kiss cut is included, die cut is +₱10 a sheet) and the number of A4 sheets. Optionally add the sticker size, so the line shows about how many stickers that is.
    - **Peel-off sheets:** the material, the peel-off size and how many. One A4 is shared by the sheets cut from it: (material + ₱17 peel-off cut) ÷ sheets per A4.
    - **Packaging:** the type, the size and the number of packs.
+   - **Illustration:** drawing the sticker art. Pick the tier and the number of designs; sets cost less, and the app takes the cheapest mix of sets and single designs. The price can be changed on the order.
+     - **Small / simple:** one subject, flat colours, light shading, little or no lettering (mascots, icons, small doodles). ₱100 a design; 2 for ₱180, 5 for ₱450, 10 for ₱850.
+     - **Detailed:** full illustration with shading, texture, props, hand lettering or a character in a scene (portraits, pet stickers). ₱220 a design; 2 for ₱390, 5 for ₱950, 10 for ₱1,700 (saving ₱50, ₱150 and ₱500).
+     - Pick **Who draws it**: they earn the illustrator's share of the illustration, set on the rate card (0% until you set it).
    - **Other:** layout or design work, a rush fee, anything else.
 
    Pick **Pickup** or **Courier**. For a courier, add the courier, the delivery fee and the address. The fee is added to the order and the studio pays the courier. The app warns about the minimums: 3 A4 sheets, and 20 packs per packaging design.
@@ -25,14 +29,16 @@ Anyone on the team can work print orders: the owner, cashiers and designers. Onl
 ## Where the money goes
 
 - **In the POS:**
-  - Payments are recorded on the print order, not as booth sales.
-  - Cash taken while a register is open on that phone is added to the drawer as a cash-in ("Print order PA-007"), so the drawer still counts out right.
+  - **With a register open on the phone,** a payment is a sale there under **Services**: it shows in the Sales log, Money in and the drawer (when it's cash), and as **Services** in the event summary and report. It stays out of the booth's merch figures and the team's booth share, since the printer and the illustrator get their own shares.
+  - **With no register open,** it's recorded on the print order only.
   - GCash and bank payments go wherever your GCash or bank account is. The order keeps the reference number.
+  - Voiding a Services sale in the Sales log takes the payment off the order, so it's due again.
 - **In JoshWorks Studio (Money → Booth events → Sticker printing):**
   - Each print order shows up by itself, on the same device or from the Studio file. **Add to Studio** books it as a Sticker Printing job:
     - The **customer** becomes a client, matched by email, then by name.
     - **Payments:** the down payment is a down payment, and the balance is the final payment. They count in Studio's income, reports and BIR.
-    - **The printer's share:** whoever prints it gets their % of the print work (20% to start, not counting the delivery fee) as their earnings. It's released as the customer pays, so Payouts shows what's owed.
+    - **The printer's share:** whoever prints it gets their % of the print work (20% to start, not counting the illustration or the delivery fee) as their earnings. It's released as the customer pays, so Payouts shows what's owed.
+    - **The illustrator's share:** whoever draws it gets their % of the illustration, the same way. One person can do both.
     - **Expenses:** the courier fee (Transport), and the materials (Printing) when the rate card has costs.
   - **The studio keeps the rest.** For a ₱970 order with a ₱120 courier fee and 20% for the printer: the printer earns ₱170 (20% of ₱850), the courier gets ₱120, and the studio keeps ₱680, less material costs.
   - When the order changes in the POS (a payment, shipped), Studio shows **Changed in the POS**. **Update** brings it in line.
@@ -40,5 +46,5 @@ Anyone on the team can work print orders: the owner, cashiers and designers. Onl
 ## Fixing or deleting an order
 
 - **Edit:** the pencil works on any order. Once it's done or cancelled, what was printed, the delivery and the price stay as they are, but the customer, who printed it, the files and the notes can still be fixed.
-- **Delete (owner only):** the bin on the order. Any payments on it go too, so refund the customer first if you need to. Cash already in a drawer stays counted there. A commission order under **Orders** can't be deleted while it holds money: cancel and refund a deposit, or void a pickup sale in the Sales log, first.
+- **Delete (owner only):** the bin on the order. A payment taken at the register is a sale, so void it in the Sales log first. Other payments on it go too, so refund the customer first if you need to. Cash already in a drawer stays counted there. A commission order under **Orders** can't be deleted while it holds money: cancel and refund a deposit, or void a pickup sale in the Sales log, first.
 - **In Studio:** a deleted order leaves **Money → Booth events**. If it was already added as a job, it shows under **Deleted in the POS**; **Delete from Studio** removes the job with what came from the POS. Payments entered by hand in Studio stop this, so nothing is lost by accident. On another device, open a new **Studio file** to see what was deleted.

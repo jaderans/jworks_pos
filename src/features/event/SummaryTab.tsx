@@ -71,6 +71,7 @@ export function SummaryTab({ ev }: { ev: JWEvent }) {
         {eventOrders.length ? (
           <Stat label="Deposits held" value={peso(held)} hint={`${openOrders.length} open order${openOrders.length === 1 ? '' : 's'}; they become sales at pickup`} />
         ) : null}
+        {m.servicesTaken ? <Stat label="Services" value={peso(m.servicesTaken)} hint="Sticker printing paid at the register, apart from booth sales" /> : null}
         {m.addOnAttach !== null ? <Stat label="Add-ons per sale" value={m.addOnAttach.toFixed(2)} hint={m.addOnAttach < 0.5 ? 'Below 0.5: remind the team to offer add-ons' : 'Good attach rate'} /> : null}
       </div>
 

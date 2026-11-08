@@ -65,7 +65,11 @@ test('a pre-order: deposit now (money in, not a sale), hand over later, drawer b
   await expect(page.locator('.stat', { hasText: 'Gross sales' })).toContainText('₱110');
   await expect(page.locator('.stat', { hasText: 'Deposits held' })).toContainText('₱0');
   await page.goto('/#/sales');
-  await expect(page.getByText(/1 sale · ₱110 shown, plus ₱55 in order deposits/)).toBeVisible();
+  const money = page.getByRole('region', { name: 'Money in' });
+  await expect(money.locator('.money-total')).toHaveText('₱110');
+  await expect(money).toContainText(/Booth sales\s*₱110/);
+  await expect(money).toContainText(/Order deposits\s*₱55/);
+  await expect(money).toContainText(/used at pickup\s*−₱55/);
 
   // The drawer has both cash payments: ₱2,000 float + ₱55 + ₱55
   await page.goto('/#/sell');

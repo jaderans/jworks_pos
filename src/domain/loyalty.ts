@@ -1,6 +1,7 @@
 import { peso, sum, type Cents } from '../lib/money';
 import { fmtIsoDate } from '../lib/time';
 import type { CartDiscount } from './cart';
+import { isMoneyOnly } from './orders';
 import type { LoyaltySettings, Sale, Voucher } from '../db/types';
 
 /**
@@ -9,7 +10,7 @@ import type { LoyaltySettings, Sale, Voucher } from '../db/types';
  * files (or the same file twice) can never double them.
  */
 
-const counts = (s: Sale) => s.status === 'completed' && s.deleted !== 1 && s.kind !== 'deposit';
+const counts = (s: Sale) => s.status === 'completed' && s.deleted !== 1 && !isMoneyOnly(s);
 
 /** Stamps one sale earns: one for every pesoPerStamp actually paid. */
 export function stampsForSale(sale: Pick<Sale, 'total'>, rules: LoyaltySettings): number {

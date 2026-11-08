@@ -417,11 +417,12 @@ export async function buildPayoutSlips(i: ReportInput) {
 /** End-of-day report for one calendar day. */
 export async function buildEndOfDay(i: ReportInput, date: string) {
   const all = i.sales.filter((s) => isoDate(s.at) === date);
-  const sales = all.filter((s) => s.kind !== 'deposit');
+  const sales = all.filter((s) => !s.kind);
   const done = sales.filter((s) => s.status === 'completed');
   const deposits = all.filter((s) => s.kind === 'deposit' && s.status === 'completed');
+  const services = all.filter((s) => s.kind === 'service' && s.status === 'completed');
   const byMethod = new Map<string, { name: string; amount: number; count: number }>();
-  for (const s of [...done, ...deposits]) for (const p of s.payments) {
+  for (const s of [...done, ...deposits, ...services]) for (const p of s.payments) {
     if (p.kind === 'deposit') continue;
     const v = byMethod.get(p.methodId) ?? { name: p.name, amount: 0, count: 0 };
     v.amount += p.amount;
@@ -439,6 +440,7 @@ export async function buildEndOfDay(i: ReportInput, date: string) {
       { label: 'Items', value: String(sum(done.flatMap((s) => s.lines.map((l) => l.qty)))) },
       { label: 'Voided', value: String(sales.length - done.length) },
       ...(deposits.length ? [{ label: 'Order deposits', value: peso(sum(deposits.map((s) => s.total))) }] : []),
+      ...(services.length ? [{ label: 'Services', value: peso(sum(services.map((s) => s.total))) }] : []),
     ]),
     sectionTitle('Payments'),
     table(['*', 'auto', 'auto'], [th('Method'), th('Count', true), th('Amount', true)], [...byMethod.values()].map((v) => [td(v.name), td(v.count, true), td(peso(v.amount), true)])),

@@ -209,6 +209,8 @@ export interface CashMove {
   amount: Cents;
   reason: string;
   by: string | null;
+  /** Where the money moved: the drawer's cash, or GCash and the like. Moves recorded before this was asked are cash. */
+  method?: { id: string; name: string; kind: PayKind };
 }
 
 export interface Session extends Syncable {
@@ -284,10 +286,16 @@ export interface Sale extends Syncable {
   customerId?: string | null;
   /** The voucher code used on this sale, uppercase. */
   voucherCode?: string;
-  /** 'deposit': money taken toward an order. It counts in the drawer, not in sales, until pickup. */
-  kind?: 'deposit';
+  /**
+   * 'deposit': money taken toward an order. It counts in the drawer, not in sales, until pickup.
+   * 'service': a payment for a JoshWorks service (sticker printing) taken at the register. It's money in
+   * and a sale of its own, kept out of the booth's merch figures and the team's booth share.
+   */
+  kind?: 'deposit' | 'service';
   /** The order this deposit or pickup belongs to. */
   orderId?: string;
+  /** The print order a service payment is for. */
+  printOrderId?: string;
 }
 
 export interface StockMove extends Syncable {
@@ -788,6 +796,10 @@ export interface StudioPrintFeed {
   printerPct: number;
   /** The printer's share of the print work, worked out in the POS. */
   printerShare: Cents;
+  /** Who drew the sticker art and their share of the illustration lines, when the order has them. */
+  illustrator?: { memberId: string; name: string; email: string } | null;
+  illustratorPct?: number;
+  illustratorShare?: Cents;
   lines: { label: string; qty: number; unitPrice: Cents; amount: Cents }[];
   subtotal: Cents;
   /** A service coupon's discount off the print work; total is after it. */
@@ -862,12 +874,25 @@ export interface PrintRates {
   downPct: number;
   /** The printer's share of the print work (before the courier fee), % — their earnings in Studio. */
   printerPct: number;
+  /** Drawing the sticker art: a price per design in each tier, cheaper in sets, and the illustrator's share (%). */
+  illustration: { tiers: IllustrationTier[]; artistPct: number };
+}
+
+export interface IllustrationTier {
+  key: string;
+  name: string;
+  /** What it covers, for the customer. */
+  note: string;
+  /** One design. */
+  price: Cents;
+  /** Several designs ordered at once cost less. */
+  sets: { designs: number; price: Cents }[];
 }
 
 export type PrintStatus = 'quote' | 'printing' | 'ready' | 'done' | 'cancelled';
 
 export interface PrintLine {
-  kind: 'sheets' | 'peel' | 'pack' | 'custom';
+  kind: 'sheets' | 'peel' | 'pack' | 'custom' | 'illustration';
   label: string;
   /** A4 sheets, peel-off sheets, packs or pieces. */
   qty: number;
@@ -882,6 +907,9 @@ export interface PrintLine {
   size?: string;
   pack?: string;
   packSize?: PackSize;
+  /** Illustration: the tier and how many designs. */
+  tier?: string;
+  designs?: number;
 }
 
 export interface PrintPayment {
@@ -894,6 +922,8 @@ export interface PrintPayment {
   ref: string;
   stage: 'down' | 'balance';
   by: string | null;
+  /** The register sale it was taken as, when a register was open on the phone. */
+  saleId?: string;
 }
 
 export interface PrintDelivery {
@@ -922,6 +952,9 @@ export interface PrintOrder extends Syncable {
   dueDate: string;
   printerId: string | null;
   printerPct: number;
+  /** Who draws the sticker art, and their share of the illustration lines (%). */
+  illustratorId?: string | null;
+  illustratorPct?: number;
   payments: PrintPayment[];
   /** Where the customer's files are (Drive or Messenger link). */
   files: string;

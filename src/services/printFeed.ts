@@ -35,6 +35,7 @@ async function refresh(d: Snapshot) {
       downPct: d.rates.downPct,
       customer: o.customerId ? d.customers.get(o.customerId) : undefined,
       printer: o.printerId ? d.members.get(o.printerId) : undefined,
+      illustrator: o.illustratorId ? d.members.get(o.illustratorId) : undefined,
     });
     if (prev && prev.deleted !== 1 && sameFeed(prev.feed, feed)) continue;
     await save(db.studioFeed, { ...(prev ?? build<StudioFeedRow>({ id, feed, sentBy: '' })), feed, sentBy: 'Print orders', deleted: 0 });

@@ -12,15 +12,15 @@ import { peso, sum, type Cents } from '../../lib/money';
 import { fmtDateTime, fmtIsoDate } from '../../lib/time';
 import { safeFileName } from '../../lib/files';
 import {
-  DEFAULT_PRINT_RATES, PACK_SIZE_LABEL, PRINT_STATUS_LABEL, customLine, isOpenPrint, lineTotal, packLine, peelLine, printTotals, printWarnings, sheetsLine,
+  DEFAULT_PRINT_RATES, PACK_SIZE_LABEL, PRINT_STATUS_LABEL, customLine, illustrationLine, illustrationPrice, isOpenPrint, lineTotal, packLine, peelLine, printTotals, printWarnings, sheetsLine,
 } from '../../domain/print';
 import {
-  approvePrint, blankDelivery, cancelPrint, createPrintOrder, deletePrintOrder, markProofSent, setPrintStatus, takePrintPayment, updatePrintOrder, type NewPrintOrder,
+  approvePrint, blankDelivery, cancelPrint, createPrintOrder, deletePrintOrder, markProofSent, printDeleteBlock, setPrintStatus, takePrintPayment, updatePrintOrder, type NewPrintOrder,
 } from '../../services/print';
 import { CustomerPicker } from '../register/CustomerPicker';
 import { CouponField, appliedFrom, useCouponCheck } from '../coupons/CouponField';
 import { claimId } from '../../domain/coupons';
-import type { BusinessSettings, Customer, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../../db/types';
+import type { BusinessSettings, Customer, IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../../db/types';
 import '../orders/orders.css';
 
 const COLUMNS: { status: PrintStatus; hint: string }[] = [
@@ -67,6 +67,11 @@ export default function PrintPage() {
   };
   const owner = app.can('viewProfit');
   const removeOrder = async (o: PrintOrder) => {
+    const blocked = await printDeleteBlock(o);
+    if (blocked) {
+      app.toast(blocked, { tone: 'bad' });
+      return;
+    }
     const { paid } = printTotals(o, rates.downPct);
     const ok = await app.confirm({
       title: `Delete ${o.number}?`,
@@ -306,6 +311,8 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
   const [delivery, setDelivery] = useState(blankDelivery());
   const [printerId, setPrinterId] = useState('');
   const [printerPct, setPrinterPct] = useState<number | null>(rates.printerPct);
+  const [illustratorId, setIllustratorId] = useState('');
+  const [illustratorPct, setIllustratorPct] = useState<number | null>(rates.illustration.artistPct);
   const [files, setFiles] = useState('');
   const [notes, setNotes] = useState('');
   const [couponCode, setCouponCode] = useState('');
@@ -326,6 +333,9 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
   const [customLabel, setCustomLabel] = useState('');
   const [customQty, setCustomQty] = useState<number | null>(1);
   const [customPrice, setCustomPrice] = useState<Cents | null>(null);
+  const [tier, setTier] = useState(rates.illustration.tiers[0]?.key ?? '');
+  const [designs, setDesigns] = useState<number | null>(1);
+  const [artPrice, setArtPrice] = useState<Cents | null>(null);
 
   useEffect(() => {
     if (!order) return;
@@ -337,6 +347,8 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
     setDelivery(o?.delivery ?? blankDelivery());
     setPrinterId(o?.printerId ?? '');
     setPrinterPct(o?.printerPct ?? rates.printerPct);
+    setIllustratorId(o?.illustratorId ?? '');
+    setIllustratorPct(o?.illustratorPct ?? rates.illustration.artistPct);
     setFiles(o?.files ?? '');
     setNotes(o?.notes ?? '');
     setCouponCode(o?.coupon?.code ?? '');
@@ -351,12 +363,14 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
     setCustomLabel('');
     setCustomQty(1);
     setCustomPrice(null);
+    setDesigns(1);
+    setArtPrice(null);
   }, [order]); // eslint-disable-line react-hooks/exhaustive-deps
   const couponCheck = useCouponCheck(couponCode, sum(lines.map(lineTotal)), order && order !== 'new' ? claimId('print', order.id) : null);
 
   if (!order) return null;
   const closed = order !== 'new' && !isOpenPrint(order);
-  const draft = { lines, delivery, payments: order === 'new' ? [] : order.payments, printerPct: printerPct ?? 0, coupon: closed ? order.coupon : appliedFrom(couponCheck) };
+  const draft = { lines, delivery, payments: order === 'new' ? [] : order.payments, printerPct: printerPct ?? 0, illustratorPct: illustratorPct ?? 0, coupon: closed ? order.coupon : appliedFrom(couponCheck) };
   const t = printTotals(draft, rates.downPct);
   const warnings = printWarnings({ lines }, rates);
   const preview: PrintLine | null =
@@ -368,18 +382,23 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
           ? packLine(rates, pack, packSize, packs)
           : kind === 'custom' && customLabel.trim() && customQty && customPrice !== null
             ? customLine(customLabel.trim(), customQty, customPrice)
-            : null;
+            : kind === 'illustration' && designs
+              ? illustrationLine(rates, tier, designs, artPrice ?? undefined)
+              : null;
+  const artTier = rates.illustration.tiers.find((x) => x.key === tier);
+  const artRate = artTier && designs ? illustrationPrice(artTier, designs) : null;
+  const hasArt = lines.some((l) => l.kind === 'illustration') || !!illustratorId;
 
   const save = async () => {
     setError('');
     setBusy(true);
-    const o: NewPrintOrder = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact: customer ? customer.phone || customer.email || contact : contact, lines, delivery, printerId: printerId || null, files, notes, couponCode };
+    const o: NewPrintOrder = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact: customer ? customer.phone || customer.email || contact : contact, lines, delivery, printerId: printerId || null, illustratorId: illustratorId || null, files, notes, couponCode };
     try {
       if (isNew) {
         const created = await createPrintOrder(o, app.device);
         app.toast(`Print order ${created.number} saved`, { tone: 'good' });
       } else {
-        await updatePrintOrder(order.id, { ...o, printerPct: printerPct ?? rates.printerPct });
+        await updatePrintOrder(order.id, { ...o, printerPct: printerPct ?? rates.printerPct, illustratorPct: illustratorPct ?? rates.illustration.artistPct });
         app.toast('Saved', { tone: 'good' });
       }
       onClose();
@@ -487,6 +506,7 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
                   { value: 'sheets', label: 'Sticker sheets' },
                   { value: 'peel', label: 'Peel-off sheets' },
                   { value: 'pack', label: 'Packaging' },
+                  { value: 'illustration', label: 'Illustration' },
                   { value: 'custom', label: 'Other' },
                 ]}
               />
@@ -564,6 +584,28 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
                       <NumberInput id="po-packs" decimals={false} min={1} value={packs} onChange={setPacks} />
                     </Field>
                   </>
+                ) : kind === 'illustration' ? (
+                  <>
+                    <Field label="Tier" htmlFor="po-tier" hint={artTier?.note} className="span-2">
+                      <Select id="po-tier" value={tier} onChange={(e) => setTier(e.target.value)}>
+                        {rates.illustration.tiers.map((x) => (
+                          <option key={x.key} value={x.key}>
+                            {x.name} · {peso(x.price)} a design
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="Designs" htmlFor="po-designs" hint={artTier?.sets.length ? `Sets of ${artTier.sets.map((x) => x.designs).join(', ')} cost less.` : undefined}>
+                      <NumberInput id="po-designs" decimals={false} min={1} value={designs} onChange={setDesigns} />
+                    </Field>
+                    <Field
+                      label="Price"
+                      htmlFor="po-art-price"
+                      hint={artRate ? `Rate card: ${peso(artRate.total)}${artRate.saved ? `, a set saving ${peso(artRate.saved)}` : ''}. Type another price for this order.` : undefined}
+                    >
+                      <MoneyInput id="po-art-price" value={artPrice ?? artRate?.total ?? null} onChange={setArtPrice} />
+                    </Field>
+                  </>
                 ) : (
                   <>
                     <Field label="What it is" htmlFor="po-custom" className="span-2">
@@ -590,6 +632,7 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
                       setCustomLabel('');
                       setCustomPrice(null);
                     }
+                    if (kind === 'illustration') setArtPrice(null);
                   }}
                 >
                   <Plus size={15} /> Add to the order
@@ -649,8 +692,27 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
           </Select>
         </Field>
         {app.can('viewProfit') ? (
-          <Field label="Printer’s share" htmlFor="po-pct" hint={`Of the print work${t.discount ? ' after the coupon' : ''}, not the delivery fee: ${peso(t.printerShare)}.`}>
+          <Field label="Printer’s share" htmlFor="po-pct" hint={`Of the print work${t.discount ? ' after the coupon' : ''}, not the illustration or the delivery fee: ${peso(t.printerShare)}.`}>
             <NumberInput id="po-pct" min={0} value={printerPct} onChange={setPrinterPct} suffix="%" />
+          </Field>
+        ) : null}
+        {hasArt ? (
+          <Field label="Who draws it" htmlFor="po-artist" hint="Their share of the illustration goes to their earnings in JoshWorks Studio.">
+            <Select id="po-artist" value={illustratorId} onChange={(e) => setIllustratorId(e.target.value)}>
+              <option value="">Not set yet</option>
+              {(members ?? [])
+                .filter((m) => m.active === 1)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        ) : null}
+        {hasArt && app.can('viewProfit') ? (
+          <Field label="Illustrator’s share" htmlFor="po-art-pct" hint={`Of the illustration${t.discount ? ' after its part of the coupon' : ''}: ${peso(t.illustratorShare)}.`}>
+            <NumberInput id="po-art-pct" min={0} value={illustratorPct} onChange={setIllustratorPct} suffix="%" />
           </Field>
         ) : null}
         <Field label="Files" htmlFor="po-files" hint="Drive or Messenger link to the designs.">
@@ -736,7 +798,7 @@ function PayDialog({ order, rates, onClose }: { order: PrintOrder | null; rates:
     if (method.requireRef && !ref.trim()) return setError(`Enter the ${method.name} reference number.`);
     setBusy(true);
     try {
-      await takePrintPayment(order.id, { methodId: method.id, name: method.name, kind: method.kind, amount: amount ?? 0, ref, by: app.member?.id ?? null }, session ?? null);
+      await takePrintPayment(order.id, { methodId: method.id, name: method.name, kind: method.kind, amount: amount ?? 0, ref, by: app.member?.id ?? null }, session ? { session, device: app.device } : null);
       app.toast(`${peso(amount ?? 0)} received for ${order.number}`, { tone: 'good' });
       onClose();
     } catch (e) {
@@ -777,9 +839,14 @@ function PayDialog({ order, rates, onClose }: { order: PrintOrder | null; rates:
           ))}
         </Select>
       </Field>
-      <Field label="Reference no." htmlFor="pp-ref" hint={method?.kind === 'cash' ? (session ? `Goes in register ${session.letter}’s drawer as cash in.` : 'Kept apart from the register drawer.') : undefined}>
+      <Field label="Reference no." htmlFor="pp-ref">
         <TextInput id="pp-ref" value={ref} onChange={(e) => setRef(e.target.value)} placeholder={method?.kind === 'cash' ? 'Not needed for cash' : 'From the GCash or bank receipt'} />
       </Field>
+      <Callout tone="info">
+        {session
+          ? `It goes in register ${session.letter} as a sale under Services, so it counts in the Sales log, the money totals${method?.kind === 'cash' ? ' and the drawer' : ''}.`
+          : 'No register is open on this phone, so it stays on the order only. Open the register first to count it in the sales.'}
+      </Callout>
       {error ? <Callout tone="bad">{error}</Callout> : null}
     </Dialog>
   );
@@ -870,6 +937,9 @@ function RateCardDialog({ rates, onClose }: { rates: PrintRates; onClose: () => 
   const setMat = (i: number, ch: Partial<PrintRates['materials'][number]>) => setR({ ...r, materials: r.materials.map((m, k) => (k === i ? { ...m, ...ch } : m)) });
   const setCut = (i: number, price: Cents) => setR({ ...r, cuts: r.cuts.map((c, k) => (k === i ? { ...c, price } : c)) });
   const setPack = (i: number, size: PackSize, v: Cents) => setR({ ...r, packs: r.packs.map((p, k) => (k === i ? { ...p, [size]: v } : p)) });
+  const setTier = (i: number, ch: Partial<IllustrationTier>) => setR({ ...r, illustration: { ...r.illustration, tiers: r.illustration.tiers.map((x, k) => (k === i ? { ...x, ...ch } : x)) } });
+  const setTierSet = (i: number, j: number, price: Cents) => setTier(i, { sets: r.illustration.tiers[i].sets.map((x, k) => (k === j ? { ...x, price } : x)) });
+  const setSizes = [...new Set(r.illustration.tiers.flatMap((x) => x.sets.map((y) => y.designs)))].sort((a, b) => a - b);
   const save = async () => {
     await setSetting('printRates', r);
     app.toast('Rate card saved. Every phone uses it from now on.', { tone: 'good' });
@@ -951,6 +1021,9 @@ function RateCardDialog({ rates, onClose }: { rates: PrintRates; onClose: () => 
             <Field label="Printer’s share" htmlFor="rc-printer" hint="The default for new orders.">
               <NumberInput id="rc-printer" min={0} value={r.printerPct} onChange={(n) => setR({ ...r, printerPct: Math.min(100, Math.max(0, n ?? 0)) })} suffix="%" />
             </Field>
+            <Field label="Illustrator’s share" htmlFor="rc-artist" hint="Of the illustration; the default for new orders.">
+              <NumberInput id="rc-artist" min={0} value={r.illustration.artistPct} onChange={(n) => setR({ ...r, illustration: { ...r.illustration, artistPct: Math.min(100, Math.max(0, n ?? 0)) } })} suffix="%" />
+            </Field>
           </div>
         </div>
       </div>
@@ -973,6 +1046,49 @@ function RateCardDialog({ rates, onClose }: { rates: PrintRates; onClose: () => 
                     <MoneyInput ariaLabel={`${p.name}, ${s}`} value={p[s]} onChange={(c) => setPack(i, s, c ?? 0)} />
                   </td>
                 ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Sticker illustration</th>
+              <th className="r">1 design</th>
+              {setSizes.map((n) => (
+                <th key={n} className="r">
+                  Set of {n}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {r.illustration.tiers.map((x, i) => (
+              <tr key={x.key}>
+                <td>
+                  <b>{x.name}</b>
+                  <div className="muted tiny">{x.note}</div>
+                </td>
+                <td className="r" style={{ width: 120 }}>
+                  <MoneyInput ariaLabel={`${x.name}, one design`} value={x.price} onChange={(c) => setTier(i, { price: c ?? 0 })} />
+                </td>
+                {setSizes.map((n) => {
+                  const j = x.sets.findIndex((y) => y.designs === n);
+                  return (
+                    <td key={n} className="r" style={{ width: 120 }}>
+                      {j >= 0 ? (
+                        <>
+                          <MoneyInput ariaLabel={`${x.name}, set of ${n}`} value={x.sets[j].price} onChange={(c) => setTierSet(i, j, c ?? 0)} />
+                          <div className={`tiny ${x.sets[j].price < n * x.price ? 'muted' : 'bad'}`}>
+                            {x.sets[j].price < n * x.price ? `save ${peso(n * x.price - x.sets[j].price)}` : 'no saving'}
+                          </div>
+                        </>
+                      ) : null}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

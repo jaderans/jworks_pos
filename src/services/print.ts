@@ -7,9 +7,11 @@ import { todayISO } from '../lib/time';
 import { uid } from '../lib/ids';
 import { PRINT_STATUS_LABEL, addWorkingDays, lineTotal, printTotals } from '../domain/print';
 import { claimId } from '../domain/coupons';
-import { addCashMove } from './sales';
+import { completeSale } from './sales';
+import { priceCart } from '../domain/cart';
+import { ORDER_LINE } from '../domain/orders';
 import { resolveCoupon, syncClaim } from './coupons';
-import type { PayKind, PrintDelivery, PrintLine, PrintOrder, PrintRates, PrintStatus, Session } from '../db/types';
+import type { PayKind, PrintDelivery, PrintLine, PrintOrder, PrintRates, PrintStatus, Sale, Session } from '../db/types';
 
 /**
  * Sticker printing jobs: quote → proof → 50% down → print → ready → picked up
@@ -38,6 +40,8 @@ export interface NewPrintOrder {
   notes: string;
   /** A service coupon code; checked against the print work when the order is saved. */
   couponCode?: string;
+  /** Who draws the sticker art, for orders with illustration. */
+  illustratorId?: string | null;
 }
 
 export const blankDelivery = (): PrintDelivery => ({ method: 'pickup', courier: '', address: '', fee: 0, tracking: '' });
@@ -85,6 +89,7 @@ export async function createPrintOrder(o: NewPrintOrder, device: DeviceInfo): Pr
     approvedAt: null,
     dueDate: '',
     printerPct: rates.printerPct,
+    illustratorPct: rates.illustration.artistPct,
     payments: [],
     doneAt: null,
   });
@@ -100,30 +105,44 @@ async function get(id: string): Promise<PrintOrder> {
   return o;
 }
 
-export async function updatePrintOrder(id: string, changes: NewPrintOrder & { printerPct?: number }): Promise<void> {
+export async function updatePrintOrder(id: string, changes: NewPrintOrder & { printerPct?: number; illustratorPct?: number }): Promise<void> {
   const o = await get(id);
   if (o.status === 'done' || o.status === 'cancelled') return updateClosedPrint(o, changes);
   check(changes);
   const coupon = await resolveCoupon(changes.couponCode, printWork(changes.lines), claimId('print', id));
-  const { printerPct, ...rest } = changes;
-  const next = { ...clean(rest), coupon, ...(printerPct !== undefined ? { printerPct } : {}) };
+  const { printerPct, illustratorPct, ...rest } = changes;
+  const next = { ...clean(rest), coupon, ...(printerPct !== undefined ? { printerPct } : {}), ...(illustratorPct !== undefined ? { illustratorPct } : {}) };
   await patch(db.printOrders, id, next);
   await syncClaim(claimFor({ ...o, ...next }), coupon);
 }
 
 /** A closed order keeps what was printed and its price. Who it's for, who printed it, the files and the notes can still be fixed. */
-async function updateClosedPrint(o: PrintOrder, { printerPct, ...changes }: NewPrintOrder & { printerPct?: number }): Promise<void> {
+async function updateClosedPrint(o: PrintOrder, { printerPct, illustratorPct, ...changes }: NewPrintOrder & { printerPct?: number; illustratorPct?: number }): Promise<void> {
   const fixed = clean({ ...changes, lines: o.lines, delivery: o.delivery });
   check(fixed);
   const { customerId, customerName, contact, printerId, files, notes } = fixed;
-  const details = { customerId, customerName, contact, printerId, files, notes, ...(printerPct !== undefined ? { printerPct } : {}) };
+  const details = {
+    customerId, customerName, contact, printerId, files, notes,
+    ...(fixed.illustratorId !== undefined ? { illustratorId: fixed.illustratorId } : {}),
+    ...(printerPct !== undefined ? { printerPct } : {}),
+    ...(illustratorPct !== undefined ? { illustratorPct } : {}),
+  };
   await patch(db.printOrders, o.id, details);
   if (o.status === 'done') await syncClaim(claimFor({ ...o, ...details }), o.coupon);
+}
+
+/** Why a print order can't be deleted yet: a payment taken at the register is a sale, voided first. Null when it can. */
+export async function printDeleteBlock(o: PrintOrder): Promise<string | null> {
+  const ids = o.payments.map((p) => p.saleId).filter((x): x is string => !!x);
+  const sales = (await db.sales.bulkGet(ids)).filter((s): s is Sale => !!s && s.status === 'completed' && s.deleted !== 1);
+  return sales.length ? `${o.number} was paid at the register. Void ${sales.map((s) => s.receiptNo).join(' and ')} in the Sales log first.` : null;
 }
 
 /** Delete a print order, with its coupon use and any payments on it. Its summary leaves Studio by itself (see printFeed). */
 export async function deletePrintOrder(id: string): Promise<void> {
   const o = await get(id);
+  const blocked = await printDeleteBlock(o);
+  if (blocked) throw new Error(blocked);
   const paid = sum(o.payments.map((p) => p.amount));
   await syncClaim(claimFor(o), null);
   await remove(db.printOrders, id);
@@ -172,19 +191,37 @@ export interface PrintPaymentInput {
 }
 
 /**
- * Money toward a print order. Cash taken while this phone's register is open
- * goes in that drawer as a cash-in, so the drawer still counts out right.
+ * Money toward a print order. With a register open on this phone it's taken as
+ * a sale there (a service, kept apart from the booth's merch), so it shows in
+ * the Sales log, the money totals and the drawer. Otherwise it stays on the order.
  */
-export async function takePrintPayment(id: string, p: PrintPaymentInput, session: Session | null): Promise<void> {
+export async function takePrintPayment(id: string, p: PrintPaymentInput, register: { session: Session; device: DeviceInfo } | null): Promise<void> {
   const o = await get(id);
   const rates = await getSetting<PrintRates>('printRates');
   const t = printTotals(o, rates.downPct);
   if (!(p.amount > 0)) throw new Error('Enter the amount.');
   if (p.amount > t.balance) throw new Error(`That's more than the ${peso(t.balance)} still due.`);
   const stage = t.paid < t.down ? 'down' : 'balance';
-  await patch(db.printOrders, id, { payments: [...o.payments, { id: uid(), at: Date.now(), methodId: p.methodId, name: p.name, kind: p.kind, amount: p.amount, ref: p.ref.trim(), stage, by: p.by }] });
-  if (p.kind === 'cash' && session && session.closedAt === null) await addCashMove(session.id, 'in', p.amount, `Print order ${o.number}`, p.by);
-  await audit('payment', 'print', id, `${o.number}: ${stage === 'down' ? 'down payment' : 'payment'} ${peso(p.amount)} (${p.name})`);
+  let saleId: string | undefined;
+  if (register && register.session.closedAt === null) {
+    const name = `${stage === 'down' ? 'Down payment' : 'Payment'} · print order ${o.number}`;
+    const priced = priceCart([{ key: 'print', productId: `${ORDER_LINE}print:${o.id}`, name, categoryId: null, unitPrice: p.amount, qty: 1, free: false, freeReason: '', designerId: null }], [], []);
+    const sale = await completeSale({
+      eventId: register.session.eventId,
+      session: register.session,
+      device: register.device,
+      cashierId: p.by,
+      priced,
+      payments: [{ methodId: p.methodId, name: p.name, kind: p.kind, amount: p.amount, tendered: p.kind === 'cash' ? p.amount : null, ref: p.ref }],
+      note: `Sticker printing for ${o.customerName || 'a customer'}`,
+      customerId: o.customerId,
+      kind: 'service',
+      printOrderId: o.id,
+    });
+    saleId = sale.id;
+  }
+  await patch(db.printOrders, id, { payments: [...o.payments, { id: uid(), at: Date.now(), methodId: p.methodId, name: p.name, kind: p.kind, amount: p.amount, ref: p.ref.trim(), stage, by: p.by, ...(saleId ? { saleId } : {}) }] });
+  await audit('payment', 'print', id, `${o.number}: ${stage === 'down' ? 'down payment' : 'payment'} ${peso(p.amount)} (${p.name})${saleId ? ', taken at the register' : ''}`);
 }
 
 export async function cancelPrint(id: string, reason: string): Promise<void> {

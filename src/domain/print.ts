@@ -1,6 +1,6 @@
 import { roundUpTo, sum, toCents, type Cents } from '../lib/money';
 import { addDays } from '../lib/time';
-import type { PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../db/types';
+import type { IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../db/types';
 
 /**
  * The sticker printing service: prices from the rate card (per A4 sheet,
@@ -62,6 +62,27 @@ export const DEFAULT_PRINT_RATES: PrintRates = {
   leadDays: { min: 4, max: 7 },
   downPct: 50,
   printerPct: 20,
+  // JoshWorks Sticker Illustration rates. The illustrator's share is set on the rate card.
+  illustration: {
+    artistPct: 0,
+    tiers: [
+      {
+        key: 'simple',
+        name: 'Small / simple',
+        note: 'One subject, flat colours, light shading, little or no lettering. Mascots, icons and small doodles.',
+        price: P(100),
+        sets: [{ designs: 2, price: P(180) }, { designs: 5, price: P(450) }, { designs: 10, price: P(850) }],
+      },
+      {
+        key: 'detailed',
+        name: 'Detailed',
+        note: 'Full illustration with shading, texture, props, hand lettering or a character in a scene. Portraits and pet stickers.',
+        price: P(220),
+        // Each set saves what the rate sheet says (₱50, ₱150, ₱500) off ₱220 a design.
+        sets: [{ designs: 2, price: P(390) }, { designs: 5, price: P(950) }, { designs: 10, price: P(1700) }],
+      },
+    ],
+  },
 };
 
 export const PACK_SIZE_LABEL: Record<PackSize, string> = { small: 'Small (3.5 × 5 | 2.5 × 7 in)', medium: 'Medium (4 × 6 in)', large: 'Large (5 × 7 in)' };
@@ -122,6 +143,38 @@ export function packLine(r: PrintRates, packKey: string, size: PackSize, packs: 
 
 export const customLine = (label: string, qty: number, unitPrice: Cents): PrintLine => ({ kind: 'custom', label, qty, unitPrice, unitCost: null, a4: 0 });
 
+/**
+ * The cheapest way to price this many designs in a tier: sets and single
+ * designs mixed, so a set never costs more than buying the designs one by one.
+ */
+export function illustrationPrice(t: Pick<IllustrationTier, 'price' | 'sets'>, designs: number): { total: Cents; singles: Cents; saved: Cents } {
+  const n = Math.max(0, Math.floor(designs));
+  const best: Cents[] = [0];
+  for (let k = 1; k <= n; k++) {
+    let c = best[k - 1] + t.price;
+    for (const s of t.sets) if (s.designs > 0 && s.designs <= k) c = Math.min(c, best[k - s.designs] + s.price);
+    best.push(c);
+  }
+  const singles = n * t.price;
+  return { total: best[n], singles, saved: singles - best[n] };
+}
+
+/** Drawing the sticker art: one line for the designs in a tier. The price comes from the rate card and can be changed on the order. */
+export function illustrationLine(r: PrintRates, tierKey: string, designs: number, price?: Cents): PrintLine {
+  const t = r.illustration.tiers.find((x) => x.key === tierKey) ?? r.illustration.tiers[0];
+  const n = Math.max(1, Math.floor(designs));
+  return {
+    kind: 'illustration',
+    label: `Sticker illustration, ${t.name.toLowerCase()}: ${n} design${n === 1 ? '' : 's'}`,
+    qty: 1,
+    unitPrice: price ?? illustrationPrice(t, n).total,
+    unitCost: null,
+    a4: 0,
+    tier: t.key,
+    designs: n,
+  };
+}
+
 export const lineTotal = (l: Pick<PrintLine, 'qty' | 'unitPrice'>): Cents => Math.round(l.qty * l.unitPrice);
 
 export interface PrintTotals {
@@ -140,13 +193,20 @@ export interface PrintTotals {
   a4: number;
   /** What the materials cost the studio, where the rate card has costs. */
   materialCost: Cents;
-  /** The printer's share of the print work after the coupon. */
+  /** The printer's share of the print work (not the illustration) after its part of the coupon. */
   printerShare: Cents;
+  /** The illustration lines, before the coupon. */
+  illustration: Cents;
+  /** The illustrator's share of the illustration after its part of the coupon. */
+  illustratorShare: Cents;
 }
 
-export function printTotals(o: Pick<PrintOrder, 'lines' | 'delivery' | 'payments' | 'printerPct' | 'coupon'>, downPct: number): PrintTotals {
+export function printTotals(o: Pick<PrintOrder, 'lines' | 'delivery' | 'payments' | 'printerPct' | 'illustratorPct' | 'coupon'>, downPct: number): PrintTotals {
   const subtotal = sum(o.lines.map(lineTotal));
   const discount = Math.min(subtotal, Math.max(0, o.coupon?.discount ?? 0));
+  // Everyone shares the coupon: it comes off the print work and the illustration in proportion.
+  const illustration = sum(o.lines.filter((l) => l.kind === 'illustration').map(lineTotal));
+  const artOff = subtotal ? Math.round((discount * illustration) / subtotal) : 0;
   const delivery = o.delivery.method === 'courier' ? Math.max(0, o.delivery.fee) : 0;
   const total = subtotal - discount + delivery;
   const paid = sum(o.payments.map((p) => p.amount));
@@ -163,8 +223,9 @@ export function printTotals(o: Pick<PrintOrder, 'lines' | 'delivery' | 'payments
     downPaid: paid >= down,
     a4: sum(o.lines.map((l) => l.a4)),
     materialCost: sum(o.lines.map((l) => (l.unitCost === null ? 0 : Math.round(l.unitCost * (l.kind === 'peel' ? l.qty : l.a4 || l.qty))))),
-    // Everyone shares the coupon: the printer's % is of the print work after it.
-    printerShare: Math.round(((subtotal - discount) * Math.max(0, o.printerPct)) / 100),
+    printerShare: Math.round(((subtotal - illustration - (discount - artOff)) * Math.max(0, o.printerPct)) / 100),
+    illustration,
+    illustratorShare: Math.round(((illustration - artOff) * Math.max(0, o.illustratorPct ?? 0)) / 100),
   };
 }
 

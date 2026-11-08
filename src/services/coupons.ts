@@ -153,7 +153,7 @@ export async function markReminded(id: string): Promise<void> {
  * reaches, one code per sale). Deposits don't earn.
  */
 export async function issueEarnedCoupon(sale: Sale): Promise<Coupon | null> {
-  if (sale.kind === 'deposit' || sale.status !== 'completed') return null;
+  if (sale.kind === 'deposit' || sale.kind === 'service' || sale.status !== 'completed') return null;
   const already = alive(await db.coupons.where('saleId').equals(sale.id).toArray());
   if (already.length) return already[0];
   const b = earnBatchFor(alive(await db.couponBatches.where('eventId').equals(sale.eventId).toArray()), sale.eventId, sale.total, todayISO());

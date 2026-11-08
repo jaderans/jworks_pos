@@ -4,10 +4,8 @@ import { alive, db } from '../src/db/db';
 import { ensureDevice } from '../src/db/local';
 import { setWriterDevice } from '../src/db/write';
 import { toCents } from '../src/lib/money';
-import { DEFAULT_PRINT_RATES as R, addWorkingDays, customLine, packLine, peelLine, printTotals, printWarnings, sheetsLine } from '../src/domain/print';
+import { DEFAULT_PRINT_RATES as R, addWorkingDays, customLine, illustrationLine, illustrationPrice, packLine, peelLine, printTotals, printWarnings, sheetsLine } from '../src/domain/print';
 import { buildPrintFeed } from '../src/domain/studioFeed';
-import { createEvent } from '../src/services/events';
-import { openSession } from '../src/services/sales';
 import { blankDelivery, createPrintOrder, deletePrintOrder, setPrintStatus, takePrintPayment, updatePrintOrder } from '../src/services/print';
 import type { Member } from '../src/db/types';
 
@@ -53,6 +51,46 @@ describe('the sticker printing rate card', () => {
   });
 });
 
+describe('sticker illustration', () => {
+  const [simple, detailed] = R.illustration.tiers;
+
+  it('prices designs from the rate card: ₱100 simple, ₱220 detailed, cheaper in sets', () => {
+    expect([1, 2, 5, 10].map((n) => illustrationPrice(simple, n).total)).toEqual([P(100), P(180), P(450), P(850)]);
+    expect([1, 2, 5, 10].map((n) => illustrationPrice(detailed, n).total)).toEqual([P(220), P(390), P(950), P(1700)]);
+    // Each set saves what the rate sheet says.
+    expect([2, 5, 10].map((n) => illustrationPrice(detailed, n).saved)).toEqual([P(50), P(150), P(500)]);
+  });
+
+  it('mixes sets and single designs for the lowest price, and never charges more than singles', () => {
+    expect(illustrationPrice(simple, 7).total).toBe(P(630));
+    expect(illustrationPrice(detailed, 3).total).toBe(P(610));
+    expect(illustrationPrice(detailed, 12).total).toBe(P(2090));
+    // A set priced above its singles is skipped.
+    expect(illustrationPrice({ price: P(220), sets: [{ designs: 2, price: P(450) }] }, 2).total).toBe(P(440));
+  });
+
+  it('is one line per tier, with the price changeable on the order', () => {
+    expect(illustrationLine(R, 'detailed', 5)).toMatchObject({ kind: 'illustration', label: 'Sticker illustration, detailed: 5 designs', qty: 1, unitPrice: P(950), tier: 'detailed', designs: 5 });
+    expect(illustrationLine(R, 'simple', 1, P(80)).unitPrice).toBe(P(80));
+  });
+
+  it('the illustrator’s share is of the illustration, the printer’s of the print work, both after their part of the coupon', () => {
+    const t = printTotals(
+      { lines: [customLine('Print', 1, P(1000)), illustrationLine(R, 'simple', 1, P(500))], delivery: blankDelivery(), payments: [], printerPct: 20, illustratorPct: 40, coupon: { couponId: 'c', code: 'X', discount: P(300) } },
+      50,
+    );
+    expect([t.subtotal, t.illustration, t.discount, t.total]).toEqual([P(1500), P(500), P(300), P(1200)]);
+    // The coupon comes off in proportion: ₱200 off the print work, ₱100 off the illustration.
+    expect([t.printerShare, t.illustratorShare]).toEqual([P(160), P(160)]);
+  });
+
+  it('goes to Studio with who drew it and their share', () => {
+    const order = { id: 'o', number: 'PA-002', customerId: null, customerName: 'Mira', contact: '', lines: [illustrationLine(R, 'detailed', 2)], delivery: blankDelivery(), status: 'quote', statusAt: 0, proofAt: null, approvedAt: null, dueDate: '', printerId: null, printerPct: 20, illustratorId: 'm2', illustratorPct: 50, payments: [], files: '', notes: '', doneAt: null, createdAt: 0, updatedAt: 0 } as never;
+    const artist = { id: 'm2', name: 'Ian', email: 'ian@example.com' } as Member;
+    expect(buildPrintFeed({ order, downPct: 50, customer: undefined, printer: undefined, illustrator: artist })).toMatchObject({ illustrator: { memberId: 'm2', name: 'Ian' }, illustratorPct: 50, illustratorShare: P(195), printerShare: 0 });
+  });
+});
+
 describe('print orders', () => {
   async function order() {
     const device = await ensureDevice();
@@ -71,17 +109,6 @@ describe('print orders', () => {
     expect(after.payments.map((p) => [p.stage, p.amount])).toEqual([['down', P(300)], ['balance', P(300)]]);
     await setPrintStatus(o.id, 'done');
     expect((await db.printOrders.get(o.id))?.doneAt).toBeTypeOf('number');
-  });
-
-  it('cash taken with the register open goes in that drawer', async () => {
-    const { o, device } = await order();
-    const ev = await createEvent({ name: 'Komiket' });
-    const session = await openSession(ev.id, device, P(1000), null);
-    await takePrintPayment(o.id, { methodId: 'cash', name: 'Cash', kind: 'cash', amount: P(300), ref: '', by: null }, session);
-    const s = (await db.sessions.get(session.id))!;
-    expect(s.cashMoves.map((m) => [m.kind, m.amount, m.reason])).toEqual([['in', P(300), `Print order ${o.number}`]]);
-    // Booth sales don't change: print money isn't an event sale
-    expect(alive(await db.sales.toArray())).toHaveLength(0);
   });
 
   it('deletes an order, with the payments on it', async () => {

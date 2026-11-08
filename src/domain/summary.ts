@@ -1,7 +1,8 @@
 import { sum, type Cents } from '../lib/money';
 import { isoDate, localHour } from '../lib/time';
 import { lineRevenue } from './cart';
-import type { Category, Sale, Session } from '../db/types';
+import { isMoneyOnly } from './orders';
+import type { CashMove, Category, PayKind, Sale, Session } from '../db/types';
 
 export interface MethodTotal {
   methodId: string;
@@ -40,12 +41,15 @@ export interface EventMetrics {
   depositsTaken: Cents;
   /** Deposits used to pay for picked-up orders. */
   depositsApplied: Cents;
+  /** JoshWorks services paid at the register (sticker printing): money in, kept apart from the booth's sales. */
+  servicesTaken: Cents;
 }
 
 export function eventMetrics(sales: readonly Sale[], categories: readonly Category[]): EventMetrics {
   const done = sales.filter((s) => s.status === 'completed' && s.deleted !== 1);
   // Order deposits are money in (they show under payments) but only become sales at pickup.
-  const completed = done.filter((s) => s.kind !== 'deposit');
+  // Services paid at the register are money in too, kept apart from the booth's merch.
+  const completed = done.filter((s) => !isMoneyOnly(s));
   const voided = sales.filter((s) => s.status === 'voided' && s.deleted !== 1).length;
   const catName = new Map(categories.map((c) => [c.id, c.name]));
 
@@ -128,6 +132,7 @@ export function eventMetrics(sales: readonly Sale[], categories: readonly Catego
     addOnAttach: hasAddOnCategory && completed.length ? addOns / completed.length : null,
     depositsTaken: sum(done.filter((s) => s.kind === 'deposit').map((s) => s.total)),
     depositsApplied: sum(completed.flatMap((s) => s.payments.filter((p) => p.kind === 'deposit').map((p) => p.amount))),
+    servicesTaken: sum(done.filter((s) => s.kind === 'service').map((s) => s.total)),
   };
 }
 
@@ -141,15 +146,97 @@ export interface DrawerState {
   overShort: Cents | null;
 }
 
-/** Cash that should be in the drawer for one register session. */
+/** Where a cash move's money went. Moves recorded before the method was asked are the drawer's cash. */
+export const moveMethod = (m: CashMove): { id: string; name: string; kind: PayKind } => m.method ?? { id: 'cash', name: 'Cash', kind: 'cash' };
+
+/** Cash that should be in the drawer for one register session. GCash and other moves don't touch the drawer. */
 export function drawerState(session: Session, sales: readonly Sale[]): DrawerState {
   const mine = sales.filter((s) => s.sessionId === session.id && s.status === 'completed' && s.deleted !== 1);
   const cashSales = sum(mine.flatMap((s) => s.payments.filter((p) => p.kind === 'cash').map((p) => p.amount)));
-  const cashIn = sum(session.cashMoves.filter((m) => m.kind === 'in').map((m) => m.amount));
-  const cashOut = sum(session.cashMoves.filter((m) => m.kind === 'out').map((m) => m.amount));
+  const moves = (session.cashMoves ?? []).filter((m) => moveMethod(m).kind === 'cash');
+  const cashIn = sum(moves.filter((m) => m.kind === 'in').map((m) => m.amount));
+  const cashOut = sum(moves.filter((m) => m.kind === 'out').map((m) => m.amount));
   const expected = session.openingFloat + cashSales + cashIn - cashOut;
   const counted = session.countedTotal;
   return { opening: session.openingFloat, cashSales, cashIn, cashOut, expected, counted, overShort: counted === null ? null : counted - expected };
+}
+
+export interface MoneyLine {
+  /** 'cash' for every cash payment and move (one drawer), else the payment method's id. */
+  key: string;
+  name: string;
+  kind: string;
+  /** Taken from sales, deposits and services. */
+  taken: Cents;
+  /** Cash in and out on this method: in − out. */
+  moves: Cents;
+  /** taken + moves. */
+  amount: Cents;
+}
+
+export interface MoneyIn {
+  /** Each payment method, cash first. */
+  methods: MoneyLine[];
+  /** Every peso in, after cash in and out. */
+  total: Cents;
+  /** Booth sales (merch), at their full price. */
+  sales: Cents;
+  /** Order deposits taken (sales at pickup). */
+  deposits: Cents;
+  /** Deposits that paid for picked-up orders: counted when taken, so they come off the booth sales. */
+  depositsApplied: Cents;
+  /** JoshWorks services paid at the register. */
+  services: Cents;
+  movesIn: Cents;
+  movesOut: Cents;
+  /** What the open registers' drawers should hold now: floats, cash taken and cash moves. */
+  drawers: Cents;
+  openRegisters: number;
+}
+
+/**
+ * All the money in at an event, by payment method: sales, order deposits and
+ * services as they were paid, plus the cash in and out on each register.
+ */
+export function moneyIn(sales: readonly Sale[], sessions: readonly Session[]): MoneyIn {
+  const lines = new Map<string, MoneyLine>();
+  const line = (id: string, name: string, kind: string) => {
+    const key = kind === 'cash' ? 'cash' : id;
+    const l = lines.get(key) ?? { key, name: kind === 'cash' ? 'Cash' : name, kind, taken: 0, moves: 0, amount: 0 };
+    lines.set(key, l);
+    return l;
+  };
+  const done = sales.filter((s) => s.status === 'completed' && s.deleted !== 1);
+  for (const s of done)
+    for (const p of s.payments) {
+      // The deposit part of a pickup was already counted when the deposit was taken.
+      if (p.kind === 'deposit') continue;
+      line(p.methodId, p.name, p.kind).taken += p.amount;
+    }
+  const live = sessions.filter((s) => s.deleted !== 1);
+  let movesIn = 0;
+  let movesOut = 0;
+  for (const sess of live)
+    for (const m of sess.cashMoves ?? []) {
+      const how = moveMethod(m);
+      line(how.id, how.name, how.kind).moves += m.kind === 'in' ? m.amount : -m.amount;
+      if (m.kind === 'in') movesIn += m.amount;
+      else movesOut += m.amount;
+    }
+  const methods = [...lines.values()].map((l) => ({ ...l, amount: l.taken + l.moves })).sort((a, b) => Number(b.key === 'cash') - Number(a.key === 'cash') || b.amount - a.amount);
+  const open = live.filter((s) => s.closedAt === null);
+  return {
+    methods,
+    total: sum(methods.map((l) => l.amount)),
+    sales: sum(done.filter((s) => !isMoneyOnly(s)).map((s) => s.total)),
+    deposits: sum(done.filter((s) => s.kind === 'deposit').map((s) => s.total)),
+    depositsApplied: sum(done.flatMap((s) => s.payments.filter((p) => p.kind === 'deposit').map((p) => p.amount))),
+    services: sum(done.filter((s) => s.kind === 'service').map((s) => s.total)),
+    movesIn,
+    movesOut,
+    drawers: sum(open.map((s) => drawerState(s, sales).expected)),
+    openRegisters: open.length,
+  };
 }
 
 /** Philippine cash denominations for the drawer count, in centavos. */

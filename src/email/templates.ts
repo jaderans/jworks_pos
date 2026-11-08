@@ -160,14 +160,15 @@ export function daySummaryEmail(b: BusinessSettings, i: ReportInput, day: string
   const from = dayStart(day);
   const to = dayStart(addDays(day, 1));
   const allToday = i.sales.filter((x) => x.at >= from && x.at < to);
-  const daySales = allToday.filter((x) => x.kind !== 'deposit');
+  const daySales = allToday.filter((x) => !x.kind);
   const done = daySales.filter((x) => x.status === 'completed');
   const deposits = allToday.filter((x) => x.kind === 'deposit' && x.status === 'completed');
+  const services = allToday.filter((x) => x.kind === 'service' && x.status === 'completed');
   const gross = sum(done.map((x) => x.total));
   const items = sum(done.flatMap((x) => x.lines.map((l) => l.qty)));
   const discounts = sum(done.map((x) => x.discountTotal));
   const methods = new Map<string, { name: string; amount: number; count: number }>();
-  for (const x of [...done, ...deposits])
+  for (const x of [...done, ...deposits, ...services])
     for (const pm of x.payments) {
       if (pm.kind === 'deposit') continue;
       const v = methods.get(pm.methodId) ?? { name: pm.name, amount: 0, count: 0 };
@@ -199,6 +200,7 @@ export function daySummaryEmail(b: BusinessSettings, i: ReportInput, day: string
       ...(discounts ? ([['Discounts given', peso(discounts)]] as [string, string][]) : []),
       ...(daySales.length > done.length ? ([['Voided', String(daySales.length - done.length)]] as [string, string][]) : []),
       ...(deposits.length ? ([['Order deposits taken', peso(sum(deposits.map((x) => x.total)))]] as [string, string][]) : []),
+      ...(services.length ? ([['Services (sticker printing)', peso(sum(services.map((x) => x.total)))]] as [string, string][]) : []),
       ['Whole event so far', peso(i.metrics.gross)],
     ],
     sections: [

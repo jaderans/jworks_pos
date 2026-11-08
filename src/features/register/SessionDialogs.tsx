@@ -1,57 +1,103 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Button, Callout, Segmented } from '../../components/ui';
-import { Field, MoneyInput, NumberInput, TextArea, TextInput } from '../../components/form';
+import { Field, MoneyInput, NumberInput, Select, TextArea, TextInput } from '../../components/form';
 import { peso, sum, type Cents } from '../../lib/money';
 import { isoDate, fmtTime } from '../../lib/time';
-import { DENOMINATIONS, countTotal, drawerState } from '../../domain/summary';
-import { addCashMove, closeSession } from '../../services/sales';
+import { DENOMINATIONS, countTotal, drawerState, moveMethod } from '../../domain/summary';
+import { addCashMove, closeSession, removeCashMove, updateCashMove } from '../../services/sales';
+import { useEvent, usePaymentMethods } from '../../hooks/data';
 import { backupBlob, backupFileName, exportAll } from '../../services/backup';
 import { downloadBlob, shareBlob, canShareFiles } from '../../lib/files';
 import { useApp } from '../../app/AppContext';
-import type { Sale, Session } from '../../db/types';
+import type { CashMove, Sale, Session } from '../../db/types';
 
-export function CashMoveDialog({ session, open, onClose }: { session: Session; open: boolean; onClose: () => void }) {
+/**
+ * Money in or out of a register that isn't a sale, in cash or GCash and the
+ * like. Pass a move to fix one recorded wrong, or to remove it.
+ */
+export function CashMoveDialog({ session, move, open, onClose }: { session: Session; move?: CashMove | null; open: boolean; onClose: () => void }) {
   const app = useApp();
+  const methods = usePaymentMethods();
+  const ev = useEvent(session.eventId);
   const [kind, setKind] = useState<'in' | 'out'>('out');
   const [amount, setAmount] = useState<Cents | null>(null);
   const [reason, setReason] = useState('');
+  const [methodId, setMethodId] = useState('cash');
+  const [error, setError] = useState('');
   useEffect(() => {
     if (open) {
-      setAmount(null);
-      setReason('');
-      setKind('out');
+      setAmount(move?.amount ?? null);
+      setReason(move?.reason ?? '');
+      setKind(move?.kind ?? 'out');
+      setMethodId(move && moveMethod(move).kind !== 'cash' ? moveMethod(move).id : 'cash');
+      setError('');
     }
-  }, [open]);
+  }, [open, move]);
+  // The drawer's cash, then the event's other payment methods (GCash and the like).
+  const others = (methods ?? []).filter((m) => m.kind !== 'cash' && m.active === 1 && m.deleted !== 1 && (!ev || ev.paymentMethodIds.includes(m.id) || m.id === methodId));
+  const how = (): CashMove['method'] => {
+    const m = others.find((x) => x.id === methodId);
+    return m ? { id: m.id, name: m.name, kind: m.kind } : undefined;
+  };
   const save = async () => {
     if (!amount || amount <= 0) return;
-    await addCashMove(session.id, kind, amount, reason, app.member?.id ?? null);
-    app.toast(`${kind === 'in' ? 'Cash in' : 'Cash out'} ${peso(amount)} recorded`, { tone: 'good' });
+    const method = how();
+    try {
+      if (move) await updateCashMove(session.id, move.id, { kind, amount, reason, method });
+      else await addCashMove(session.id, kind, amount, reason, app.member?.id ?? null, method);
+      app.toast(`${kind === 'in' ? 'In' : 'Out'} ${peso(amount)} (${method?.name ?? 'Cash'}) ${move ? 'saved' : 'recorded'}`, { tone: 'good' });
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Couldn’t save it');
+    }
+  };
+  const remove = async () => {
+    if (!move || !(await app.confirm({ title: 'Remove this cash move?', message: `${move.kind === 'in' ? 'In' : 'Out'} ${peso(move.amount)} (${moveMethod(move).name}) comes off register ${session.letter}.`, confirmLabel: 'Remove', tone: 'danger' }))) return;
+    await removeCashMove(session.id, move.id);
+    app.toast('Cash move removed', { tone: 'good' });
     onClose();
   };
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title="Cash in or out"
+      title={move ? `Cash move on register ${session.letter}` : 'Cash in or out'}
       size="sm"
       footer={
         <>
+          {move ? (
+            <Button variant="danger" onClick={remove}>
+              Remove
+            </Button>
+          ) : null}
+          <span className="grow" />
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!amount || amount <= 0} onClick={save}>
-            Record
+            {move ? 'Save' : 'Record'}
           </Button>
         </>
       }
     >
-      <p className="muted small">For cash that isn&rsquo;t a sale: buying water, paying the tricycle, adding coins for change. It keeps the drawer count honest.</p>
-      <Segmented label="Direction" full value={kind} onChange={setKind} options={[{ value: 'out', label: 'Cash out' }, { value: 'in', label: 'Cash in' }]} />
+      <p className="muted small">For money that isn&rsquo;t a sale: buying water, paying the tricycle, adding coins for change, or a GCash cash-in or cash-out. Only cash changes the drawer count.</p>
+      <Segmented label="Direction" full value={kind} onChange={setKind} options={[{ value: 'out', label: 'Out' }, { value: 'in', label: 'In' }]} />
+      <Field label="Money" htmlFor="cm-method" hint={methodId === 'cash' ? 'The drawer’s cash.' : 'Not the drawer: it changes the GCash (or bank) total.'}>
+        <Select id="cm-method" value={methodId} onChange={(e) => setMethodId(e.target.value)}>
+          <option value="cash">Cash</option>
+          {others.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
       <Field label="Amount" htmlFor="cm-amount">
         <MoneyInput id="cm-amount" value={amount} onChange={setAmount} autoFocus onEnter={save} />
       </Field>
       <Field label="What for" htmlFor="cm-reason">
         <TextInput id="cm-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={kind === 'out' ? 'e.g. Water for the team' : 'e.g. Extra ₱20 coins'} />
       </Field>
+      {error ? <Callout tone="bad">{error}</Callout> : null}
     </Dialog>
   );
 }

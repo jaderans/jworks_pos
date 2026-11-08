@@ -1,16 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
-import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
-/** The commit a build comes from (shown in the profile menu, so devices can be compared). */
+/**
+ * The release number from package.json, shown in the profile menu so phones can
+ * be compared. It goes up with every release: 1.1.0 for new features, 1.0.1 for fixes.
+ */
 function appVersion(): string {
-  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 7);
-  try {
-    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
-  } catch {
-    return 'dev';
-  }
+  return (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version;
 }
 
 // base './' keeps every asset path relative, so the same build works on

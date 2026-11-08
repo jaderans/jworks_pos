@@ -12,8 +12,10 @@ import type { Order, OrderStatus, Sale } from '../db/types';
 export const ORDER_LINE = 'order:';
 export const isOrderLine = (productId: string) => productId.startsWith(ORDER_LINE);
 export const isDeposit = (s: Pick<Sale, 'kind'>) => s.kind === 'deposit';
-/** Completed sales that count as sales (deposits wait for pickup). */
-export const isRevenueSale = (s: Sale) => s.status === 'completed' && s.deleted !== 1 && s.kind !== 'deposit';
+/** Money in that isn't a booth sale: an order deposit (a sale at pickup) or a JoshWorks service paid at the register. */
+export const isMoneyOnly = (s: Pick<Sale, 'kind'>) => s.kind === 'deposit' || s.kind === 'service';
+/** Completed booth sales: the merch figures, stock and the team's booth share. */
+export const isRevenueSale = (s: Sale) => s.status === 'completed' && s.deleted !== 1 && !isMoneyOnly(s);
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   new: 'New',
