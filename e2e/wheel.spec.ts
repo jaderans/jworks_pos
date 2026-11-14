@@ -37,8 +37,15 @@ test('the prize wheel: set it up, spin on a qualifying sale, see it land on the 
   await screen.setViewportSize({ width: 1920, height: 1080 });
 
   // ₱480 qualifies: the cashier spins, the customer screen shows the wheel landing on the prize.
+  // It turns even when Windows has animations off (the browser then asks for reduced motion).
+  await screen.emulateMedia({ reducedMotion: 'reduce' });
   let receipt = await sellAndOpenReceipt(page);
   await receipt.getByRole('button', { name: 'Spin the wheel' }).click();
+  const turning = screen.getByRole('region', { name: 'Prize wheel' }).locator('svg > g').first();
+  await expect(turning).toBeVisible();
+  const first = await turning.getAttribute('transform');
+  await screen.waitForTimeout(500);
+  expect(await turning.getAttribute('transform')).not.toBe(first);
   await expect(receipt.getByText('They won: Free Couple Pack')).toBeVisible();
   const wheel = screen.getByRole('region', { name: 'Prize wheel' });
   await expect(wheel).toBeVisible();

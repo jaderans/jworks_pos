@@ -55,6 +55,13 @@ describe('end-of-day summary', () => {
     expect(rows.find((r) => r.productId === 'p3')).toBeUndefined();
   });
 
+  it('leaves out deleted products, unless one sold that day', () => {
+    const rows = dayStock([ep('p1', 10), ep('gone', 5), ep('p2', 2)], (id) => (id === 'p1' ? 'Cat Meme' : null), sales, dayStart(day), dayStart('2026-10-29'));
+    expect(rows.map((r) => r.productId).sort()).toEqual(['p1', 'p2']);
+    // p2 was deleted after selling today: it keeps the name it sold under.
+    expect(rows.find((r) => r.productId === 'p2')?.name).toBe('Enamel Pin');
+  });
+
   it('emails sales, payments and inventory, flagging what to restock', () => {
     const input = {
       business: 'JoshWorks',
@@ -76,7 +83,9 @@ describe('end-of-day summary', () => {
     expect(mail.text).toContain('Cash: ₱100 (2)');
     expect(mail.text).toContain('RESTOCK BEFORE THE NEXT DAY');
     expect(mail.text).toContain('Enamel Pin: OUT');
-    expect(mail.text).toContain('Cat Meme: sold 3 today · 7 left');
+    expect(mail.text).toContain('SOLD TODAY');
+    expect(mail.text).toContain('Cat Meme: 3 sold · 7 left');
+    expect(mail.text).not.toContain('Deleted product');
   });
 
   it('goes to the listed addresses, or the reply-to address', () => {

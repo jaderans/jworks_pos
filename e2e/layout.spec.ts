@@ -45,6 +45,8 @@ async function layoutProblems(page: Page): Promise<string[]> {
       for (const l of bottom.querySelectorAll('span')) if (l.scrollWidth > l.clientWidth + 1) out.push(`bottom bar label clipped: ${l.textContent}`);
     }
     if (document.documentElement.scrollWidth > window.innerWidth + 1) out.push(`page scrolls sideways (${document.documentElement.scrollWidth} > ${window.innerWidth})`);
+    // Only the content area scrolls; the window never does (or the menu slides up out of sight).
+    if (document.documentElement.scrollHeight > window.innerHeight + 1) out.push(`page taller than the window (${document.documentElement.scrollHeight} > ${window.innerHeight})`);
     const main = document.querySelector('main');
     if (main && main.scrollWidth > main.clientWidth + 1) out.push(`content wider than the screen (${main.scrollWidth} > ${main.clientWidth})`);
     const top = document.querySelector('.topbar');

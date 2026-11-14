@@ -244,24 +244,16 @@ export default function CustomerDisplay() {
 const SPIN_MS = 6000;
 
 function WheelView({ w }: { w: { id: string; slices: WheelSlice[]; turn: number; won: boolean; label: string; detail: string } }) {
-  const [turn, setTurn] = useState(0);
   const [landed, setLanded] = useState(false);
   useEffect(() => {
-    // Start from rest, then turn on the next frames, so every spin animates.
-    setTurn(0);
     setLanded(false);
-    let a = 0;
-    const b = requestAnimationFrame(() => (a = requestAnimationFrame(() => setTurn(w.turn))));
     const t = window.setTimeout(() => setLanded(true), SPIN_MS + 200);
-    return () => {
-      cancelAnimationFrame(b);
-      cancelAnimationFrame(a);
-      window.clearTimeout(t);
-    };
+    return () => window.clearTimeout(t);
   }, [w.id, w.turn]);
   return (
     <section className="cd-full cd-wheel" aria-label="Prize wheel">
-      <WheelSvg slices={w.slices} turn={turn} spinMs={turn ? SPIN_MS : 0} className="cd-wheel-svg" />
+      {/* A new spin starts from rest: each spin id draws a fresh wheel. */}
+      <WheelSvg key={w.id} slices={w.slices} turn={w.turn} spinMs={SPIN_MS} className="cd-wheel-svg" />
       <div className={`cd-wheel-result${landed ? ' on' : ''}`} role="status" aria-live="polite">
         {landed ? (
           <>

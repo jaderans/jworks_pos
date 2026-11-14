@@ -431,7 +431,7 @@ export async function buildEndOfDay(i: ReportInput, date: string) {
     byMethod.set(p.methodId, v);
   }
   const sessions = i.sessions.filter((s) => isoDate(s.openedAt) === date);
-  const stock = dayStock(i.eventProducts, (id) => i.products.get(id)?.name ?? 'Deleted product', i.sales, dayStart(date), dayStart(addDays(date, 1)));
+  const stock = dayStock(i.eventProducts, (id) => { const p = i.products.get(id); return p && p.deleted !== 1 ? p.name : null; }, i.sales, dayStart(date), dayStart(addDays(date, 1)));
   const content: Content[] = [
     docTitle('End of day'),
     eventGrid(i, { label: 'Day', value: fmtIsoWeekday(date) }),

@@ -69,12 +69,16 @@ export interface DayStockRow {
  */
 export function dayStock(
   eventProducts: readonly EventProduct[],
-  productName: (id: string) => string,
+  /** The product's name, or null when it was deleted. */
+  productName: (id: string) => string | null,
   sales: readonly Sale[],
   dayStartMs: number,
   dayEndMs: number,
 ): DayStockRow[] {
   const upTo = sales.filter((s) => s.at < dayEndMs);
+  // A deleted product sold that day keeps the name it sold under.
+  const soldAs = new Map<string, string>();
+  for (const s of upTo) for (const l of s.lines) soldAs.set(l.productId, l.name);
   const today = upTo.filter((s) => s.at >= dayStartMs);
   const soldToday = soldByProduct(today);
   const soldSoFar = soldByProduct(upTo);
@@ -86,7 +90,12 @@ export function dayStock(
       const so = soldSoFar.get(id) ?? 0;
       const left = b === null ? null : b - so;
       const status: DayStockRow['status'] = left === null ? 'uncounted' : left <= 0 ? 'out' : left <= Math.max(2, Math.ceil((b ?? 0) / 10)) ? 'low' : 'ok';
-      return { productId: id, name: productName(id), brought: b, soldToday: soldToday.get(id) ?? 0, soldSoFar: so, left, status };
+      const name = productName(id);
+      const today = soldToday.get(id) ?? 0;
+      // Deleted and not sold that day: nothing to restock or count.
+      if (name === null && !today) return null;
+      return { productId: id, name: name ?? soldAs.get(id) ?? 'A deleted product', brought: b, soldToday: today, soldSoFar: so, left, status };
     })
+    .filter((r): r is DayStockRow => r !== null)
     .sort((a, b) => b.soldToday - a.soldToday || a.name.localeCompare(b.name));
 }

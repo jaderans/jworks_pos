@@ -1,9 +1,14 @@
+import { useEffect, useRef } from 'react';
 import type { WheelSlice } from '../../domain/wheel';
+import { LABEL_OUTER, wheelLabel } from '../../domain/wheelLabel';
+import { sliceUnderPointer, spinAngle } from '../../domain/wheelSpin';
 
 /** Prize colours in the JoshWorks palette; "Try again" is always the dark one. */
 const COLORS = ['#1fa3a8', '#f7d820', '#087a86', '#ee9d17', '#5fcf94', '#e07a5f'];
 const INK = ['#ffffff', '#2b2526', '#ffffff', '#2b2526', '#2b2526', '#ffffff'];
 const R = 100;
+/** Turning slowly while it waits to be spun, degrees a second. */
+const IDLE_SPEED = 9;
 
 const point = (deg: number, r = R) => {
   const a = (deg * Math.PI) / 180;
@@ -13,12 +18,76 @@ const point = (deg: number, r = R) => {
 /**
  * The prize wheel, each slice as wide as its chance. `turn` turns it
  * clockwise; with `spinMs` it eases to a stop under the pointer at the top.
+ * The turning is drawn frame by frame (not a CSS transition), so it spins
+ * even when the computer asks for less motion; `onTick` fires each time a
+ * slice passes the pointer. `idle` turns it slowly while it waits.
  */
-export function WheelSvg({ slices, turn = 0, spinMs = 0, className }: { slices: readonly WheelSlice[]; turn?: number; spinMs?: number; className?: string }) {
+export function WheelSvg({
+  slices,
+  turn = 0,
+  spinMs = 0,
+  idle = false,
+  onTick,
+  className,
+}: {
+  slices: readonly WheelSlice[];
+  turn?: number;
+  spinMs?: number;
+  idle?: boolean;
+  onTick?: () => void;
+  className?: string;
+}) {
+  const g = useRef<SVGGElement>(null);
+  const angle = useRef(0);
+  const tick = useRef(onTick);
+  tick.current = onTick;
+
+  useEffect(() => {
+    const el = g.current;
+    if (!el) return;
+    const set = (a: number) => {
+      angle.current = a;
+      el.setAttribute('transform', `rotate(${a.toFixed(3)})`);
+    };
+    let raf = 0;
+    if (idle && !spinMs) {
+      let last = performance.now();
+      const drift = (now: number) => {
+        set((angle.current + ((now - last) / 1000) * IDLE_SPEED) % 360);
+        last = now;
+        raf = requestAnimationFrame(drift);
+      };
+      raf = requestAnimationFrame(drift);
+      return () => cancelAnimationFrame(raf);
+    }
+    if (!spinMs) {
+      set(turn);
+      return;
+    }
+    // From wherever it is now, a whole number of turns further, to land on `turn`.
+    const from = angle.current;
+    const to = turn + 360 * Math.ceil(Math.max(0, from - turn) / 360);
+    const start = performance.now();
+    let under = sliceUnderPointer(slices, from);
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / spinMs);
+      const a = from + (to - from) * spinAngle(t);
+      set(a);
+      const s = sliceUnderPointer(slices, a);
+      if (s !== under) {
+        under = s;
+        tick.current?.();
+      }
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [turn, spinMs, idle]); // eslint-disable-line react-hooks/exhaustive-deps
+
   let k = 0;
   return (
     <svg viewBox="-112 -122 224 236" className={className} role="img" aria-label={`Prize wheel: ${slices.map((s) => s.label).join(', ')}`}>
-      <g style={{ transform: `rotate(${turn}deg)`, transformBox: 'fill-box', transformOrigin: 'center', transition: spinMs ? `transform ${spinMs}ms cubic-bezier(0.1, 0.65, 0.12, 1)` : 'none' }}>
+      <g ref={g} transform={`rotate(${angle.current})`}>
         {slices.map((s) => {
           const tryAgain = s.id === null;
           const i = tryAgain ? -1 : k++ % COLORS.length;
@@ -32,14 +101,25 @@ export function WheelSvg({ slices, turn = 0, spinMs = 0, className }: { slices: 
             ) : (
               <path d={`M 0 0 L ${point(s.from)} A ${R} ${R} 0 ${span > 180 ? 1 : 0} 1 ${point(s.to)} Z`} fill={fill} stroke="#0f1516" strokeWidth={1.2} />
             );
-          const label = s.label.length > 18 ? `${s.label.slice(0, 17)}…` : s.label;
+          // The name fits its slice: from the rim inward, as big as the slice allows, the right way up.
+          const fit = wheelLabel(s.label, s.from, s.to);
           return (
             <g key={`${s.id ?? 'try'}:${s.from}`}>
               {shape}
-              {span >= 14 ? (
-                <text transform={`rotate(${mid - 90}) translate(${R * 0.6} 0)`} textAnchor="middle" dominantBaseline="middle" fill={ink} fontSize={span < 30 ? 7 : 9} fontWeight={800}>
-                  {label}
-                </text>
+              {fit ? (
+                <g transform={fit.flip ? `rotate(${mid + 90})` : `rotate(${mid - 90})`} fill={ink} fontSize={fit.fontSize} fontWeight={800}>
+                  {fit.lines.map((line, n) => (
+                    <text
+                      key={n}
+                      x={fit.flip ? -LABEL_OUTER : LABEL_OUTER}
+                      y={(n - (fit.lines.length - 1) / 2) * fit.fontSize * 1.12}
+                      textAnchor={fit.flip ? 'start' : 'end'}
+                      dominantBaseline="central"
+                    >
+                      {line}
+                    </text>
+                  ))}
+                </g>
               ) : null}
             </g>
           );

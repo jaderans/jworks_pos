@@ -358,7 +358,9 @@ img { max-width: 100%; display: block; }
 .act-row + .act-row { border-top: 1px solid var(--line); }
 .act-text { font-size: 0.88rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-.main { grid-column: 2; grid-row: 2; overflow-y: auto; overflow-x: hidden; min-width: 0; }
+/* position: relative keeps absolutely placed hidden inputs inside the scrolling area: without it they
+   made the page taller than the window, and jumping to a Settings section scrolled the whole window. */
+.main { grid-column: 2; grid-row: 2; overflow-y: auto; overflow-x: hidden; min-width: 0; position: relative; }
 .main.flush { overflow: hidden; }
 .app-notices { display: grid; gap: 8px; padding: 12px clamp(12px, 3vw, 28px) 0; }
 .app-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-radius: 12px; background: var(--teal-soft, rgba(22, 125, 136, 0.1)); border: 1px solid var(--teal, #167d88); font-size: 0.92rem; }

@@ -183,7 +183,9 @@ export function daySummaryEmail(b: BusinessSettings, i: ReportInput, day: string
       const result = d.counted === null ? 'still open' : d.overShort === 0 ? 'balanced' : (d.overShort ?? 0) > 0 ? `over ${peso(d.overShort)}` : `short ${peso(-(d.overShort ?? 0))}`;
       return [`Register ${x.letter}${x.closedAt ? ` (closed ${fmtTime(x.closedAt)})` : ''}`, d.counted === null ? `expected ${peso(d.expected)} · ${result}` : `counted ${peso(d.counted)} · ${result}`] as [string, string];
     });
-  const stock = dayStock(i.eventProducts, (id) => i.products.get(id)?.name ?? 'Deleted product', i.sales.filter((x) => x.status === 'completed'), from, to);
+  const stock = dayStock(i.eventProducts, (id) => liveName(i.products.get(id)), i.sales.filter((x) => x.status === 'completed'), from, to);
+  const soldToday = stock.filter((r) => r.soldToday > 0);
+  const notSold = stock.length - soldToday.length;
   const restock = stock.filter((r) => r.status === 'out' || r.status === 'low');
   const reorder = (o.materials ?? []).filter((m) => m.deleted !== 1 && m.reorderAt > 0 && (m.counted === 1 || m.onHand > 0) && m.onHand <= m.reorderAt);
   const left = (r: (typeof stock)[number]) => (r.left === null ? 'not counted' : r.left <= 0 ? 'OUT' : `${r.left} left`);
@@ -207,7 +209,14 @@ export function daySummaryEmail(b: BusinessSettings, i: ReportInput, day: string
       { title: 'Payments', rows: [...methods.values()].map((m) => [m.name, `${peso(m.amount)} (${m.count})`] as [string, string]) },
       { title: 'Registers', rows: registers },
       { title: 'Restock before the next day', warn: true, rows: restock.map((r) => [r.name, left(r)] as [string, string]) },
-      { title: 'Inventory', rows: stock.slice(0, 60).map((r) => [r.name, `sold ${r.soldToday} today · ${left(r)}`] as [string, string]) },
+      // What sold today; the attached PDF has every product.
+      {
+        title: 'Sold today',
+        rows: [
+          ...soldToday.slice(0, 60).map((r) => [r.name, `${r.soldToday} sold · ${left(r)}`] as [string, string]),
+          ...(notSold ? ([[`${notSold} other product${notSold === 1 ? '' : 's'}`, 'none sold today (see the PDF)']] as [string, string][]) : []),
+        ],
+      },
       { title: 'Materials to reorder', warn: true, rows: reorder.map((m) => [m.name, `${m.onHand} ${m.unit} left`] as [string, string]) },
     ],
     note: `${esc(o.reason)} Sales from other phones show up here after they're merged in.`,
@@ -270,4 +279,9 @@ export function couponReminderEmail(b: BusinessSettings, o: { customerName: stri
       ['Good until', fmtIsoDate(o.validTo)],
     ],
   });
+}
+
+/** A product's name, or null when it was deleted. */
+function liveName(p: { name: string; deleted?: number } | undefined): string | null {
+  return p && p.deleted !== 1 ? p.name : null;
 }
