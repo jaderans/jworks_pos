@@ -35,6 +35,8 @@ export interface StickPack {
   /** Its design file in Drive → Custom stickers: CS12 → CS12-Leanna.png. */
   designNo: string;
   note: string;
+  /** Add-ons for this pack, from the Add-on category: "Keychain", "Pin", "Extra reprint". */
+  addOns?: string[];
 }
 
 /** The Couple-of-Stickers details of an order, filled in at the register after they pay. */
@@ -45,17 +47,23 @@ export interface StickOrder {
   email: string;
   softCopy: boolean;
   packs: StickPack[];
-  /** Other things they bought with it: "1 × Chonky Cat Keychains". */
+  /** Other things they bought with it: "1 × Chonky Cat Keychains" (each pack keeps its own add-ons). */
   addOns: string[];
   /** The sale it was paid with. */
   saleId: string;
+  /** The receipt it was paid with: A-0012. */
+  receiptNo?: string;
   paid: Cents;
+  /** "GCash (ref 5012)" */
   paidWith: string;
   /** When it should be ready: a ten-minute window. */
   readyFrom: number;
   readyTo: number;
   /** How they'll give us the photo to work from. */
   photo: 'message' | 'booth' | 'none';
+  /** Taken at our photo booth: the photo on this laptop, and its copy in Drive. */
+  photoId?: string;
+  photoUrl?: string;
 }
 
 export interface StickSettings {
@@ -63,15 +71,43 @@ export interface StickSettings {
   packs: Record<string, { pack: PackCode | null; singles: boolean }>;
   /** Minutes to make one pack. */
   minutes: Record<Making, number>;
+  /** Minutes each add-on (a keychain, a pin) adds to its pack. */
+  addOnMinutes: number;
   /** How many people make stickers at once. */
   makers: number;
   /** The stubs' paper: an A4 or Letter sheet to cut, or an 80 mm or 58 mm receipt printer. */
   stubPaper: 'sheet' | 'r80' | 'r58';
   /** Design numbers start with this: CS01. */
   designPrefix: string;
+  /** Stub numbers: 01, 02… or with the register letter, A-01, B-01… (several registers taking orders). */
+  numbers: 'plain' | 'letter';
+  /** Per event: the lowest number the next stub can have (to match pre-printed stubs, or to start again at 01). */
+  startAt: Record<string, number>;
 }
 
-export const DEFAULT_STICK: StickSettings = { packs: {}, minutes: { printing: 20, illustrating: 30 }, makers: 1, stubPaper: 'sheet', designPrefix: 'CS' };
+export const DEFAULT_STICK: StickSettings = { packs: {}, minutes: { printing: 20, illustrating: 30 }, addOnMinutes: 5, makers: 1, stubPaper: 'sheet', designPrefix: 'CS', numbers: 'plain', startAt: {} };
+
+/** Add-on products: the ones in a category named Add-on (Add-ons, Add on…). */
+export const isAddOnCategory = (name: string | undefined): boolean => !!name && /add[\s-]?ons?\b/i.test(name);
+
+/** The number in a stub number: 7 from "07" or "A-07". */
+export const stubSeq = (n: string): number => {
+  const m = n.match(/(\d+)\s*$/);
+  return m ? Number(m[1]) : 0;
+};
+
+/**
+ * The next stub number at an event: after the highest one still on Orders
+ * (so deleting test orders brings the numbers back down), and no lower than
+ * where the owner set them to start.
+ */
+export function nextStubNumber(taken: readonly string[], o: { startAt?: number; letter?: string | null }): string {
+  const used = new Set(taken.map(stubSeq));
+  let n = Math.max(1, o.startAt ?? 1, ...[...used].map((x) => x + 1));
+  while (used.has(n)) n++;
+  const nn = String(n).padStart(2, '0');
+  return o.letter ? `${o.letter}-${nn}` : nn;
+}
 
 /**
  * A pack from a product's name: "Couple Pack Singles" is C singles; "Barkada
@@ -119,6 +155,9 @@ export function nextDesignNos(count: number, used: Iterable<string>, prefix = 'C
   return Array.from({ length: Math.max(0, count) }, (_, i) => `${p}${String(top + 1 + i).padStart(2, '0')}`);
 }
 
+/** Their photo from our booth, named after the order and the name: "07-Leanna" (add .jpg). */
+export const orderPhotoName = (number: string, nickname: string): string => designFileName(claimNo(number), nickname);
+
 /** The design file's name in Drive: "CS12-Leanna" (add .png). */
 export function designFileName(designNo: string, nickname: string): string {
   const who = nickname
@@ -142,12 +181,12 @@ const MIN = 60_000;
  * nothing ahead, a printed pack is "20 to 30 minutes".
  */
 export function estimateReady(
-  packs: readonly Pick<StickPack, 'making'>[],
-  ahead: readonly { packs: readonly Pick<StickPack, 'making'>[]; started: boolean }[],
-  s: Pick<StickSettings, 'minutes' | 'makers'>,
+  packs: readonly Pick<StickPack, 'making' | 'addOns'>[],
+  ahead: readonly { packs: readonly Pick<StickPack, 'making' | 'addOns'>[]; started: boolean }[],
+  s: Pick<StickSettings, 'minutes' | 'makers'> & { addOnMinutes?: number },
   now: number,
 ): { from: number; to: number; ahead: number; minutes: number } {
-  const per = (p: Pick<StickPack, 'making'>) => Math.max(1, s.minutes[p.making] ?? 20);
+  const per = (p: Pick<StickPack, 'making' | 'addOns'>) => Math.max(1, s.minutes[p.making] ?? 20) + (p.addOns?.length ?? 0) * (s.addOnMinutes ?? 5);
   // An order already being made is about half done.
   const queue = ahead.reduce((a, o) => a + o.packs.reduce((b, p) => b + per(p), 0) * (o.started ? 0.5 : 1), 0);
   const mine = packs.length ? Math.max(...packs.map(per)) + (packs.length - 1) * (per(packs[0]) / 2) : 0;
@@ -155,10 +194,10 @@ export function estimateReady(
   return { from: now + minutes * MIN, to: now + (minutes + 10) * MIN, ahead: ahead.length, minutes };
 }
 
-/** "20–30 minutes" */
+/** "20–30 minutes", counting down a whole minute at a time. */
 export function readyText(o: Pick<StickOrder, 'readyFrom' | 'readyTo'>, now: number): string {
-  const a = Math.max(0, Math.round((o.readyFrom - now) / MIN));
-  const b = Math.max(a, Math.round((o.readyTo - now) / MIN));
+  const a = Math.max(0, Math.ceil((o.readyFrom - now) / MIN - 0.01));
+  const b = Math.max(a, Math.ceil((o.readyTo - now) / MIN - 0.01));
   if (b <= 0) return 'any minute now';
   return a === b ? `about ${a} minutes` : `${a}–${b} minutes`;
 }

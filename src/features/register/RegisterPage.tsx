@@ -26,7 +26,7 @@ import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
 import { SPIN_MS } from '../../domain/wheelSpin';
 import { DEFAULT_STICK, packOf, type StickSettings } from '../../domain/stick';
 import { StickDialog } from '../stick/StickDialog';
-import { printStubs } from '../stick/Stubs';
+import { StubsDialog, type StubOrder } from '../stick/Stubs';
 import type { DisplayStick } from '../../domain/display';
 import { openCustomerScreen, useSecondScreen } from '../../display/screens';
 import { wheelQualifies, wheelSlices } from '../../domain/wheel';
@@ -108,6 +108,7 @@ function Register({ ev }: { ev: JWEvent }) {
   /** What the customer screen shows of it: the draft, then the saved order with its number. */
   const [stickView, setStickView] = useState<DisplayStick | null>(null);
   const [stickOrder, setStickOrder] = useState<Order | null>(null);
+  const [stubsFor, setStubsFor] = useState<StubOrder | null>(null);
   const hasPacks = (sale: Sale) => {
     const byId = new Map((products ?? []).map((p) => [p.id, p]));
     return sale.lines.some((l) => {
@@ -482,8 +483,8 @@ function Register({ ev }: { ev: JWEvent }) {
             <span>
               For {stickOrder.customerName}. Their number is on the claim stub.
             </span>
-            <Button size="sm" onClick={() => printStubs({ number: stickOrder.number, eventName: ev.name, at: stickOrder.createdAt, stick: stickOrder.stick! }, stickSettings.stubPaper)}>
-              Print the stubs again
+            <Button size="sm" onClick={() => setStubsFor({ number: stickOrder.number, eventName: ev.name, at: stickOrder.createdAt, stick: stickOrder.stick! })}>
+              See the stubs
             </Button>
           </div>
         </Callout>
@@ -712,10 +713,11 @@ function Register({ ev }: { ev: JWEvent }) {
           onDraft={(d) => setStickView((v) => d ?? (v?.number ? v : null))}
           onSaved={(o) => {
             setStickOrder(o);
-            setStickView({ number: o.number, nickname: o.stick!.nickname, packs: o.stick!.packs, addOns: o.stick!.addOns, readyFrom: o.stick!.readyFrom, readyTo: o.stick!.readyTo, photo: o.stick!.photo });
+            setStickView({ number: o.number, nickname: o.stick!.nickname, packs: o.stick!.packs, addOns: o.stick!.addOns, readyFrom: o.stick!.readyFrom, readyTo: o.stick!.readyTo, photo: o.stick!.photo, paid: o.stick!.paid, paidWith: o.stick!.paidWith });
           }}
         />
       ) : null}
+      <StubsDialog o={stubsFor} paper={stickSettings.stubPaper} onClose={() => setStubsFor(null)} />
       <CameraScanner open={scanOpen} onClose={() => setScanOpen(false)} onCode={(c) => void onCode(c)} />
       <CashMoveDialog session={session} open={cashMove} onClose={() => setCashMove(false)} />
       <FindOrderDialog open={findOpen} onClose={() => setFindOpen(false)} />
@@ -936,9 +938,14 @@ function useCustomerScreen(state: DisplayState, onSpin: (id: string) => void): {
   const sender = useRef<DisplaySender | null>(null);
   const spinRef = useRef(onSpin);
   spinRef.current = onSpin;
+  const last = useRef(state);
+  last.current = state;
   useEffect(() => {
     sender.current = displaySender((id) => spinRef.current(id));
     return () => {
+      // Leaving Sell: the screen goes back to the slides, not stuck on the last sale or order.
+      const l = last.current;
+      sender.current?.send({ v: 1, mode: 'closed', eventId: l.eventId, business: l.business, eventName: l.eventName, cart: emptyDisplayCart(), customer: null, pay: null, thanks: null });
       sender.current?.close();
       sender.current = null;
     };

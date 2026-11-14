@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Ban, ClipboardList, CloudDownload, HandCoins, Monitor, PackageCheck, Pencil, Plus, Printer, Search, Send, Trash2, UserRound, Volume2, Wallet, X } from 'lucide-react';
+import { Ban, Camera, ClipboardList, CloudDownload, HandCoins, Monitor, PackageCheck, Pencil, Plus, Printer, Search, Send, Trash2, UserRound, Volume2, Wallet, X } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import { StickDialog } from '../stick/StickDialog';
-import { printStubs } from '../stick/Stubs';
+import { StubsDialog, type StubOrder } from '../stick/Stubs';
+import { PhotoImg } from '../../booth/PhotoImg';
 import { miniPic } from '../stick/MiniPicker';
 import { handOverStick } from '../../services/stick';
 import { DEFAULT_STICK, claimNo, designFileName, minisFor, packLabel, type StickSettings } from '../../domain/stick';
@@ -33,10 +34,9 @@ import { orderReadyEmail, orderReadyText } from '../../email/templates';
 import { PaymentDialog } from '../register/PaymentDialog';
 import { FindOrderDialog } from './FindOrderDialog';
 import { useCallOrder } from '../../display/voice';
-import { makeIntoName, makeIntoPrice, makeIntoRates } from '../../domain/makeInto';
 import { ReceiptDialog } from '../register/ReceiptDialog';
 import { CustomerPicker } from '../register/CustomerPicker';
-import type { BusinessSettings, Customer, JWEvent, Order, OrderLine, OrderStatus, PrintRates, Sale, SalePayment, StickerArt } from '../../db/types';
+import type { BusinessSettings, Customer, JWEvent, Order, OrderLine, OrderStatus, Sale, SalePayment, StickerArt } from '../../db/types';
 import './orders.css';
 
 export default function OrdersPage() {
@@ -77,6 +77,7 @@ function Orders({ ev }: { ev: JWEvent }) {
   const artList = useLiveQuery(() => db.stickerArt.toArray(), []);
   const art = useMemo(() => new Map((artList ?? []).map((a) => [a.code.toUpperCase(), a])), [artList]);
   const [stickEdit, setStickEdit] = useState<{ order: Order; sale: Sale } | null>(null);
+  const [stubs, setStubs] = useState<StubOrder | null>(null);
   const [checking, setChecking] = useState(false);
   const checkDrive = async () => {
     setChecking(true);
@@ -285,7 +286,8 @@ function Orders({ ev }: { ev: JWEvent }) {
                     onDelete={owner ? () => void removeOrder(o) : undefined}
                     art={art}
                     onStick={o.stick ? () => void stickDetails(o) : undefined}
-                    onStubs={o.stick ? () => printStubs({ number: o.number, eventName: ev.name, at: o.createdAt, stick: o.stick! }, stickSettings.stubPaper) : undefined}
+                    onStubs={o.stick ? () => setStubs({ number: o.number, eventName: ev.name, at: o.createdAt, stick: o.stick! }) : undefined}
+                    onPhoto={o.stick ? () => navigate(`/booth?order=${o.id}`) : undefined}
                     onShowOff={o.stick ? () => showOff(o) : undefined}
                   />
                 ))}
@@ -383,6 +385,7 @@ function Orders({ ev }: { ev: JWEvent }) {
         }}
       />
       {stickEdit ? <StickDialog sale={stickEdit.sale} ev={ev} existing={stickEdit.order} onClose={() => setStickEdit(null)} /> : null}
+      <StubsDialog o={stubs} paper={stickSettings.stubPaper} onClose={() => setStubs(null)} />
       <FindOrderDialog open={finding} onClose={() => setFinding(false)} />
       <CreatedDialog order={created} name={created ? nameOf(created) : ''} money={created ? money(created) : null} onClose={() => setCreated(null)} />
     </div>
@@ -390,9 +393,11 @@ function Orders({ ev }: { ev: JWEvent }) {
 }
 
 function OrderCard({
-  order: o, money: m, customer, maker, otherEvent, onEdit, onCancel, onDeposit, onStart, onReady, onHandOver, onCall, onStudio, onDelete, art, onStick, onStubs, onShowOff,
+  order: o, money: m, customer, maker, otherEvent, onEdit, onCancel, onDeposit, onStart, onReady, onHandOver, onCall, onStudio, onDelete, art, onStick, onStubs, onShowOff, onPhoto,
 }: {
   art?: Map<string, StickerArt>;
+  /** Couple-of-Stickers: take their photo at the booth, for this order. */
+  onPhoto?: () => void;
   /** Couple-of-Stickers: change the details, print the stubs again, show it on the customer screen. */
   onStick?: () => void;
   onStubs?: () => void;
@@ -426,7 +431,7 @@ function OrderCard({
         </div>
         <div className="row" style={{ gap: 2 }}>
           {onStubs ? (
-            <IconButton label={`Print the stubs for ${o.number}`} size="sm" plain onClick={onStubs}>
+            <IconButton label={`Stubs for ${o.number}`} size="sm" plain onClick={onStubs}>
               <Printer size={15} />
             </IconButton>
           ) : null}
@@ -449,7 +454,7 @@ function OrderCard({
         </div>
       </div>
       {o.stick ? (
-        <StickInfo o={o} art={art} onShowOff={onShowOff} />
+        <StickInfo o={o} art={art} onShowOff={onShowOff} onPhoto={onPhoto} />
       ) : (
         <ul className="order-lines">
           {o.lines.map((l, i) => (
@@ -518,7 +523,6 @@ function OrderDialog({
   const eps = useEventProducts(ev.id);
   const members = useMembers();
   const customers = useCustomers();
-  const settingRows = useSettingRows();
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [customerName, setCustomerName] = useState('');
@@ -566,13 +570,6 @@ function OrderDialog({
   const isNew = order === 'new';
   const closed = !isNew && !isOpenOrder(order);
   const setLine = (i: number, patch: Partial<OrderLine>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)));
-  const makeInto = makeIntoRates(settingValue<PrintRates>(settingRows, 'printRates').makeInto);
-  /** A pin, keychain, couple set or reprint of this line's design: a custom piece of its own. */
-  const addMakeInto = (i: number, kind: string) => {
-    const rate = makeInto.find((m) => m.kind === kind);
-    const l = lines[i];
-    if (rate && l) setLines([...lines, { productId: null, name: makeIntoName(rate, l.name), categoryId: null, designerId: l.designerId, qty: l.qty, unitPrice: makeIntoPrice(rate, l.unitPrice) }]);
-  };
   const addProduct = (id: string) => {
     const p = onSale.find((x) => x.id === id);
     if (!p) return;
@@ -668,17 +665,6 @@ function OrderDialog({
                 <div style={{ width: 130 }}>
                   <MoneyInput ariaLabel={`Price each of ${l.name || 'the piece'}`} value={l.unitPrice} onChange={(c) => setLine(i, { unitPrice: c ?? 0 })} />
                 </div>
-                {l.name.trim() ? (
-              <Select aria-label={`Make ${l.name} into`} value="" onChange={(e) => addMakeInto(i, e.target.value)} style={{ width: 'auto' }}>
-                <option value="">Make it into…</option>
-                {makeInto.map((m) => (
-                  <option key={m.kind} value={m.kind}>
-                    {m.label}
-                    {m.addOn ? ` (+${peso(m.addOn)} each)` : ''}
-                  </option>
-                ))}
-              </Select>
-            ) : null}
             <IconButton label={`Remove ${l.name || 'item'}`} size="sm" onClick={() => setLines(lines.filter((_, k) => k !== i))}>
                   <Trash2 size={15} />
                 </IconButton>
@@ -869,7 +855,7 @@ function CreatedDialog({ order, name, money, onClose }: { order: Order | null; n
 }
 
 /** A Couple-of-Stickers order on its card: the packs, the mini stickers, and whether the design is in Drive yet. */
-function StickInfo({ o, art, onShowOff }: { o: Order; art?: Map<string, StickerArt>; onShowOff?: () => void }) {
+function StickInfo({ o, art, onShowOff, onPhoto }: { o: Order; art?: Map<string, StickerArt>; onShowOff?: () => void; onPhoto?: () => void }) {
   const s = o.stick!;
   const ready = s.packs.some((p) => art?.has(p.designNo.toUpperCase()));
   return (
@@ -895,13 +881,26 @@ function StickInfo({ o, art, onShowOff }: { o: Order; art?: Map<string, StickerA
                 {p.minis.length ? p.minis.map((n) => (miniPic(n) ? <img key={n} src={miniPic(n)} alt={n} title={n} /> : <span key={n}>{n}</span>)) : <span className="muted small">Mini stickers to pick</span>}
               </div>
             ) : null}
+            {p.addOns?.length ? <span className="stick-addons">{p.addOns.map((a, k) => <span key={k} className="stick-addon">+ {a}</span>)}</span> : null}
             {p.note ? <span className="muted small">{p.note}</span> : null}
           </div>
         );
       })}
-      {s.addOns.length ? <span className="small">With {s.addOns.join(', ')}</span> : null}
+      {s.addOns.length ? <span className="small">Also {s.addOns.join(', ')}</span> : null}
       {s.softCopy && s.email ? <span className="small">Soft copy to {s.email}</span> : null}
-      <span className="small">{s.photo === 'booth' ? 'Photo: our photo booth' : s.photo === 'message' ? 'Photo: they’ll message it' : ''}</span>
+      {s.photoId ? (
+        <BoothPhotoLine id={s.photoId} name={`${claimNo(o.number)}-${s.nickname}`} url={s.photoUrl} />
+      ) : s.photo === 'booth' ? (
+        onPhoto ? (
+          <Button size="sm" variant="teal" onClick={onPhoto}>
+            <Camera size={15} /> Take their photo
+          </Button>
+        ) : (
+          <span className="small">Photo: our photo booth</span>
+        )
+      ) : (
+        <span className="small">{s.photo === 'message' ? 'Photo: they’ll message it' : ''}</span>
+      )}
       {onShowOff ? (
         <Button size="sm" variant="ghost" onClick={onShowOff} disabled={!ready} title={ready ? undefined : 'Once the design is in Drive (Check Drive for designs)'}>
           <Monitor size={15} /> Show on customer screen
@@ -915,4 +914,23 @@ function ArtThumb({ blob, name }: { blob: Blob; name: string }) {
   const url = useMemo(() => URL.createObjectURL(blob), [blob]);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
   return <img src={url} alt={name} />;
+}
+
+/** Their photo from our booth, when it's on this laptop; its Drive link otherwise. */
+function BoothPhotoLine({ id, name, url }: { id: string; name: string; url?: string }) {
+  const photo = useLiveQuery(() => db.boothPhotos.get(id), [id]);
+  return (
+    <span className="stick-design">
+      {photo ? <PhotoImg photo={photo} /> : null}
+      <span className="small">
+        Their photo: {name}
+        {url ? (
+          <>
+            {' '}
+            (<a href={url} target="_blank" rel="noreferrer">Drive</a>)
+          </>
+        ) : null}
+      </span>
+    </span>
+  );
 }

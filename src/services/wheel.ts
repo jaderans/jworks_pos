@@ -125,7 +125,7 @@ export async function spinWheel(o: { ev: JWEvent; saleId: string; session: Sessi
       label: `Wheel prize: ${prize.label}`,
       kind: prize.voucher.kind,
       value: prize.voucher.value,
-      minSpend: 0,
+      minSpend: Math.max(0, prize.voucher.minSpend ?? 0),
       validFrom: today,
       validTo: o.ev.endDate || today,
       eventId: o.ev.id,
@@ -133,7 +133,7 @@ export async function spinWheel(o: { ev: JWEvent; saleId: string; session: Sessi
       perCustomer: null,
       notes: `Won on ${sale.receiptNo}`,
     });
-    detail = `${off} their next purchase at this event with code ${voucher.code}.`;
+    detail = `${off} their next purchase at this event${prize.voucher.minSpend ? ` of ${peso(prize.voucher.minSpend)} or more` : ''}, with code ${voucher.code}.`;
   }
 
   const label = prize?.label ?? TRY_AGAIN;

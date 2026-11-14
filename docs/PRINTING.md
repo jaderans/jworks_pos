@@ -1,6 +1,6 @@
-# Services: sticker printing, illustration, pins and keychains
+# Services: sticker printing and illustration
 
-JoshWorks services for customers (custom stickers, sticker sheets, peel-off packs, food labels, sticker illustration, pins, keychains and couple stickers) are taken and tracked in the POS under **Selling → Services**. Every payment is a sale in the Sales log, counted as **Services** in the event's revenue. Their money is booked in JoshWorks Studio as a **Sticker Printing** job. Services never change the booth's merch sales or the team's booth share: the printer and the illustrator get their own shares.
+JoshWorks services for customers (custom stickers, sticker sheets, peel-off packs, food labels and sticker illustration) are taken and tracked in the POS under **Selling → Services**. Every payment is a sale in the Sales log, counted as **Services** in the event's revenue. Their money is booked in JoshWorks Studio as a **Sticker Printing** job. Services never change the booth's merch sales or the team's booth share: the printer and the illustrator get their own shares.
 
 ## The process
 
@@ -15,10 +15,6 @@ The steps follow the rate sheet's *How to order* page.
      - **Detailed:** full illustration with shading, texture, props, hand lettering or a character in a scene (portraits, pet stickers). ₱220 a design; 2 for ₱390, 5 for ₱950, 10 for ₱1,700 (saving ₱50, ₱150 and ₱500).
      - Pick **Who draws it**: they earn the illustrator's share of the illustration, set on the rate card (0% until you set it).
    - **Other:** layout or design work, a rush fee, anything else.
-   - **Make it into…** on an illustration or an *Other* line turns that design into another piece, added as its own line:
-     - **Pin**, **Keychain** or **Couple stickers:** the design's price plus the add-on set on the rate card. One piece per design: an illustration of 2 designs makes 2 pins, each half the illustration's price plus the add-on.
-     - **Extra reprint:** only the add-on, since the design is already paid for.
-     - All the add-ons start at ₱0. Set them on the rate card under **Make it into**.
 
    Pick **Pickup** or **Courier**. For a courier, add the courier, the delivery fee and the address. The fee is added to the order and the studio pays the courier. The app warns about the minimums: 3 A4 sheets, and 20 packs per packaging design.
 2. **Files.** Paste the Drive or Messenger link in **Files**. The **PDF** button gives the customer a quote on the JoshWorks letterhead. It shows the items, the total, the 50% down payment, the file checklist and your payment QR codes.
@@ -28,7 +24,7 @@ The steps follow the rate sheet's *How to order* page.
    - When it's done, tap **Ready**.
    - Tap **Picked up**, or **Shipped** with the tracking number. If a balance is still due, the app offers to take it first.
 
-Anyone on the team can work service orders: the owner, cashiers and designers. Only the owner edits the **rate card**, on the same page. Every price, cut and packaging rate can be changed there, plus the minimums, the lead time, the down payment, the printer's share and the **Make it into** add-ons. Add each material's **cost per sheet** (paper, laminate, ink) to see the real profit in Studio.
+Anyone on the team can work service orders: the owner, cashiers and designers. Only the owner edits the **rate card**, on the same page. Every price, cut and packaging rate can be changed there, plus the minimums, the lead time, the down payment and the printer's share. Add each material's **cost per sheet** (paper, laminate, ink) to see the real profit in Studio.
 
 ## Where the money goes
 
@@ -47,6 +43,8 @@ Anyone on the team can work service orders: the owner, cashiers and designers. O
     - **Expenses:** the courier fee (Transport), and the materials (Printing) when the rate card has costs.
   - **The studio keeps the rest.** For a ₱970 order with a ₱120 courier fee and 20% for the printer: the printer earns ₱170 (20% of ₱850), the courier gets ₱120, and the studio keeps ₱680, less material costs.
   - When the order changes in the POS (a payment, shipped), Studio shows **Changed in the POS**. **Update** brings it in line.
+
+Making a Couple-of-Stickers design into a keychain or a pin is an **add-on** sold with the pack at the register, not a service: see the Couple-of-Stickers notes in the README.
 
 ## Photo booth
 

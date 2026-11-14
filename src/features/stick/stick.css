@@ -26,3 +26,7 @@
 .stick-minis img { width: 28px; height: 28px; object-fit: contain; background: #fff; border-radius: 6px; border: 1px solid var(--line); }
 .stick-design { display: flex; align-items: center; gap: 8px; }
 .stick-design img { width: 44px; height: 44px; object-fit: contain; background: #fff; border-radius: 8px; border: 1px solid var(--line); }
+
+.stick-addons { display: flex; flex-wrap: wrap; gap: 6px; }
+.stick-addon { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; background: color-mix(in srgb, var(--yellow) 30%, transparent); font-weight: 700; font-size: 0.85rem; }
+.stick-addon select { min-height: 28px; padding: 0 6px; font-size: 0.8rem; }

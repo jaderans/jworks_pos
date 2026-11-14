@@ -43,3 +43,6 @@
   .cd-showcase-art { max-height: 56vh; }
 }
 @media (prefers-reduced-motion: reduce) { .cd-showcase { animation: none; } }
+
+.cd-order-paid { margin: 0; font-size: 1.15em; font-weight: 800; color: var(--cd-good); }
+.cd-order-addons { margin: 0; font-weight: 800; color: var(--cd-yellow); }

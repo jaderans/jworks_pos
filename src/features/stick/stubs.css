@@ -49,3 +49,11 @@
   .stub-print { display: block !important; }
   html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
 }
+
+.stub-packs li span.stub-addons { color: var(--st-blue); font-weight: 800; }
+
+/* The preview in a dialog: the stubs as they print, scrolled sideways if the screen is narrow. */
+.stubs-preview { overflow-x: auto; padding: 4px; background: #eef0f4; border-radius: 12px; }
+.stubs-preview .stubs { margin: 0 auto; width: max-content; }
+.stubs-preview .stubs.paper-r80 { width: 80mm; }
+.stubs-preview .stubs.paper-r58 { width: 58mm; }

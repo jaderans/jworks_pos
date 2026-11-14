@@ -4,11 +4,12 @@ import { getLocal, setLocal, type DeviceInfo } from '../db/local';
 import { getSetting } from '../db/settings';
 import { uid } from '../lib/ids';
 import { boothExpired, boothFileName, boothNumber } from '../domain/booth';
+import { orderPhotoName } from '../domain/stick';
 import { saveToDrive, DriveError } from '../drive/drive';
 import { blobToAttachment, isEmail } from '../email/send';
 import { boothPhotoEmail } from '../email/templates';
 import { flushOutbox, queueEmail } from '../email/outbox';
-import type { BoothPhoto, BusinessSettings, PrintOrder, PrintRates } from '../db/types';
+import type { BoothPhoto, BusinessSettings, Order, PrintOrder, PrintRates } from '../db/types';
 
 /**
  * Booth photos on this laptop: kept with the customer's yes, used for a
@@ -50,14 +51,25 @@ export async function deleteBoothPhoto(id: string): Promise<void> {
   await audit('delete', 'boothPhoto', id, `Booth photo ${p.number} deleted`);
 }
 
+/** The file name: a Couple-of-Stickers order's photo is named after its number and the name ("07-Leanna.jpg"). */
+export function photoFileName(p: Pick<BoothPhoto, 'number' | 'name' | 'blob' | 'usedFor'>): string {
+  if (p.usedFor?.kind === 'order') return `${orderPhotoName(p.usedFor.number, p.name)}.${p.blob.type === 'image/png' ? 'png' : 'jpg'}`;
+  return boothFileName(p);
+}
+
 /** Copy a photo used for an order to Drive → Booth photos, and put the link on the order. */
 export async function sendBoothPhotoToDrive(id: string): Promise<'saved' | 'waiting'> {
   const p = await db.boothPhotos.get(id);
   if (!p?.usedFor) return 'waiting';
   if (p.drive?.state === 'saved') return 'saved';
   try {
-    const { url } = await saveToDrive('photos', boothFileName(p), p.blob);
+    const { url } = await saveToDrive('photos', photoFileName(p), p.blob);
     await db.boothPhotos.update(id, { drive: { state: 'saved', url } });
+    if (p.usedFor.kind === 'order') {
+      const o = await db.orders.get(p.usedFor.id);
+      if (url && o?.stick && o.deleted !== 1) await patch(db.orders, o.id, { stick: { ...o.stick, photoUrl: url } });
+      return 'saved';
+    }
     const order = await db.printOrders.get(p.usedFor.id);
     if (url && order && order.deleted !== 1 && !order.files.includes(url)) await patch(db.printOrders, order.id, { files: order.files ? `${order.files}\n${url}` : url });
     return 'saved';
@@ -77,11 +89,22 @@ export async function attachBoothPhoto(id: string, order: Pick<PrintOrder, 'id' 
   return sendBoothPhotoToDrive(id);
 }
 
+/** The photo is for this Couple-of-Stickers order: it stays with it, named after it, and goes to Drive. */
+export async function attachPhotoToOrder(id: string, order: Pick<Order, 'id' | 'number'>): Promise<'saved' | 'waiting'> {
+  const p = await db.boothPhotos.get(id);
+  const o = await db.orders.get(order.id);
+  if (!p || !o?.stick) return 'waiting';
+  await db.boothPhotos.update(id, { usedFor: { kind: 'order', id: order.id, number: order.number }, name: p.name || o.stick.nickname });
+  await patch(db.orders, o.id, { stick: { ...o.stick, photoId: id, photo: 'booth' } });
+  await audit('update', 'boothPhoto', id, `Booth photo ${p.number} used for Couple-of-Stickers ${order.number}`);
+  return sendBoothPhotoToDrive(id);
+}
+
 /** Delete photos past 30 days that no order uses. */
 export async function cleanBoothPhotos(now = Date.now()): Promise<number> {
   const photos = await db.boothPhotos.toArray();
   if (!photos.length) return 0;
-  const orders = new Set(alive(await db.printOrders.toArray()).map((o) => o.id));
+  const orders = new Set([...alive(await db.printOrders.toArray()), ...alive(await db.orders.toArray())].map((o) => o.id));
   const gone = photos.filter((p) => boothExpired(p, (oid) => orders.has(oid), now)).map((p) => p.id);
   if (gone.length) {
     await db.boothPhotos.bulkDelete(gone);
@@ -105,7 +128,7 @@ export async function emailBoothPhoto(id: string, to: string, eventName: string)
     to: addr,
     toName: p.name,
     mail: boothPhotoEmail(business, { customerName: p.name, number: p.number, eventName, illustrationFrom: Number.isFinite(from) ? from : 0 }),
-    attachments: [await blobToAttachment(boothFileName(p), p.blob)],
+    attachments: [await blobToAttachment(photoFileName(p), p.blob)],
   });
   await db.boothPhotos.update(id, { emailedTo: addr, ...(p.contact ? {} : { contact: addr }) });
   void flushOutbox();

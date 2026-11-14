@@ -1,8 +1,8 @@
 import { alive, db } from '../db/db';
 import { audit, create, patch } from '../db/write';
 import type { DeviceInfo } from '../db/local';
-import { nextOrderNumber } from './orders';
-import { PACK_NAME, designFileName, type StickOrder } from '../domain/stick';
+import { getSetting, setSetting } from '../db/settings';
+import { DEFAULT_STICK, PACK_NAME, designFileName, nextStubNumber, type StickOrder, type StickSettings } from '../domain/stick';
 import type { Order, OrderLine, Sale } from '../db/types';
 
 /**
@@ -45,7 +45,7 @@ export async function saveStickOrder(o: { sale: Sale; stick: StickOrder; existin
     await audit('update', 'order', o.existing.id, `Couple-of-Stickers ${o.existing.number} for ${s.nickname} changed`);
     return (await db.orders.get(o.existing.id))!;
   }
-  const number = await nextOrderNumber(o.eventId, o.device.letter);
+  const number = await nextStickNumber(o.eventId, o.device.letter);
   const order = await create<Order>(db.orders, {
     number,
     eventId: o.eventId,
@@ -59,6 +59,25 @@ export async function saveStickOrder(o: { sale: Sale; stick: StickOrder; existin
   });
   await audit('create', 'order', order.id, `Couple-of-Stickers ${number} for ${s.nickname}: ${s.packs.map((p) => p.pack + (p.singles ? ' singles' : '')).join(', ')} (paid with ${o.sale.receiptNo})`);
   return order;
+}
+
+/**
+ * The next stub number at an event: 01, 02… after the highest Couple-of-Stickers
+ * order still on Orders (delete test orders and it starts again), no lower than
+ * Settings → Couple-of-Stickers → Start the next stub at.
+ */
+export async function nextStickNumber(eventId: string, letter: string): Promise<string> {
+  const s: StickSettings = { ...DEFAULT_STICK, ...(await getSetting<Partial<StickSettings>>('stick')) };
+  const taken = alive(await db.orders.where('eventId').equals(eventId).toArray())
+    .filter((x) => x.stick)
+    .map((x) => x.number);
+  return nextStubNumber(taken, { startAt: s.startAt?.[eventId], letter: s.numbers === 'letter' ? letter : null });
+}
+
+/** Start the stubs at this number for an event (1 starts again at 01, once the test orders are deleted). */
+export async function setStubStart(eventId: string, n: number): Promise<void> {
+  const s: StickSettings = { ...DEFAULT_STICK, ...(await getSetting<Partial<StickSettings>>('stick')) };
+  await setSetting('stick', { ...s, startAt: { ...s.startAt, [eventId]: Math.max(1, Math.round(n)) } });
 }
 
 /** The Couple-of-Stickers order made for a sale, if any. */

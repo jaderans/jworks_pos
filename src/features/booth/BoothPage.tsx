@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Camera, Download, Mail, Monitor, Palette, Printer, RefreshCw, RotateCcw, Trash2, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
@@ -12,12 +12,13 @@ import { Check, Field, Select, TextInput } from '../../components/form';
 import { peso } from '../../lib/money';
 import { fmtDate } from '../../lib/time';
 import { downloadBlob } from '../../lib/files';
-import { BOOTH_FRAMES, boothDaysLeft, boothFileName, boothFrame, type BoothFrameKey } from '../../domain/booth';
+import { BOOTH_FRAMES, boothDaysLeft, boothFrame, type BoothFrameKey } from '../../domain/booth';
 import { listCameras, useCamera } from '../../booth/camera';
 import { captureBoothPhoto } from '../../booth/frames';
 import { FramePreview } from '../../booth/FramePreview';
 import { PhotoImg } from '../../booth/PhotoImg';
-import { deleteBoothPhoto, emailBoothPhoto, keepBoothPhoto, sendBoothPhotoToDrive } from '../../booth/photos';
+import { attachPhotoToOrder, deleteBoothPhoto, emailBoothPhoto, keepBoothPhoto, photoFileName, sendBoothPhotoToDrive } from '../../booth/photos';
+import { orderPhotoName } from '../../domain/stick';
 import { boothSender, type BoothShow } from '../../display/channel';
 import { openCustomerScreen, useSecondScreen } from '../../display/screens';
 import type { BoothPhoto, BusinessSettings, PrintRates } from '../../db/types';
@@ -65,6 +66,16 @@ export default function BoothPage() {
   const live = !shot && !kept;
   const cam = useCamera(prefs.camera, live);
   const alive = useRef(true);
+  // Opened from a Couple-of-Stickers order ("Save and take their photo"): the photo is for that order.
+  const [params] = useSearchParams();
+  const orderId = params.get('order');
+  const forOrder = useLiveQuery(async () => (orderId ? ((await db.orders.get(orderId)) ?? null) : null), [orderId]);
+  useEffect(() => {
+    if (forOrder?.stick) {
+      setName((n) => n || forOrder.stick!.nickname);
+      setContact((c) => c || forOrder.stick!.email);
+    }
+  }, [forOrder?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const eventName = app.activeEvent?.name ?? business.name ?? 'JoshWorks';
   const date = fmtDate(Date.now());
@@ -159,7 +170,10 @@ export default function BoothPage() {
       setEmailTo(looksLikeEmail(contact) ? contact.trim() : '');
       setName('');
       setContact('');
-      app.toast(`Photo ${p.number} kept`, { tone: 'good' });
+      if (forOrder?.stick && !forOrder.stick.photoId) {
+        await attachPhotoToOrder(p.id, forOrder);
+        app.toast(`Their photo is on Couple-of-Stickers ${forOrder.number} as ${orderPhotoName(forOrder.number, forOrder.stick.nickname)}`, { tone: 'good' });
+      } else app.toast(`Photo ${p.number} kept`, { tone: 'good' });
     } catch (e) {
       app.toast(e instanceof Error ? e.message : 'Couldn’t keep it', { tone: 'bad' });
     } finally {
@@ -225,6 +239,20 @@ export default function BoothPage() {
         }
       />
 
+      {forOrder?.stick ? (
+        <Callout tone={forOrder.stick.photoId ? 'good' : 'info'} title={`Photo for Couple-of-Stickers ${forOrder.number} · ${forOrder.stick.nickname}`}>
+          <div className="row between wrap">
+            <span>
+              {forOrder.stick.photoId
+                ? `Done: it’s on the order as ${orderPhotoName(forOrder.number, forOrder.stick.nickname)}.`
+                : `They see themselves on the customer screen. When they say yes, it goes on the order as ${orderPhotoName(forOrder.number, forOrder.stick.nickname)}.`}
+            </span>
+            <Button size="sm" variant={forOrder.stick.photoId ? 'primary' : undefined} onClick={() => navigate('/orders')}>
+              Back to Orders
+            </Button>
+          </div>
+        </Callout>
+      ) : null}
       <div className="booth">
         <section className="booth-stage card" aria-label={kept ? `Photo ${kept.number}` : shot ? 'The photo' : 'Camera'}>
           {kept ? (
@@ -267,7 +295,8 @@ export default function BoothPage() {
               </p>
               {kept.usedFor ? (
                 <Callout tone={kept.drive?.state === 'saved' ? 'good' : 'info'}>
-                  Used for service order <b>{kept.usedFor.number}</b>, so it stays as long as the order does.{' '}
+                  Used for {kept.usedFor.kind === 'order' ? 'Couple-of-Stickers' : 'service order'} <b>{kept.usedFor.number}</b>
+                  {kept.usedFor.kind === 'order' ? ` as ${photoFileName(kept)}` : ''}, so it stays as long as the order does.{' '}
                   {kept.drive?.state === 'saved' ? (
                     <>
                       It’s in Google Drive → JoshWorks POS → Booth photos{kept.drive.url ? <> (<a href={kept.drive.url} target="_blank" rel="noreferrer">open</a>)</> : null}.
@@ -304,7 +333,7 @@ export default function BoothPage() {
                 </div>
               </Field>
               <div className="row wrap">
-                <Button size="sm" onClick={() => downloadBlob(kept.blob, boothFileName(kept))}>
+                <Button size="sm" onClick={() => downloadBlob(kept.blob, photoFileName(kept))}>
                   <Download size={16} /> Save a copy
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => void remove(kept)}>

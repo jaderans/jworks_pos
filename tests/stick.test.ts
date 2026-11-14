@@ -5,7 +5,7 @@ import { ensureDevice } from '../src/db/local';
 import { setWriterDevice } from '../src/db/write';
 import { saveStickOrder, stickOrderFor } from '../src/services/stick';
 import type { Sale } from '../src/db/types';
-import { DEFAULT_STICK, claimNo, designFileName, estimateReady, guessPack, minisFor, nextDesignNos, packOf, readyText } from '../src/domain/stick';
+import { DEFAULT_STICK, claimNo, designFileName, estimateReady, guessPack, isAddOnCategory, minisFor, nextDesignNos, nextStubNumber, orderPhotoName, packOf, readyText, stubSeq } from '../src/domain/stick';
 
 const MIN = 60_000;
 
@@ -75,6 +75,10 @@ describe('when it should be ready', () => {
     expect(estimateReady([{ making: 'printing' }], ahead, DEFAULT_STICK, now).ahead).toBe(2);
   });
 
+  it('an add-on (a keychain, a pin) adds its minutes to the pack', () => {
+    expect(estimateReady([{ making: 'printing', addOns: ['Keychain (add-on)'] }], [], DEFAULT_STICK, now).minutes).toBe(25);
+  });
+
   it('more packs in one order take a little longer, not twice as long', () => {
     expect(estimateReady([{ making: 'printing' }, { making: 'printing' }], [], DEFAULT_STICK, now).minutes).toBe(30);
   });
@@ -96,10 +100,36 @@ describe('saving a Couple-of-Stickers order', () => {
     const device = await ensureDevice();
     await expect(saveStickOrder({ sale, stick: stick('  '), eventId: 'e1', device })).rejects.toThrow(/name or nickname/);
     const o = await saveStickOrder({ sale, stick: stick(' Leanna '), eventId: 'e1', device });
-    expect(o).toMatchObject({ number: 'QA-01', status: 'new', pickupSaleId: 's1', customerName: 'Leanna', designNo: 'CS01' });
+    expect(o).toMatchObject({ number: '01', status: 'new', pickupSaleId: 's1', customerName: 'Leanna', designNo: 'CS01' });
     expect(o.lines).toEqual([expect.objectContaining({ unitPrice: 0, name: 'Couple Pack · printing · CS01-Leanna' })]);
     const again = await saveStickOrder({ sale, stick: { ...stick('Leanna R'), email: 'l@jw.ph' }, existing: o, eventId: 'e1', device });
-    expect(again).toMatchObject({ id: o.id, number: 'QA-01', contact: 'l@jw.ph' });
+    expect(again).toMatchObject({ id: o.id, number: '01', contact: 'l@jw.ph' });
     expect((await stickOrderFor('s1'))?.id).toBe(o.id);
+  });
+});
+
+describe('stub numbers', () => {
+  it('follow the last order still on Orders, so deleting test orders brings them back down', () => {
+    expect(nextStubNumber([], {})).toBe('01');
+    expect(nextStubNumber(['01', '02'], {})).toBe('03');
+    expect(nextStubNumber(['01', '03'], {})).toBe('04');
+    // All the test orders deleted: back to 01.
+    expect(nextStubNumber([], { startAt: 1 })).toBe('01');
+  });
+
+  it('can start where pre-printed stubs left off, or carry the register letter', () => {
+    expect(nextStubNumber([], { startAt: 9 })).toBe('09');
+    expect(nextStubNumber(['12'], { startAt: 9 })).toBe('13');
+    expect(nextStubNumber(['A-01'], { letter: 'A' })).toBe('A-02');
+    expect(stubSeq('A-07')).toBe(7);
+    expect(claimNo('A-07')).toBe('07');
+  });
+
+  it('names a booth photo after the order and the name; knows the add-on category', () => {
+    expect(orderPhotoName('07', 'joshua')).toBe('07-Joshua');
+    expect(isAddOnCategory('Add-on')).toBe(true);
+    expect(isAddOnCategory('Add-ons')).toBe(true);
+    expect(isAddOnCategory('Add on')).toBe(true);
+    expect(isAddOnCategory('Stickers')).toBe(false);
   });
 });

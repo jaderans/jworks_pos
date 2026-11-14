@@ -1,7 +1,11 @@
 import { flushSync } from 'react-dom';
+import { Printer } from 'lucide-react';
+import { Dialog } from '../../components/Dialog';
+import { Button } from '../../components/ui';
 import { createRoot } from 'react-dom/client';
 import { fmtTime } from '../../lib/time';
-import { ENJOY, PACK_CODES, claimNo, designFileName, minisFor, packLabel, readyText, type StickOrder, type StickSettings } from '../../domain/stick';
+import { peso } from '../../lib/money';
+import { ENJOY, PACK_CODES, claimNo, designFileName, minisFor, orderPhotoName, packLabel, readyText, type StickOrder, type StickSettings } from '../../domain/stick';
 import mark from '../../assets/brand/mark.png';
 import './stubs.css';
 
@@ -84,14 +88,19 @@ export function Stubs({ o, paper, now = Date.now() }: { o: StubOrder; paper: Sti
               </b>
               <span>{designFileName(p.designNo, s.nickname)}.png</span>
               {minisFor(p) ? <span>Minis: {p.minis.length ? p.minis.join(', ') : 'to pick'}</span> : null}
+              {p.addOns?.length ? <span className="stub-addons">{p.addOns.map((a) => `+ ${a}`).join('  ')}</span> : null}
               {p.note ? <span>Note: {p.note}</span> : null}
             </li>
           ))}
         </ol>
-        {s.addOns.length ? <p className="stub-line">Add-ons: {s.addOns.join(', ')}</p> : null}
+        {s.addOns.length ? <p className="stub-line">Also: {s.addOns.join(', ')}</p> : null}
+        <p className="stub-line">
+          Paid: {peso(s.paid)} · {s.paidWith}
+          {s.receiptNo ? ` · ${s.receiptNo}` : ''}
+        </p>
         {s.softCopy && s.email ? <p className="stub-line">Soft copy: {s.email}</p> : null}
         <p className="stub-line">
-          Photo: {s.photo === 'booth' ? 'taken at our photo booth' : s.photo === 'message' ? 'they’ll message it to JoshWorks' : 'none needed'}
+          Photo: {s.photo === 'booth' ? `our photo booth${s.photoId ? ` (${orderPhotoName(o.number, s.nickname)})` : ''}` : s.photo === 'message' ? 'they’ll message it to JoshWorks' : 'none needed'}
         </p>
       </section>
     </div>
@@ -130,4 +139,30 @@ export function printStubs(o: StubOrder, paper: StickSettings['stubPaper']): voi
   };
   if (img && !img.complete) img.addEventListener('load', go, { once: true });
   else go();
+}
+
+/** See the stubs before printing them (or instead of printing). */
+export function StubsDialog({ o, paper, onClose }: { o: StubOrder | null; paper: StickSettings['stubPaper']; onClose: () => void }) {
+  if (!o) return null;
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      size="wide"
+      title={`Stubs for ${o.number}`}
+      footer={
+        <>
+          <Button onClick={onClose}>Close</Button>
+          <Button variant="primary" onClick={() => printStubs(o, paper)}>
+            <Printer size={16} /> Print
+          </Button>
+        </>
+      }
+    >
+      <div className="stubs-preview">
+        <Stubs o={o} paper={paper} />
+      </div>
+      <p className="muted small">The claim stub is theirs to keep; the information stub goes to whoever makes it. Paper: Settings → Couple-of-Stickers.</p>
+    </Dialog>
+  );
 }

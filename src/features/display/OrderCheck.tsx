@@ -2,6 +2,7 @@ import { ENJOY, claimNo, minisFor, packLabel, readyText, type StickPack } from '
 import { MINI_STICKERS } from '../../domain/miniStickers';
 import { miniPic } from '../stick/MiniPicker';
 import { fmtTime } from '../../lib/time';
+import { peso } from '../../lib/money';
 import type { DisplayStick } from '../../domain/display';
 import './order.css';
 
@@ -21,6 +22,9 @@ export function OrderCheck({ o, now }: { o: DisplayStick; now: number }) {
         <h1>{o.nickname || 'Your stickers'}</h1>
         <p className="cd-order-ready">
           Ready in {readyText(o, now)}, around {fmtTime(o.readyFrom)}
+        </p>
+        <p className="cd-order-paid">
+          Paid {peso(o.paid)} · {o.paidWith}
         </p>
       </div>
       <ol className="cd-order-packs">
@@ -47,12 +51,13 @@ export function OrderCheck({ o, now }: { o: DisplayStick; now: number }) {
                 )}
               </div>
             ) : null}
+            {p.addOns?.length ? <p className="cd-order-addons">{p.addOns.map((a) => `+ ${a}`).join('   ')}</p> : null}
             {p.note ? <p className="cd-order-muted">{p.note}</p> : null}
           </li>
         ))}
       </ol>
       <div className="cd-order-foot">
-        {o.addOns.length ? <p>With {o.addOns.join(', ')}</p> : null}
+        {o.addOns.length ? <p>Also {o.addOns.join(', ')}</p> : null}
         <p className="cd-order-photo">
           {o.photo === 'booth'
             ? 'We’ll take your photo at our photo booth.'

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { CloudCheck, Printer } from 'lucide-react';
+import { Camera, CloudCheck, Printer } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { db } from '../../db/db';
 import { settingValue } from '../../db/settings';
-import { useOrders, usePrintOrders, useProducts, useSettingRows } from '../../hooks/data';
+import { useCategories, useOrders, usePrintOrders, useProducts, useSettingRows } from '../../hooks/data';
 import { Dialog } from '../../components/Dialog';
 import { Badge, Button, Callout, Segmented } from '../../components/ui';
 import { Check, Field, Select, TextInput } from '../../components/form';
@@ -12,17 +13,18 @@ import { peso } from '../../lib/money';
 import { fmtTime } from '../../lib/time';
 import { isOpenOrder } from '../../domain/orders';
 import {
-  DEFAULT_STICK, ENJOY, PACK_CODES, PACK_NAME, designFileName, estimateReady, minisFor, nextDesignNos, packOf, readyText,
+  DEFAULT_STICK, ENJOY, PACK_CODES, PACK_NAME, designFileName, estimateReady, isAddOnCategory, minisFor, nextDesignNos, packOf, readyText,
   type Making, type PackCode, type StickOrder, type StickPack, type StickSettings,
 } from '../../domain/stick';
 import { saveStickOrder } from '../../services/stick';
 import { MiniPicker } from './MiniPicker';
 import { printStubs } from './Stubs';
 import type { JWEvent, Order, Sale } from '../../db/types';
+import type { DisplayStick } from '../../domain/display';
 import './stick.css';
 
 /** What the customer screen shows while the cashier fills it in, so the customer can check it. */
-export type StickDraft = Pick<StickOrder, 'nickname' | 'packs' | 'addOns' | 'readyFrom' | 'readyTo' | 'photo'> & { number: string | null };
+export type StickDraft = DisplayStick;
 
 /**
  * Couple-of-Stickers details, after the customer pays: their nickname, each
@@ -46,7 +48,9 @@ export function StickDialog({
   onDraft?: (d: StickDraft | null) => void;
 }) {
   const app = useApp();
+  const navigate = useNavigate();
   const products = useProducts();
+  const categories = useCategories();
   const orders = useOrders();
   const prints = usePrintOrders();
   const rows = useSettingRows();
@@ -69,41 +73,53 @@ export function StickDialog({
     for (const l of sale.lines) {
       const p = byId.get(l.productId);
       const k = p ? packOf(p, settings) : null;
-      if (k) for (let i = 0; i < l.qty; i++) found.push({ name: l.name, pack: k.pack, singles: k.singles, making: 'printing', minis: [], note: '' });
+      if (k) for (let i = 0; i < l.qty; i++) found.push({ name: l.name, pack: k.pack, singles: k.singles, making: 'printing', minis: [], note: '', addOns: [] });
     }
+    // Add-ons bought with them (a keychain, a pin, an extra reprint) go with the first pack until moved.
+    if (found.length) for (const a of addOnLines) found[0].addOns = [...(found[0].addOns ?? []), a];
     const used = [...orders.flatMap((o) => [o.designNo ?? '', ...(o.stick?.packs.map((x) => x.designNo) ?? [])]), ...prints.map((o) => o.designNo ?? ''), ...art.map((a) => a.code)];
     const nos = nextDesignNos(found.length, used, settings.designPrefix);
     setPacks(found.map((p, i) => ({ ...p, designNo: nos[i] })));
-  }, [products, orders, prints, art]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [products, orders, prints, art, categories]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const packIds = useMemo(() => new Set((products ?? []).filter((p) => packOf(p, settings)).map((p) => p.id)), [products, rows]); // eslint-disable-line react-hooks/exhaustive-deps
-  const addOns = sale.lines.filter((l) => !packIds.has(l.productId)).map((l) => `${l.qty} × ${l.name}`);
+  const addOnCats = new Set((categories ?? []).filter((c) => isAddOnCategory(c.name)).map((c) => c.id));
+  const isAddOn = (l: Sale['lines'][number]) => !!l.categoryId && addOnCats.has(l.categoryId);
+  /** One entry per add-on bought: "Keychain", "Keychain", "Pin". */
+  const addOnLines = sale.lines.filter(isAddOn).flatMap((l) => Array.from({ length: l.qty }, () => l.name));
+  // Anything else they bought with it, not part of a pack.
+  const addOns = sale.lines.filter((l) => !packIds.has(l.productId) && !isAddOn(l)).map((l) => `${l.qty} × ${l.name}`);
   const ahead = (orders ?? []).filter((o) => o.stick && o.id !== existing?.id && o.eventId === ev.id && isOpenOrder(o) && o.status !== 'ready');
   // When they paid: the estimate holds still while the details are filled in.
   const [now] = useState(() => Date.now());
   const est = existing?.stick ? { from: existing.stick.readyFrom, to: existing.stick.readyTo, ahead: ahead.length } : estimateReady(packs ?? [], ahead.map((o) => ({ packs: o.stick!.packs, started: o.status === 'in-progress' })), settings, now);
-  const paidWith = sale.payments.map((p) => p.name).join(' + ') || 'Free';
+  const paidWith = sale.payments.map((p) => (p.ref ? `${p.name} (ref ${p.ref})` : p.name)).join(' + ') || 'Free';
 
   // Keep the customer screen showing what's being filled in.
   const draftKey = JSON.stringify([nickname, packs, addOns, est.from, est.to, photo]);
   useEffect(() => {
-    if (packs) onDraft?.({ number: existing?.number ?? null, nickname, packs, addOns, readyFrom: est.from, readyTo: est.to, photo });
+    if (packs) onDraft?.({ number: existing?.number ?? null, nickname, packs, addOns, readyFrom: est.from, readyTo: est.to, photo, paid: sale.total, paidWith });
   }, [draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onDraft?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setPack = (i: number, ch: Partial<StickPack>) => setPacks((ps) => (ps ?? []).map((p, k) => (k === i ? { ...p, ...ch } : p)));
 
-  const save = async (print: boolean) => {
+  const save = async (then: 'close' | 'print' | 'photo') => {
     if (!packs) return;
     setBusy(true);
     setError('');
     try {
-      const stick: StickOrder = { nickname, email, softCopy: softCopy && !!email.trim(), packs, addOns, saleId: sale.id, paid: sale.total, paidWith, readyFrom: est.from, readyTo: est.to, photo };
+      const stick: StickOrder = {
+        ...existing?.stick,
+        nickname, email, softCopy: softCopy && !!email.trim(), packs, addOns, saleId: sale.id, receiptNo: sale.receiptNo, paid: sale.total, paidWith, readyFrom: est.from, readyTo: est.to, photo,
+      };
       const order = await saveStickOrder({ sale, stick, existing, eventId: ev.id, device: app.device });
       app.toast(existing ? `${order.number} saved` : `Couple-of-Stickers ${order.number} for ${order.customerName}: it’s on Orders`, { tone: 'good' });
-      if (print) printStubs({ number: order.number, eventName: ev.name, at: order.createdAt, stick: order.stick! }, settings.stubPaper);
+      if (then === 'print') printStubs({ number: order.number, eventName: ev.name, at: order.createdAt, stick: order.stick! }, settings.stubPaper);
       onSaved?.(order);
       onClose();
+      // Their photo, now: the photo booth opens for this order, on this screen and the customer screen.
+      if (then === 'photo') navigate(`/booth?order=${order.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Couldn’t save it');
     } finally {
@@ -122,16 +138,25 @@ export function StickDialog({
       footer={
         <>
           <Button onClick={onClose}>{existing ? 'Close' : 'Later'}</Button>
-          <Button onClick={() => void save(false)} disabled={busy || !packs?.length}>
+          <Button onClick={() => void save('close')} disabled={busy || !packs?.length}>
             Save
           </Button>
-          <Button variant="primary" onClick={() => void save(true)} disabled={busy || !packs?.length}>
+          {photo === 'booth' && !existing?.stick?.photoId ? (
+            <Button variant="teal" onClick={() => void save('photo')} disabled={busy || !packs?.length}>
+              <Camera size={16} /> Save and take their photo
+            </Button>
+          ) : null}
+          <Button variant="primary" onClick={() => void save('print')} disabled={busy || !packs?.length}>
             <Printer size={16} /> Save and print stubs
           </Button>
         </>
       }
     >
       {packs && !packs.length ? <Callout tone="warn">No Couple-of-Stickers packs on this sale. Settings → Couple-of-Stickers says which products are packs.</Callout> : null}
+      <Callout tone="good" title={`Paid ${peso(sale.total)} by ${paidWith}`}>
+        {sale.receiptNo}
+        {existing ? ` · stub ${existing.number}` : ' · the stub number comes when you save'}
+      </Callout>
       <div className="form-grid">
         <Field label="Name or nickname" htmlFor="st-nick" hint="On the stubs, the customer screen and the design file.">
           <TextInput id="st-nick" value={nickname} onChange={(e) => setNickname(e.target.value)} autoFocus />
@@ -194,6 +219,32 @@ export function StickDialog({
                   <TextInput id={`st-note-${i}`} value={p.note} onChange={(e) => setPack(i, { note: e.target.value })} placeholder="e.g. matching outfits, a cat between them" />
                 </Field>
               </div>
+              {p.addOns?.length ? (
+                <div className="stick-addons" aria-label={`Add-ons for pack ${i + 1}`}>
+                  {p.addOns.map((a, k) => (
+                    <span key={k} className="stick-addon">
+                      + {a}
+                      {(packs ?? []).length > 1 ? (
+                        <Select
+                          aria-label={`Move ${a} to`}
+                          value={String(i)}
+                          onChange={(e) => {
+                            const to = Number(e.target.value);
+                            setPacks((ps) => (ps ?? []).map((x, n) => (n === i ? { ...x, addOns: (x.addOns ?? []).filter((_, j) => j !== k) } : n === to ? { ...x, addOns: [...(x.addOns ?? []), a] } : x)));
+                          }}
+                          style={{ width: 'auto' }}
+                        >
+                          {(packs ?? []).map((_, n) => (
+                            <option key={n} value={n}>
+                              Pack {n + 1}
+                            </option>
+                          ))}
+                        </Select>
+                      ) : null}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               {inDrive ? <DriveArt blob={inDrive.blob} name={inDrive.name} /> : null}
               {max ? (
                 <>
@@ -213,12 +264,9 @@ export function StickDialog({
       <div className="stick-summary">
         {addOns.length ? (
           <p className="small">
-            <b>Add-ons:</b> {addOns.join(', ')}
+            <b>Also bought:</b> {addOns.join(', ')}
           </p>
         ) : null}
-        <p className="small">
-          <b>Paid:</b> {peso(sale.total)} by {paidWith} ({sale.receiptNo})
-        </p>
         <Callout tone="info" title={`Ready in ${readyText({ readyFrom: est.from, readyTo: est.to }, now)}, around ${fmtTime(est.from)}`}>
           {est.ahead ? `${est.ahead} order${est.ahead === 1 ? '' : 's'} ahead of this one. ` : ''}
           {ENJOY}

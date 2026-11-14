@@ -13,7 +13,7 @@ import { peso, sum, type Cents } from '../../lib/money';
 import { fmtDateTime, fmtIsoDate } from '../../lib/time';
 import { safeFileName } from '../../lib/files';
 import {
-  DEFAULT_PRINT_RATES, PACK_SIZE_LABEL, PRINT_STATUS_LABEL, canMakeInto, customLine, illustrationLine, illustrationPrice, isOpenPrint, lineTotal, makeIntoLine, packLine, peelLine, printTotals, printWarnings, sheetsLine,
+  DEFAULT_PRINT_RATES, PACK_SIZE_LABEL, PRINT_STATUS_LABEL, customLine, illustrationLine, illustrationPrice, isOpenPrint, lineTotal, packLine, peelLine, printTotals, printWarnings, sheetsLine,
 } from '../../domain/print';
 import {
   approvePrint, blankDelivery, cancelPrint, createPrintOrder, deletePrintOrder, markProofSent, printDeleteBlock, setPrintStatus, takePrintPayment, updatePrintOrder, type NewPrintOrder,
@@ -21,7 +21,6 @@ import {
 import { CustomerPicker } from '../register/CustomerPicker';
 import { FindOrderDialog } from '../orders/FindOrderDialog';
 import { useCallOrder } from '../../display/voice';
-import { makeIntoRates } from '../../domain/makeInto';
 import { PhotoImg } from '../../booth/PhotoImg';
 import { attachBoothPhoto } from '../../booth/photos';
 import { CouponField, appliedFrom, useCouponCheck } from '../coupons/CouponField';
@@ -448,11 +447,6 @@ function PrintOrderDialog({
             : kind === 'illustration' && designs
               ? illustrationLine(rates, tier, designs, artPrice ?? undefined)
               : null;
-  const makeInto = makeIntoRates(rates.makeInto);
-  const addMakeInto = (i: number, kind: string) => {
-    const rate = makeInto.find((m) => m.kind === kind);
-    if (rate) setLines([...lines, makeIntoLine(rate, lines[i])]);
-  };
   const artTier = rates.illustration.tiers.find((x) => x.key === tier);
   const artRate = artTier && designs ? illustrationPrice(artTier, designs) : null;
   const hasArt = lines.some((l) => l.kind === 'illustration') || !!illustratorId;
@@ -552,17 +546,6 @@ function PrintOrderDialog({
                   </span>
                 </span>
                 <b>{peso(lineTotal(l))}</b>
-                {!closed && canMakeInto(l) ? (
-                  <Select aria-label={`Make ${l.label} into`} value="" onChange={(e) => addMakeInto(i, e.target.value)} style={{ width: 'auto' }}>
-                    <option value="">Make it into…</option>
-                    {makeInto.map((m) => (
-                      <option key={m.kind} value={m.kind}>
-                        {m.label}
-                        {m.addOn ? ` (+${peso(m.addOn)} each)` : ''}
-                      </option>
-                    ))}
-                  </Select>
-                ) : null}
                 {!closed ? (
                   <IconButton label={`Remove ${l.label}`} size="sm" onClick={() => setLines(lines.filter((_, k) => k !== i))}>
                     <Trash2 size={15} />
@@ -1056,8 +1039,6 @@ function RateCardDialog({ rates, onClose }: { rates: PrintRates; onClose: () => 
   const setTier = (i: number, ch: Partial<IllustrationTier>) => setR({ ...r, illustration: { ...r.illustration, tiers: r.illustration.tiers.map((x, k) => (k === i ? { ...x, ...ch } : x)) } });
   const setTierSet = (i: number, j: number, price: Cents) => setTier(i, { sets: r.illustration.tiers[i].sets.map((x, k) => (k === j ? { ...x, price } : x)) });
   const setSizes = [...new Set(r.illustration.tiers.flatMap((x) => x.sets.map((y) => y.designs)))].sort((a, b) => a - b);
-  const makeInto = makeIntoRates(r.makeInto);
-  const setAddOn = (kind: string, addOn: Cents) => setR({ ...r, makeInto: makeInto.map((m) => (m.kind === kind ? { ...m, addOn } : m)) });
   const save = async () => {
     await setSetting('printRates', r);
     app.toast('Rate card saved. Every phone uses it from now on.', { tone: 'good' });
@@ -1207,30 +1188,6 @@ function RateCardDialog({ rates, onClose }: { rates: PrintRates; onClose: () => 
                     </td>
                   );
                 })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Make it into</th>
-              <th>Price</th>
-              <th className="r">Add-on per piece</th>
-            </tr>
-          </thead>
-          <tbody>
-            {makeInto.map((m) => (
-              <tr key={m.kind}>
-                <td>
-                  <b>{m.label}</b>
-                </td>
-                <td className="muted small">{m.withDesign ? 'The design’s price, plus the add-on' : 'Its own price'}</td>
-                <td className="r" style={{ width: 140 }}>
-                  <MoneyInput ariaLabel={`${m.label} add-on`} value={m.addOn} onChange={(c) => setAddOn(m.kind, c ?? 0)} />
-                </td>
               </tr>
             ))}
           </tbody>

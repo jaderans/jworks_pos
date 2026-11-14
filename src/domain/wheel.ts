@@ -18,7 +18,8 @@ export interface WheelPrize {
   productId: string | null;
   /** A free service: what it is and what it would cost. It becomes a ₱0 service order. */
   service?: { label: string; value: Cents } | null;
-  voucher: { kind: 'amount' | 'percent'; value: number } | null;
+  /** A discount off their next purchase, on a purchase of at least minSpend. */
+  voucher: { kind: 'amount' | 'percent'; value: number; minSpend?: Cents } | null;
   /** Percent chance, 0 to 100. */
   chance: number;
   /** The most wins a day; null for no limit. */

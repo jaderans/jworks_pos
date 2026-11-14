@@ -4,7 +4,7 @@ import type { WheelSlice } from './wheel';
 import type { StickOrder } from './stick';
 
 /** A Couple-of-Stickers order on the customer screen, for the customer to check: a number once it's saved. */
-export type DisplayStick = Pick<StickOrder, 'nickname' | 'packs' | 'addOns' | 'readyFrom' | 'readyTo' | 'photo'> & { number: string | null };
+export type DisplayStick = Pick<StickOrder, 'nickname' | 'packs' | 'addOns' | 'readyFrom' | 'readyTo' | 'photo' | 'paid' | 'paidWith'> & { number: string | null };
 
 /**
  * The customer screen: what the customer sees on the second monitor while the

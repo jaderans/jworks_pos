@@ -1,6 +1,5 @@
 import type { Cents } from '../lib/money';
 import type { WheelConfig, WheelResult } from '../domain/wheel';
-import type { MakeIntoKind, MakeIntoRate } from '../domain/makeInto';
 import type { StickOrder } from '../domain/stick';
 
 /**
@@ -487,8 +486,8 @@ export interface BoothPhoto {
   /** The customer said yes to keeping it: when, and who asked. */
   consentAt: number;
   consentBy: string | null;
-  /** The service order it's used for. */
-  usedFor?: { kind: 'print'; id: string; number: string } | null;
+  /** The service order, or the Couple-of-Stickers order, it's used for. */
+  usedFor?: { kind: 'print' | 'order'; id: string; number: string } | null;
   /** The copy in Drive → JoshWorks POS → Booth photos, for orders. */
   drive?: { state: 'waiting' | 'saved'; url?: string; error?: string } | null;
   emailedTo?: string;
@@ -949,8 +948,6 @@ export interface PrintRates {
   printerPct: number;
   /** Drawing the sticker art: a price per design in each tier, cheaper in sets, and the illustrator's share (%). */
   illustration: { tiers: IllustrationTier[]; artistPct: number };
-  /** "Make it into" a pin, keychain, couple stickers or an extra reprint: the add-on per piece. Older rate cards have none. */
-  makeInto?: MakeIntoRate[];
 }
 
 export interface IllustrationTier {
@@ -985,8 +982,8 @@ export interface PrintLine {
   /** Illustration: the tier and how many designs. */
   tier?: string;
   designs?: number;
-  /** A design made into a pin, keychain, couple stickers or a reprint. */
-  makeInto?: MakeIntoKind;
+  /** From 1.6.0: a design made into a pin, keychain or reprint. These are Couple-of-Stickers add-ons now. */
+  makeInto?: string;
 }
 
 export interface PrintPayment {

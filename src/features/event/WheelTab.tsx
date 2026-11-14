@@ -152,13 +152,18 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
                           ]}
                         />
                         {p.voucher?.kind === 'percent' ? (
-                          <NumberInput id={`wp-${p.id}-off`} min={1} value={p.voucher.value} onChange={(n) => setPrize(p.id, { voucher: { kind: 'percent', value: Math.round(n ?? 0) } })} suffix="%" />
+                          <NumberInput id={`wp-${p.id}-off`} min={1} value={p.voucher.value} onChange={(n) => setPrize(p.id, { voucher: { kind: 'percent', value: Math.round(n ?? 0), minSpend: p.voucher?.minSpend } })} suffix="%" />
                         ) : (
-                          <MoneyInput id={`wp-${p.id}-off`} value={p.voucher?.value ?? null} onChange={(c) => setPrize(p.id, { voucher: { kind: 'amount', value: c ?? 0 } })} />
+                          <MoneyInput id={`wp-${p.id}-off`} value={p.voucher?.value ?? null} onChange={(c) => setPrize(p.id, { voucher: { kind: 'amount', value: c ?? 0, minSpend: p.voucher?.minSpend } })} />
                         )}
                       </div>
                     </Field>
                   )}
+                  {p.kind === 'voucher' ? (
+                    <Field label="On a purchase of at least" htmlFor={`wp-${p.id}-min`} hint="So a discount can’t turn into a free item. Empty: any purchase.">
+                      <MoneyInput id={`wp-${p.id}-min`} value={p.voucher?.minSpend || null} onChange={(c) => setPrize(p.id, { voucher: { kind: p.voucher?.kind ?? 'amount', value: p.voucher?.value ?? 0, minSpend: c ?? 0 } })} />
+                    </Field>
+                  ) : null}
                   <Field label="Chance" htmlFor={`wp-${p.id}-chance`}>
                     <NumberInput id={`wp-${p.id}-chance`} min={0} value={p.chance} onChange={(n) => setPrize(p.id, { chance: Math.max(0, n ?? 0) })} suffix="%" />
                   </Field>
