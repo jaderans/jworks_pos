@@ -23,9 +23,10 @@ import { orderReadyEmail, orderReadyText } from '../../email/templates';
 import { PaymentDialog } from '../register/PaymentDialog';
 import { FindOrderDialog } from './FindOrderDialog';
 import { useCallOrder } from '../../display/voice';
+import { makeIntoName, makeIntoPrice, makeIntoRates } from '../../domain/makeInto';
 import { ReceiptDialog } from '../register/ReceiptDialog';
 import { CustomerPicker } from '../register/CustomerPicker';
-import type { BusinessSettings, Customer, JWEvent, Order, OrderLine, OrderStatus, Sale, SalePayment } from '../../db/types';
+import type { BusinessSettings, Customer, JWEvent, Order, OrderLine, OrderStatus, PrintRates, Sale, SalePayment } from '../../db/types';
 import './orders.css';
 
 export default function OrdersPage() {
@@ -448,6 +449,7 @@ function OrderDialog({
   const eps = useEventProducts(ev.id);
   const members = useMembers();
   const customers = useCustomers();
+  const settingRows = useSettingRows();
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [customerName, setCustomerName] = useState('');
@@ -495,6 +497,13 @@ function OrderDialog({
   const isNew = order === 'new';
   const closed = !isNew && !isOpenOrder(order);
   const setLine = (i: number, patch: Partial<OrderLine>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)));
+  const makeInto = makeIntoRates(settingValue<PrintRates>(settingRows, 'printRates').makeInto);
+  /** A pin, keychain, couple set or reprint of this line's design: a custom piece of its own. */
+  const addMakeInto = (i: number, kind: string) => {
+    const rate = makeInto.find((m) => m.kind === kind);
+    const l = lines[i];
+    if (rate && l) setLines([...lines, { productId: null, name: makeIntoName(rate, l.name), categoryId: null, designerId: l.designerId, qty: l.qty, unitPrice: makeIntoPrice(rate, l.unitPrice) }]);
+  };
   const addProduct = (id: string) => {
     const p = onSale.find((x) => x.id === id);
     if (!p) return;
@@ -590,7 +599,18 @@ function OrderDialog({
                 <div style={{ width: 130 }}>
                   <MoneyInput ariaLabel={`Price each of ${l.name || 'the piece'}`} value={l.unitPrice} onChange={(c) => setLine(i, { unitPrice: c ?? 0 })} />
                 </div>
-                <IconButton label={`Remove ${l.name || 'item'}`} size="sm" onClick={() => setLines(lines.filter((_, k) => k !== i))}>
+                {l.name.trim() ? (
+              <Select aria-label={`Make ${l.name} into`} value="" onChange={(e) => addMakeInto(i, e.target.value)} style={{ width: 'auto' }}>
+                <option value="">Make it into…</option>
+                {makeInto.map((m) => (
+                  <option key={m.kind} value={m.kind}>
+                    {m.label}
+                    {m.addOn ? ` (+${peso(m.addOn)} each)` : ''}
+                  </option>
+                ))}
+              </Select>
+            ) : null}
+            <IconButton label={`Remove ${l.name || 'item'}`} size="sm" onClick={() => setLines(lines.filter((_, k) => k !== i))}>
                   <Trash2 size={15} />
                 </IconButton>
               </div>

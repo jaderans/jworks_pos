@@ -64,8 +64,10 @@ test('receipts email out (also after being offline) and closing the register sen
   await close.getByRole('button', { name: 'Close register' }).click();
   await page.getByRole('dialog', { name: 'Close the register?' }).getByRole('button', { name: 'Close register' }).click();
   await expect(page.getByText('The end-of-day summary is on its way to your email.')).toBeVisible({ timeout: 20_000 });
-  await expect.poll(() => sent.filter((b) => String(b.subject).startsWith('End of day')).length, { timeout: 20_000 }).toBe(1);
-  const summary = sent.find((b) => String(b.subject).startsWith('End of day'))!;
+  // The one closing sent. (After the summary's set time, 9 pm, the scheduled one may have gone out first.)
+  const closedSummary = (b: Record<string, any>) => String(b.subject).startsWith('End of day') && String(b.text).includes('when the register closed');
+  await expect.poll(() => sent.filter(closedSummary).length, { timeout: 20_000 }).toBe(1);
+  const summary = sent.find(closedSummary)!;
   expect(summary.to).toBe('owner@jw.test');
   expect(summary.subject).toContain('Komiket Iloilo');
   expect(summary.text).toContain('Sales today: ₱100');
@@ -80,7 +82,7 @@ test('receipts email out (also after being offline) and closing the register sen
   await page.goto('/#/sales');
   await expect(page.getByText('emailed').first()).toBeVisible();
   await page.goto('/#/settings?section=email');
-  await expect(page.getByText('End of day · owner@jw.test')).toBeVisible();
+  await expect(page.getByText('End of day · owner@jw.test').first()).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/email-settings.png`, fullPage: true });
   expect(errors).toEqual([]);
 });

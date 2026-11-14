@@ -79,7 +79,7 @@ export function FindOrderDialog({ open, onClose }: { open: boolean; onClose: () 
                         navigate(f.kind === 'order' ? '/orders' : '/print');
                       }}
                     >
-                      Open {f.kind === 'order' ? 'Orders' : 'Printing'}
+                      Open {f.kind === 'order' ? 'Orders' : 'Services'}
                     </Button>
                   </span>
                 </div>

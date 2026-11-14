@@ -1,5 +1,6 @@
 import type { Cents } from '../lib/money';
 import type { WheelConfig, WheelResult } from '../domain/wheel';
+import type { MakeIntoKind, MakeIntoRate } from '../domain/makeInto';
 
 /**
  * Every record that syncs between devices carries these fields.
@@ -916,6 +917,8 @@ export interface PrintRates {
   printerPct: number;
   /** Drawing the sticker art: a price per design in each tier, cheaper in sets, and the illustrator's share (%). */
   illustration: { tiers: IllustrationTier[]; artistPct: number };
+  /** "Make it into" a pin, keychain, couple stickers or an extra reprint: the add-on per piece. Older rate cards have none. */
+  makeInto?: MakeIntoRate[];
 }
 
 export interface IllustrationTier {
@@ -932,7 +935,7 @@ export interface IllustrationTier {
 export type PrintStatus = 'quote' | 'printing' | 'ready' | 'done' | 'cancelled';
 
 export interface PrintLine {
-  kind: 'sheets' | 'peel' | 'pack' | 'custom' | 'illustration';
+  kind: 'sheets' | 'peel' | 'pack' | 'custom' | 'illustration' | 'makeInto';
   label: string;
   /** A4 sheets, peel-off sheets, packs or pieces. */
   qty: number;
@@ -950,6 +953,8 @@ export interface PrintLine {
   /** Illustration: the tier and how many designs. */
   tier?: string;
   designs?: number;
+  /** A design made into a pin, keychain, couple stickers or a reprint. */
+  makeInto?: MakeIntoKind;
 }
 
 export interface PrintPayment {

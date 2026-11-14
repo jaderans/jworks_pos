@@ -40,7 +40,7 @@ const batch = (b: Partial<CouponBatch> = {}): CouponBatch => ({
 const coupon = (c: Partial<Coupon> = {}): Coupon => ({ id: 'c1', createdAt: 1, updatedAt: 1, code: 'KI26-AAAAA', batchId: 'b1', eventId: 'e1', customerId: null, saleId: null, givenAt: null, remindedAt: null, void: 0, ...c });
 const claim = (c: Partial<CouponClaim> = {}): CouponClaim => ({
   id: 'print:p1', createdAt: 1, updatedAt: 1, couponId: 'c1', code: 'KI26-AAAAA', batchId: 'b1', eventId: 'e1', source: 'print', sourceId: 'p1',
-  service: 'Print order PA-001', customerId: null, customerName: 'Mira', price: P(3000), discount: P(300), at: 1, by: null, ...c,
+  service: 'Service order PA-001', customerId: null, customerName: 'Mira', price: P(3000), discount: P(300), at: 1, by: null, ...c,
 });
 
 describe('coupon codes', () => {
@@ -76,7 +76,7 @@ describe('coupon codes', () => {
     expect(checkCoupon('KI26-AAAAA', { ...data, coupons: [coupon({ void: 1 })] }, ctx)).toMatchObject({ ok: false, reason: expect.stringMatching(/turned off/) });
 
     const used = { ...data, claims: [claim()] };
-    expect(checkCoupon('KI26-AAAAA', used, ctx)).toMatchObject({ ok: false, reason: 'KI26-AAAAA was already used by Mira (Print order PA-001).' });
+    expect(checkCoupon('KI26-AAAAA', used, ctx)).toMatchObject({ ok: false, reason: 'KI26-AAAAA was already used by Mira (Service order PA-001).' });
     // The service holding it can still be edited, even after the code runs out.
     expect(checkCoupon('KI26-AAAAA', used, { ...ctx, claimId: 'print:p1', today: '2027-02-01' })).toMatchObject({ ok: true });
     // Shared codes count up to their limit.
@@ -167,7 +167,7 @@ describe('coupon services', () => {
     const first = await createPrintOrder(printOrder(codes[0]), device);
     expect(first.coupon).toMatchObject({ code: codes[0], discount: P(300) });
     const held = await db.couponClaims.get(claimId('print', first.id));
-    expect(held).toMatchObject({ batchId: b.id, price: P(2700), discount: P(300), service: `Print order ${first.number}`, customerName: 'Mira Bakeshop' });
+    expect(held).toMatchObject({ batchId: b.id, price: P(2700), discount: P(300), service: `Service order ${first.number}`, customerName: 'Mira Bakeshop' });
     expect(buildPrintFeed({ order: first, downPct: 50, customer: undefined, printer: undefined })).toMatchObject({ subtotal: P(2700), discount: P(300), couponCode: codes[0], total: P(2400) });
 
     await expect(createPrintOrder(printOrder(codes[0], 30, 'Kaye'), device)).rejects.toThrow(/already used by Mira Bakeshop/);

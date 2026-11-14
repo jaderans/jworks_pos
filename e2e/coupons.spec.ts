@@ -40,8 +40,8 @@ test('service coupons: made for an event, used on a print order, earned at the b
 
   // A ₱2,700 print order takes it: ₱300 off the print work.
   await page.goto('/#/print');
-  await page.getByRole('button', { name: 'New print order' }).click();
-  const po = page.getByRole('dialog', { name: 'New print order' });
+  await page.getByRole('button', { name: 'New service order' }).click();
+  const po = page.getByRole('dialog', { name: 'New service order' });
   await po.getByLabel('Name', { exact: true }).fill('Mira Bakeshop');
   await po.getByLabel('Material').selectOption('prem-matte-glossy');
   await po.getByLabel('Cut').selectOption('die');
@@ -52,11 +52,11 @@ test('service coupons: made for an event, used on a print order, earned at the b
   await expect(po.locator('.coupon-on')).toContainText(`${code} ₱300 off`);
   await expect(po.locator('.wf-row', { hasText: 'Coupon' })).toContainText('−₱300');
   await expect(po.locator('.wf-row.total')).toContainText('₱2,400');
-  await po.getByRole('button', { name: 'Save print order' }).click();
-  await expect(page.getByRole('article', { name: /Print order P[A-Z]-001/ })).toContainText(`Coupon ${code}`);
+  await po.getByRole('button', { name: 'Save service order' }).click();
+  await expect(page.getByRole('article', { name: /Service order P[A-Z]-001/ })).toContainText(`Coupon ${code}`);
 
   // The same code won't go on a second service.
-  await page.getByRole('button', { name: 'New print order' }).click();
+  await page.getByRole('button', { name: 'New service order' }).click();
   await po.getByLabel('Name', { exact: true }).fill('Kaye');
   await po.getByLabel('A4 sheets').fill('40');
   await po.getByRole('button', { name: 'Add to the order' }).click();

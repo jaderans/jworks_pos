@@ -153,6 +153,16 @@ describe('sticker printing paid at the register', () => {
     expect(alive(await db.printOrders.toArray())).toEqual([]);
   });
 
+  it('with no register open it can still count at an event: a sale in no drawer', async () => {
+    const { device, ev, session, o } = await setup();
+    await takePrintPayment(o.id, pay(210), null, { eventId: ev.id, device });
+    const [sale] = alive(await db.sales.toArray());
+    expect(sale).toMatchObject({ kind: 'service', sessionId: '', eventId: ev.id, total: P(210), printOrderId: o.id });
+    expect((await db.printOrders.get(o.id))!.payments[0].saleId).toBe(sale.id);
+    expect(moneyIn([sale], [session]).total).toBe(P(210));
+    expect(drawerState(session, [sale]).expected).toBe(P(2000));
+  });
+
   it('with no register open it stays on the order', async () => {
     const { o } = await setup();
     await takePrintPayment(o.id, pay(210), null);

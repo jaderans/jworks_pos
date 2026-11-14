@@ -93,7 +93,8 @@ export async function reopenSession(sessionId: string): Promise<void> {
 
 export interface CompleteSaleInput {
   eventId: string;
-  session: Session;
+  /** The register it's rung up on; null for a service paid with no register open (no drawer). */
+  session: Session | null;
   device: DeviceInfo;
   cashierId: string | null;
   priced: PricedCart;
@@ -117,7 +118,7 @@ export async function completeSale(input: CompleteSaleInput): Promise<Sale> {
     const now = Date.now();
     const sale = build<Sale>({
       eventId: input.eventId,
-      sessionId: input.session.id,
+      sessionId: input.session?.id ?? '',
       deviceId: input.device.deviceId,
       receiptNo: receiptNumber(input.device.letter, seq),
       at: now,

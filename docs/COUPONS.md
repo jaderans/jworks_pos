@@ -28,7 +28,7 @@ If something fails, the app says why, for example "KI26-7F3QX was already used b
 
 Where codes go:
 
-- **Printing.** In the print order. The coupon comes off the print work, not the delivery fee. The 50% down payment is worked out on the price after the coupon.
+- **Services.** In the service order. The coupon comes off the print work, not the delivery fee. The 50% down payment is worked out on the price after the coupon.
 - **Orders.** The coupon comes off the custom pieces (commissions), not catalog products. The pickup sale shows it as a discount.
 - **Pricing → Service quote.** The coupon comes off the price before VAT. VAT, profit and the quote PDF all use the price after it. Marking a quote **Lost** frees the code; marking it **Won** again takes the code back.
 - **JoshWorks Studio.** In **Job → Money → Service coupon**. Studio checks the code against the POS on the same device, and the discount goes on the job. The POS counts the job as a use the next time it opens.

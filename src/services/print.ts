@@ -74,7 +74,7 @@ const clean = ({ couponCode: _code, ...o }: NewPrintOrder): Omit<NewPrintOrder, 
 /** The print work's price, before the coupon and the delivery fee. */
 const printWork = (lines: readonly PrintLine[]): Cents => sum(lines.map(lineTotal));
 
-const claimFor = (o: PrintOrder) => ({ source: 'print' as const, sourceId: o.id, service: `Print order ${o.number}`, customerId: o.customerId, customerName: o.customerName, price: printWork(o.lines) });
+const claimFor = (o: PrintOrder) => ({ source: 'print' as const, sourceId: o.id, service: `Service order ${o.number}`, customerId: o.customerId, customerName: o.customerName, price: printWork(o.lines) });
 
 export async function createPrintOrder(o: NewPrintOrder, device: DeviceInfo): Promise<PrintOrder> {
   check(o);
@@ -99,13 +99,13 @@ export async function createPrintOrder(o: NewPrintOrder, device: DeviceInfo): Pr
   });
   await syncClaim(claimFor(order), coupon);
   const t = printTotals(order, rates.downPct);
-  await audit('create', 'print', order.id, `Print order ${number} for ${order.customerName || 'a customer'}: ${peso(t.total)}`);
+  await audit('create', 'print', order.id, `Service order ${number} for ${order.customerName || 'a customer'}: ${peso(t.total)}`);
   return order;
 }
 
 async function get(id: string): Promise<PrintOrder> {
   const o = await db.printOrders.get(id);
-  if (!o || o.deleted === 1) throw new Error('That print order no longer exists.');
+  if (!o || o.deleted === 1) throw new Error('That service order no longer exists.');
   return o;
 }
 
@@ -199,7 +199,13 @@ export interface PrintPaymentInput {
  * a sale there (a service, kept apart from the booth's merch), so it shows in
  * the Sales log, the money totals and the drawer. Otherwise it stays on the order.
  */
-export async function takePrintPayment(id: string, p: PrintPaymentInput, register: { session: Session; device: DeviceInfo } | null): Promise<void> {
+export async function takePrintPayment(
+  id: string,
+  p: PrintPaymentInput,
+  register: { session: Session; device: DeviceInfo } | null,
+  /** With no register open: count it at this event anyway, in no drawer. */
+  noRegister?: { eventId: string; device: DeviceInfo } | null,
+): Promise<void> {
   const o = await get(id);
   const rates = await getSetting<PrintRates>('printRates');
   const t = printTotals(o, rates.downPct);
@@ -207,13 +213,15 @@ export async function takePrintPayment(id: string, p: PrintPaymentInput, registe
   if (p.amount > t.balance) throw new Error(`That's more than the ${peso(t.balance)} still due.`);
   const stage = t.paid < t.down ? 'down' : 'balance';
   let saleId: string | undefined;
-  if (register && register.session.closedAt === null) {
-    const name = `${stage === 'down' ? 'Down payment' : 'Payment'} · print order ${o.number}`;
+  const open = register && register.session.closedAt === null ? register : null;
+  const at = open ? { eventId: open.session.eventId, session: open.session, device: open.device } : noRegister ? { eventId: noRegister.eventId, session: null, device: noRegister.device } : null;
+  if (at) {
+    const name = `${stage === 'down' ? 'Down payment' : 'Payment'} · service order ${o.number}`;
     const priced = priceCart([{ key: 'print', productId: `${ORDER_LINE}print:${o.id}`, name, categoryId: null, unitPrice: p.amount, qty: 1, free: false, freeReason: '', designerId: null }], [], []);
     const sale = await completeSale({
-      eventId: register.session.eventId,
-      session: register.session,
-      device: register.device,
+      eventId: at.eventId,
+      session: at.session,
+      device: at.device,
       cashierId: p.by,
       priced,
       payments: [{ methodId: p.methodId, name: p.name, kind: p.kind, amount: p.amount, tendered: p.kind === 'cash' ? p.amount : null, ref: p.ref }],

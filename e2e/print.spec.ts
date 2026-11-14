@@ -10,8 +10,8 @@ test('a sticker printing job: quote, proof, 50% down, print, ship with the balan
   await page.keyboard.press('Escape');
 
   await page.goto('/#/print');
-  await page.getByRole('button', { name: 'New print order' }).click();
-  const d = page.getByRole('dialog', { name: 'New print order' });
+  await page.getByRole('button', { name: 'New service order' }).click();
+  const d = page.getByRole('dialog', { name: 'New service order' });
   await d.getByLabel('Name', { exact: true }).fill('Mira Bakeshop');
   await d.getByLabel('Mobile, email or @handle').fill('0917 555 0101');
   // 5 sheets of Premium matte or glossy, die cut: 5 × (₱80 + ₱10)
@@ -32,9 +32,9 @@ test('a sticker printing job: quote, proof, 50% down, print, ship with the balan
   await expect(d.locator('.wf-row.total')).toContainText('₱970');
   await expect(d.locator('.wf-row', { hasText: '50% down payment' })).toContainText('₱485');
   await page.screenshot({ path: `${SHOTS}/print-order.png`, fullPage: true });
-  await d.getByRole('button', { name: 'Save print order' }).click();
+  await d.getByRole('button', { name: 'Save service order' }).click();
 
-  const card = page.getByRole('article', { name: /Print order P[A-Z]-001/ });
+  const card = page.getByRole('article', { name: /Service order P[A-Z]-001/ });
   await expect(card).toContainText('₱970 · no payment yet');
   await expect(page.getByRole('region', { name: 'Quote and proof' }).getByRole('article')).toHaveCount(1);
 
@@ -57,8 +57,8 @@ test('a sticker printing job: quote, proof, 50% down, print, ship with the balan
   expect(fs.readFileSync('test-results/print-quote.pdf', 'latin1')).toContain('/MediaBox [0 0 612 1008]');
 
   // Print, ready, then ship: the balance first
-  await card.getByRole('button', { name: 'Start printing' }).click();
-  await expect(page.getByRole('region', { name: 'Printing' }).getByRole('article')).toHaveCount(1);
+  await card.getByRole('button', { name: 'Start making' }).click();
+  await expect(page.getByRole('region', { name: 'Making' }).getByRole('article')).toHaveCount(1);
   await card.getByRole('button', { name: 'Ready' }).click();
   await expect(page.getByRole('region', { name: 'Ready' }).getByRole('article')).toHaveCount(1);
   await card.getByRole('button', { name: 'Shipped' }).click();
@@ -79,7 +79,7 @@ test('a sticker printing job: quote, proof, 50% down, print, ship with the balan
   await page.getByRole('button', { name: 'Rate card' }).click();
   await page.getByLabel('Price of Premium Matte or Glossy').fill('85');
   await page.getByRole('button', { name: 'Save rate card' }).click();
-  await page.getByRole('button', { name: 'New print order' }).click();
+  await page.getByRole('button', { name: 'New service order' }).click();
   await d.getByLabel('Material').selectOption('prem-matte-glossy');
   await expect(d.getByLabel('Material').locator('option:checked')).toHaveText(/₱85\/sheet/);
   expect(errors).toEqual([]);

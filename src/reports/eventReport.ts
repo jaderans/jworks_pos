@@ -75,7 +75,8 @@ function headline(i: ReportInput): Content {
   const m = i.metrics;
   const s = i.share;
   return kpis([
-    { label: 'Gross sales', value: peso(m.gross) },
+    { label: 'Gross sales', value: peso(m.gross), hint: m.servicesTaken ? 'Booth sales' : undefined },
+    ...(m.servicesTaken ? [{ label: 'Revenue', value: peso(m.gross + m.servicesTaken), hint: `With ${peso(m.servicesTaken)} in services` }] : []),
     { label: 'Profit pool', value: peso(s.pool), hint: 'After production and event costs' },
     { label: 'Transactions', value: String(m.transactions), hint: m.voided ? `${m.voided} voided` : undefined },
     { label: 'Items sold', value: String(m.itemsSold), hint: m.freeItems ? `${m.freeItems} free` : undefined },
@@ -290,7 +291,7 @@ export async function buildEventReport(i: ReportInput) {
         { label: 'Discounts given', value: peso(c.discount), hint: `${peso(c.net)} came in` },
       ]),
     );
-    content.push({ text: 'Services are paid through print orders, orders, quotes and Studio jobs, so they aren’t in the booth sales above.', style: 'muted' });
+    content.push({ text: 'Services are paid through service orders, orders, quotes and Studio jobs, so they aren’t in the booth sales above.', style: 'muted' });
   }
 
   // Profit share

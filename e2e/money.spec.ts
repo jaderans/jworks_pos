@@ -32,8 +32,8 @@ test('money in: cash and GCash moves, a print order paid at the register, and th
 
   // Sticker printing with illustration, paid by GCash at the open register.
   await page.goto('/#/print');
-  await page.getByRole('button', { name: 'New print order' }).click();
-  const d = page.getByRole('dialog', { name: 'New print order' });
+  await page.getByRole('button', { name: 'New service order' }).click();
+  const d = page.getByRole('dialog', { name: 'New service order' });
   await d.getByLabel('Name', { exact: true }).fill('Cenon Salazar');
   await d.getByLabel('A4 sheets').fill('3');
   await d.getByRole('button', { name: 'Add to the order' }).click();
@@ -46,9 +46,9 @@ test('money in: cash and GCash moves, a print order paid at the register, and th
   await d.getByLabel('Who draws it').selectOption({ label: 'Joshua Ranin' });
   await d.getByLabel('Illustrator’s share').fill('50');
   await page.screenshot({ path: `${SHOTS}/money-print-illustration.png` });
-  await d.getByRole('button', { name: 'Save print order' }).click();
+  await d.getByRole('button', { name: 'Save service order' }).click();
 
-  const card = page.getByRole('article', { name: /Print order P[A-Z]-001/ });
+  const card = page.getByRole('article', { name: /Service order P[A-Z]-001/ });
   await card.getByRole('button', { name: 'Payment' }).click();
   const pay = page.getByRole('dialog', { name: /Payment for P[A-Z]-001/ });
   await expect(pay.getByText(/It goes in register A as a sale under Services/)).toBeVisible();
@@ -67,7 +67,7 @@ test('money in: cash and GCash moves, a print order paid at the register, and th
   await expect(money.locator('.money-total')).toHaveText('₱300');
   await expect(money).toContainText(/Services\s*₱300/);
   await expect(money).toContainText(/should hold\s*₱1,800/);
-  await expect(page.getByRole('row', { name: /Service/ })).toContainText('print order');
+  await expect(page.getByRole('row', { name: /Service/ })).toContainText('service order');
   await expect(page.locator('tr.cash-move')).toHaveCount(3);
 
   // Fix the ₱100: it went back in.

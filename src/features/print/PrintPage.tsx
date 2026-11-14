@@ -4,7 +4,7 @@ import { Ban, Check as CheckIcon, FileDown, PackageCheck, Pencil, Plus, Printer,
 import { useApp } from '../../app/AppContext';
 import { alive, db } from '../../db/db';
 import { setSetting, settingValue } from '../../db/settings';
-import { useCustomers, useMembers, usePaymentMethods, usePrintOrders, useSettingRows } from '../../hooks/data';
+import { useCustomers, useEvents, useMembers, usePaymentMethods, usePrintOrders, useSettingRows } from '../../hooks/data';
 import { Dialog } from '../../components/Dialog';
 import { Badge, Button, Callout, EmptyState, IconButton, Loading, PageHeader, Segmented } from '../../components/ui';
 import { Field, MoneyInput, NumberInput, Select, TextArea, TextInput } from '../../components/form';
@@ -12,7 +12,7 @@ import { peso, sum, type Cents } from '../../lib/money';
 import { fmtDateTime, fmtIsoDate } from '../../lib/time';
 import { safeFileName } from '../../lib/files';
 import {
-  DEFAULT_PRINT_RATES, PACK_SIZE_LABEL, PRINT_STATUS_LABEL, customLine, illustrationLine, illustrationPrice, isOpenPrint, lineTotal, packLine, peelLine, printTotals, printWarnings, sheetsLine,
+  DEFAULT_PRINT_RATES, PACK_SIZE_LABEL, PRINT_STATUS_LABEL, canMakeInto, customLine, illustrationLine, illustrationPrice, isOpenPrint, lineTotal, makeIntoLine, packLine, peelLine, printTotals, printWarnings, sheetsLine,
 } from '../../domain/print';
 import {
   approvePrint, blankDelivery, cancelPrint, createPrintOrder, deletePrintOrder, markProofSent, printDeleteBlock, setPrintStatus, takePrintPayment, updatePrintOrder, type NewPrintOrder,
@@ -20,6 +20,7 @@ import {
 import { CustomerPicker } from '../register/CustomerPicker';
 import { FindOrderDialog } from '../orders/FindOrderDialog';
 import { useCallOrder } from '../../display/voice';
+import { makeIntoRates } from '../../domain/makeInto';
 import { CouponField, appliedFrom, useCouponCheck } from '../coupons/CouponField';
 import { claimId } from '../../domain/coupons';
 import type { BusinessSettings, Customer, IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../../db/types';
@@ -94,8 +95,8 @@ export default function PrintPage() {
   return (
     <div className="page wide">
       <PageHeader
-        title="Sticker printing"
-        subtitle={`Print jobs for customers: quote and proof, ${rates.downPct}% down, print, then pickup or courier. JoshWorks Studio books each one as a Sticker Printing job.`}
+        title="Services"
+        subtitle={`Sticker printing, illustration, pins, keychains and more: quote and proof, ${rates.downPct}% down, make it, then pickup or courier. Every payment is a sale in the Sales log, and JoshWorks Studio books each order as a job.`}
         actions={
           <>
             {app.can('calculator') ? (
@@ -107,14 +108,14 @@ export default function PrintPage() {
               <Search size={18} /> Find an order
             </Button>
             <Button variant="primary" onClick={() => setEditing('new')}>
-              <Plus size={18} /> New print order
+              <Plus size={18} /> New service order
             </Button>
           </>
         }
       />
 
       {open.length === 0 && closed.length === 0 ? (
-        <EmptyState icon={<Printer size={44} />} title="No print orders yet">
+        <EmptyState icon={<Printer size={44} />} title="No service orders yet">
           When someone messages for stickers, labels or peel-off packs, price it here from the rate card and send them the quote.
         </EmptyState>
       ) : (
@@ -232,7 +233,7 @@ function PrintCard(p: {
   const t = printTotals(o, p.rates.downPct);
   const late = !!o.dueDate && o.status !== 'ready' && o.dueDate < new Date().toISOString().slice(0, 10);
   return (
-    <article className="order-card" aria-label={`Print order ${o.number}`}>
+    <article className="order-card" aria-label={`Service order ${o.number}`}>
       <div className="row between" style={{ alignItems: 'flex-start' }}>
         <div>
           <div className="order-no">{o.number}</div>
@@ -291,7 +292,7 @@ function PrintCard(p: {
               </Button>
             ) : null}
             <Button size="sm" variant="primary" onClick={p.onPrint}>
-              <Printer size={15} /> Start printing
+              <Printer size={15} /> Start making
             </Button>
           </>
         ) : o.status === 'printing' ? (
@@ -410,6 +411,11 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
             : kind === 'illustration' && designs
               ? illustrationLine(rates, tier, designs, artPrice ?? undefined)
               : null;
+  const makeInto = makeIntoRates(rates.makeInto);
+  const addMakeInto = (i: number, kind: string) => {
+    const rate = makeInto.find((m) => m.kind === kind);
+    if (rate) setLines([...lines, makeIntoLine(rate, lines[i])]);
+  };
   const artTier = rates.illustration.tiers.find((x) => x.key === tier);
   const artRate = artTier && designs ? illustrationPrice(artTier, designs) : null;
   const hasArt = lines.some((l) => l.kind === 'illustration') || !!illustratorId;
@@ -421,7 +427,7 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
     try {
       if (isNew) {
         const created = await createPrintOrder(o, app.device);
-        app.toast(`Print order ${created.number} saved`, { tone: 'good' });
+        app.toast(`Service order ${created.number} saved`, { tone: 'good' });
       } else {
         await updatePrintOrder(order.id, { ...o, printerPct: printerPct ?? rates.printerPct, illustratorPct: illustratorPct ?? rates.illustration.artistPct });
         app.toast('Saved', { tone: 'good' });
@@ -455,13 +461,13 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
     <Dialog
       open
       onClose={onClose}
-      title={isNew ? 'New print order' : `Edit ${order.number}`}
+      title={isNew ? 'New service order' : `Edit ${order.number}`}
       size="wide"
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" onClick={save} disabled={busy}>
-            {isNew ? 'Save print order' : 'Save'}
+            {isNew ? 'Save service order' : 'Save'}
           </Button>
         </>
       }
@@ -494,7 +500,7 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
       </div>
 
       <div className="stack tight">
-        <span className="label strong small">What to print</span>
+        <span className="label strong small">What to make</span>
         {lines.length ? (
           <div className="list">
             {lines.map((l, i) => (
@@ -507,6 +513,17 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
                   </span>
                 </span>
                 <b>{peso(lineTotal(l))}</b>
+                {!closed && canMakeInto(l) ? (
+                  <Select aria-label={`Make ${l.label} into`} value="" onChange={(e) => addMakeInto(i, e.target.value)} style={{ width: 'auto' }}>
+                    <option value="">Make it into…</option>
+                    {makeInto.map((m) => (
+                      <option key={m.kind} value={m.kind}>
+                        {m.label}
+                        {m.addOn ? ` (+${peso(m.addOn)} each)` : ''}
+                      </option>
+                    ))}
+                  </Select>
+                ) : null}
                 {!closed ? (
                   <IconButton label={`Remove ${l.label}`} size="sm" onClick={() => setLines(lines.filter((_, k) => k !== i))}>
                     <Trash2 size={15} />
@@ -803,6 +820,8 @@ function PayDialog({ order, rates, onClose }: { order: PrintOrder | null; rates:
   const app = useApp();
   const methods = usePaymentMethods();
   const session = useLiveQuery(async () => alive(await db.sessions.toArray()).find((s) => s.deviceId === app.device.deviceId && s.closedAt === null) ?? null, [app.device.deviceId]);
+  const events = useEvents();
+  const [countAt, setCountAt] = useState('');
   const [amount, setAmount] = useState<Cents | null>(null);
   const [methodId, setMethodId] = useState('');
   const [ref, setRef] = useState('');
@@ -816,9 +835,12 @@ function PayDialog({ order, rates, onClose }: { order: PrintOrder | null; rates:
     setMethodId(active.find((m) => m.kind !== 'cash')?.id ?? active[0]?.id ?? '');
     setRef('');
     setError('');
+    setCountAt(app.activeEventId ?? '');
   }, [order]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!order || !t) return null;
   const method = active.find((m) => m.id === methodId);
+  // Events a payment can count at: the ones still running or coming, newest first.
+  const open = (events ?? []).filter((e) => e.status === 'live' || e.status === 'planning' || e.id === countAt);
 
   const save = async () => {
     setError('');
@@ -826,7 +848,12 @@ function PayDialog({ order, rates, onClose }: { order: PrintOrder | null; rates:
     if (method.requireRef && !ref.trim()) return setError(`Enter the ${method.name} reference number.`);
     setBusy(true);
     try {
-      await takePrintPayment(order.id, { methodId: method.id, name: method.name, kind: method.kind, amount: amount ?? 0, ref, by: app.member?.id ?? null }, session ? { session, device: app.device } : null);
+      await takePrintPayment(
+        order.id,
+        { methodId: method.id, name: method.name, kind: method.kind, amount: amount ?? 0, ref, by: app.member?.id ?? null },
+        session ? { session, device: app.device } : null,
+        !session && countAt ? { eventId: countAt, device: app.device } : null,
+      );
       app.toast(`${peso(amount ?? 0)} received for ${order.number}`, { tone: 'good' });
       onClose();
     } catch (e) {
@@ -870,10 +897,24 @@ function PayDialog({ order, rates, onClose }: { order: PrintOrder | null; rates:
       <Field label="Reference no." htmlFor="pp-ref">
         <TextInput id="pp-ref" value={ref} onChange={(e) => setRef(e.target.value)} placeholder={method?.kind === 'cash' ? 'Not needed for cash' : 'From the GCash or bank receipt'} />
       </Field>
+      {!session ? (
+        <Field label="Count it at" htmlFor="pp-event">
+          <Select id="pp-event" value={countAt} onChange={(e) => setCountAt(e.target.value)}>
+            {open.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+            <option value="">No event: keep it on the order only</option>
+          </Select>
+        </Field>
+      ) : null}
       <Callout tone="info">
         {session
           ? `It goes in register ${session.letter} as a sale under Services, so it counts in the Sales log, the money totals${method?.kind === 'cash' ? ' and the drawer' : ''}.`
-          : 'No register is open on this phone, so it stays on the order only. Open the register first to count it in the sales.'}
+          : countAt
+            ? `No register is open on this phone, so it’s a sale under Services at ${open.find((e) => e.id === countAt)?.name ?? 'that event'}: in the Sales log and the revenue, not in a drawer.`
+            : 'It stays on the order only, not in any event’s sales.'}
       </Callout>
       {error ? <Callout tone="bad">{error}</Callout> : null}
     </Dialog>
@@ -968,6 +1009,8 @@ function RateCardDialog({ rates, onClose }: { rates: PrintRates; onClose: () => 
   const setTier = (i: number, ch: Partial<IllustrationTier>) => setR({ ...r, illustration: { ...r.illustration, tiers: r.illustration.tiers.map((x, k) => (k === i ? { ...x, ...ch } : x)) } });
   const setTierSet = (i: number, j: number, price: Cents) => setTier(i, { sets: r.illustration.tiers[i].sets.map((x, k) => (k === j ? { ...x, price } : x)) });
   const setSizes = [...new Set(r.illustration.tiers.flatMap((x) => x.sets.map((y) => y.designs)))].sort((a, b) => a - b);
+  const makeInto = makeIntoRates(r.makeInto);
+  const setAddOn = (kind: string, addOn: Cents) => setR({ ...r, makeInto: makeInto.map((m) => (m.kind === kind ? { ...m, addOn } : m)) });
   const save = async () => {
     await setSetting('printRates', r);
     app.toast('Rate card saved. Every phone uses it from now on.', { tone: 'good' });
@@ -1117,6 +1160,30 @@ function RateCardDialog({ rates, onClose }: { rates: PrintRates; onClose: () => 
                     </td>
                   );
                 })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Make it into</th>
+              <th>Price</th>
+              <th className="r">Add-on per piece</th>
+            </tr>
+          </thead>
+          <tbody>
+            {makeInto.map((m) => (
+              <tr key={m.kind}>
+                <td>
+                  <b>{m.label}</b>
+                </td>
+                <td className="muted small">{m.withDesign ? 'The design’s price, plus the add-on' : 'Its own price'}</td>
+                <td className="r" style={{ width: 140 }}>
+                  <MoneyInput ariaLabel={`${m.label} add-on`} value={m.addOn} onChange={(c) => setAddOn(m.kind, c ?? 0)} />
+                </td>
               </tr>
             ))}
           </tbody>

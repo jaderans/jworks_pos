@@ -51,7 +51,7 @@ const GROUPS: NavGroup[] = [
       { to: '/sell', label: 'Sell', icon: ShoppingCart, perm: 'sell' },
       { to: '/sales', label: 'Sales log', short: 'Sales', icon: ReceiptText, perm: 'viewSales' },
       { to: '/orders', label: 'Orders', icon: ClipboardList, perm: 'orders' },
-      { to: '/print', label: 'Printing', icon: Printer, perm: 'printOrders' },
+      { to: '/print', label: 'Services', icon: Printer, perm: 'printOrders' },
     ],
   },
   {

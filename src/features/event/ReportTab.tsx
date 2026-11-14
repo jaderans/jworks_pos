@@ -158,7 +158,7 @@ export default function ReportTab({ ev }: { ev: JWEvent }) {
               See them all
             </Link>
           </div>
-          <p className="sub">What this event’s coupons brought in. Services are paid through print orders, orders, quotes and Studio jobs, so they aren’t in the booth sales. The full report has these numbers too.</p>
+          <p className="sub">What this event’s coupons brought in. Services are paid through service orders, orders, quotes and Studio jobs, so they aren’t in the booth sales. The full report has these numbers too.</p>
           <div className="stats">
             <Stat label="Used" value={`${formatCount(coupons.claims)} of ${formatCount(coupons.codes)}`} hint={coupons.claimRate === null ? undefined : `${coupons.claimRate}% of the codes`} />
             <Stat label="Services booked" value={peso(coupons.price)} hint="Before the coupons" />

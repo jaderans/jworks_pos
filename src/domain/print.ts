@@ -1,6 +1,7 @@
 import { roundUpTo, sum, toCents, type Cents } from '../lib/money';
 import { addDays } from '../lib/time';
 import type { IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../db/types';
+import { DEFAULT_MAKE_INTO, makeIntoName, makeIntoPrice, type MakeIntoRate } from './makeInto';
 
 /**
  * The sticker printing service: prices from the rate card (per A4 sheet,
@@ -62,6 +63,7 @@ export const DEFAULT_PRINT_RATES: PrintRates = {
   leadDays: { min: 4, max: 7 },
   downPct: 50,
   printerPct: 20,
+  makeInto: DEFAULT_MAKE_INTO,
   // JoshWorks Sticker Illustration rates. The illustrator's share is set on the rate card.
   illustration: {
     artistPct: 0,
@@ -89,7 +91,7 @@ export const PACK_SIZE_LABEL: Record<PackSize, string> = { small: 'Small (3.5 ×
 
 export const PRINT_STATUS_LABEL: Record<PrintStatus, string> = {
   quote: 'Quote and proof',
-  printing: 'Printing',
+  printing: 'Making',
   ready: 'Ready',
   done: 'Done',
   cancelled: 'Cancelled',
@@ -248,4 +250,18 @@ export function addWorkingDays(iso: string, days: number): string {
     if (dow !== 0 && dow !== 6) left--;
   }
   return d;
+}
+
+/** Lines a design can be made into: illustration and custom pieces, not sheets, packaging or other make-into lines. */
+export const canMakeInto = (l: Pick<PrintLine, 'kind'>) => l.kind === 'illustration' || l.kind === 'custom';
+
+/**
+ * A design made into a pin, keychain, couple stickers or a reprint: one piece
+ * per design (an illustration of 2 designs makes 2 pins), each the design's
+ * price per piece plus the rate card's add-on.
+ */
+export function makeIntoLine(rate: MakeIntoRate, design: PrintLine): PrintLine {
+  const pieces = Math.max(1, design.designs ?? design.qty);
+  const unit = design.designs ? Math.round(lineTotal(design) / design.designs) : design.unitPrice;
+  return { kind: 'makeInto', makeInto: rate.kind, label: makeIntoName(rate, design.label), qty: pieces, unitPrice: makeIntoPrice(rate, unit), unitCost: null, a4: 0 };
 }

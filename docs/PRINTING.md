@@ -1,12 +1,12 @@
-# Sticker printing service
+# Services: sticker printing, illustration, pins and keychains
 
-Print jobs for customers (custom stickers, sticker sheets, peel-off packs and food labels) are taken and tracked in the POS under **Selling → Printing**. Their money is booked in JoshWorks Studio as a **Sticker Printing** job. They're separate from booth events: a print job never changes an event's sales, report or profit share.
+JoshWorks services for customers (custom stickers, sticker sheets, peel-off packs, food labels, sticker illustration, pins, keychains and couple stickers) are taken and tracked in the POS under **Selling → Services**. Every payment is a sale in the Sales log, counted as **Services** in the event's revenue. Their money is booked in JoshWorks Studio as a **Sticker Printing** job. Services never change the booth's merch sales or the team's booth share: the printer and the illustrator get their own shares.
 
 ## The process
 
 The steps follow the rate sheet's *How to order* page.
 
-1. **Message.** The customer says what they want (material, cut, quantity, packaging). Tap **New print order**, add the customer, then add lines from the rate card:
+1. **Message.** The customer says what they want (material, cut, quantity, packaging). Tap **New service order**, add the customer, then add lines from the rate card:
    - **Sticker sheets:** the material, the cut (kiss cut is included, die cut is +₱10 a sheet) and the number of A4 sheets. Optionally add the sticker size, so the line shows about how many stickers that is.
    - **Peel-off sheets:** the material, the peel-off size and how many. One A4 is shared by the sheets cut from it: (material + ₱17 peel-off cut) ÷ sheets per A4.
    - **Packaging:** the type, the size and the number of packs.
@@ -15,26 +15,31 @@ The steps follow the rate sheet's *How to order* page.
      - **Detailed:** full illustration with shading, texture, props, hand lettering or a character in a scene (portraits, pet stickers). ₱220 a design; 2 for ₱390, 5 for ₱950, 10 for ₱1,700 (saving ₱50, ₱150 and ₱500).
      - Pick **Who draws it**: they earn the illustrator's share of the illustration, set on the rate card (0% until you set it).
    - **Other:** layout or design work, a rush fee, anything else.
+   - **Make it into…** on an illustration or an *Other* line turns that design into another piece, added as its own line:
+     - **Pin**, **Keychain** or **Couple stickers:** the design's price plus the add-on set on the rate card. One piece per design: an illustration of 2 designs makes 2 pins, each half the illustration's price plus the add-on.
+     - **Extra reprint:** only the add-on, since the design is already paid for.
+     - All the add-ons start at ₱0. Set them on the rate card under **Make it into**.
 
    Pick **Pickup** or **Courier**. For a courier, add the courier, the delivery fee and the address. The fee is added to the order and the studio pays the courier. The app warns about the minimums: 3 A4 sheets, and 20 packs per packaging design.
 2. **Files.** Paste the Drive or Messenger link in **Files**. The **PDF** button gives the customer a quote on the JoshWorks letterhead. It shows the items, the total, the 50% down payment, the file checklist and your payment QR codes.
 3. **Approve.** Send the proof and tap **Proof sent**. When they say yes, tap **Approved**: the ready-by date is set, the lead time's longest day counted in working days.
-4. **Pay.** Take the **50% down payment** (GCash, bank or cash) with **Payment**. **Start printing** moves it to Printing; the app asks first if the down payment isn't in.
-5. **Print, then hand over.**
+4. **Pay.** Take the **50% down payment** (GCash, bank or cash) with **Payment**. **Start making** moves it to Making; the app asks first if the down payment isn't in.
+5. **Make it, then hand over.**
    - When it's done, tap **Ready**.
    - Tap **Picked up**, or **Shipped** with the tracking number. If a balance is still due, the app offers to take it first.
 
-Anyone on the team can work print orders: the owner, cashiers and designers. Only the owner edits the **rate card**, on the same page. Every price, cut and packaging rate can be changed there, plus the minimums, the lead time, the down payment and the printer's share. Add each material's **cost per sheet** (paper, laminate, ink) to see the real profit in Studio.
+Anyone on the team can work service orders: the owner, cashiers and designers. Only the owner edits the **rate card**, on the same page. Every price, cut and packaging rate can be changed there, plus the minimums, the lead time, the down payment, the printer's share and the **Make it into** add-ons. Add each material's **cost per sheet** (paper, laminate, ink) to see the real profit in Studio.
 
 ## Where the money goes
 
 - **In the POS:**
-  - **With a register open on the phone,** a payment is a sale there under **Services**: it shows in the Sales log, Money in and the drawer (when it's cash), and as **Services** in the event summary and report. It stays out of the booth's merch figures and the team's booth share, since the printer and the illustrator get their own shares.
-  - **With no register open,** it's recorded on the print order only.
+  - **With a register open on the phone,** a payment is a sale there under **Services**: it shows in the Sales log, Money in and the drawer (when it's cash), and as **Services** in the event summary and report.
+  - **With no register open,** the payment screen asks which event to **Count it at** (the event picked on the phone to start). It's a sale under Services at that event, in its Sales log, Money in and revenue, but in no drawer. Pick **No event** to keep it on the order only.
+  - **Revenue** on the event summary and report is booth sales plus services. Services stay out of the booth's merch figures and the team's booth share, since the printer and the illustrator get their own shares.
   - GCash and bank payments go wherever your GCash or bank account is. The order keeps the reference number.
   - Voiding a Services sale in the Sales log takes the payment off the order, so it's due again.
 - **In JoshWorks Studio (Money → Booth events → Sticker printing):**
-  - Each print order shows up by itself, on the same device or from the Studio file. **Add to Studio** books it as a Sticker Printing job:
+  - Each service order shows up by itself, on the same device or from the Studio file. **Add to Studio** books it as a Sticker Printing job:
     - The **customer** becomes a client, matched by email, then by name.
     - **Payments:** the down payment is a down payment, and the balance is the final payment. They count in Studio's income, reports and BIR.
     - **The printer's share:** whoever prints it gets their % of the print work (20% to start, not counting the illustration or the delivery fee) as their earnings. It's released as the customer pays, so Payouts shows what's owed.

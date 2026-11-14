@@ -684,7 +684,7 @@ function ClaimDialog({ open, data, onClose }: { open: boolean; data: CouponData;
         </>
       }
     >
-      <p className="muted small">For a service booked somewhere the app can’t see. Print orders, orders, quotes and Studio jobs on this device record their coupons by themselves.</p>
+      <p className="muted small">For a service booked somewhere the app can’t see. Service orders, orders, quotes and Studio jobs on this device record their coupons by themselves.</p>
       <div className="form-grid">
         <Field label="Coupon code" htmlFor="cl-code">
           <TextInput id="cl-code" list="cl-codes" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. KI26-7F3QX" />
