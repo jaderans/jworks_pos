@@ -57,3 +57,7 @@
 .stubs-preview .stubs { margin: 0 auto; width: max-content; }
 .stubs-preview .stubs.paper-r80 { width: 80mm; }
 .stubs-preview .stubs.paper-r58 { width: 58mm; }
+
+.stub-photo { margin: 0; display: grid; gap: 0.6mm; justify-items: start; }
+.stub-photo img { width: 26mm; height: 26mm; object-fit: contain; border: 0.3mm solid #c8cfe6; border-radius: 1.5mm; background: #fff; }
+.stub-photo figcaption { font-size: 7.5pt; color: #3b4566; }

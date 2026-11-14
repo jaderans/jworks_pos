@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import { Printer } from 'lucide-react';
 import { Dialog } from '../../components/Dialog';
@@ -14,6 +15,8 @@ export interface StubOrder {
   eventName: string;
   at: number;
   stick: StickOrder;
+  /** Their photo from our booth: the illustrator's reference. */
+  photo?: Blob | null;
 }
 
 /**
@@ -25,6 +28,8 @@ export interface StubOrder {
  */
 export function Stubs({ o, paper, now = Date.now() }: { o: StubOrder; paper: StickSettings['stubPaper']; now?: number }) {
   const s = o.stick;
+  const photoUrl = useMemo(() => (o.photo ? URL.createObjectURL(o.photo) : ''), [o.photo]);
+  useEffect(() => () => (photoUrl ? URL.revokeObjectURL(photoUrl) : undefined), [photoUrl]);
   const no = claimNo(o.number);
   const packs = new Set(s.packs.map((p) => p.pack));
   const singles = s.packs.some((p) => p.singles);
@@ -99,6 +104,12 @@ export function Stubs({ o, paper, now = Date.now() }: { o: StubOrder; paper: Sti
           {s.receiptNo ? ` · ${s.receiptNo}` : ''}
         </p>
         {s.softCopy && s.email ? <p className="stub-line">Soft copy: {s.email}</p> : null}
+        {photoUrl ? (
+          <figure className="stub-photo">
+            <img src={photoUrl} alt="Their photo" />
+            <figcaption>Reference: {orderPhotoName(o.number, s.nickname)}</figcaption>
+          </figure>
+        ) : null}
         <p className="stub-line">
           Photo: {s.photo === 'booth' ? `our photo booth${s.photoId ? ` (${orderPhotoName(o.number, s.nickname)})` : ''}` : s.photo === 'message' ? 'they’ll message it to JoshWorks' : 'none needed'}
         </p>
@@ -130,15 +141,24 @@ export function printStubs(o: StubOrder, paper: StickSettings['stubPaper']): voi
     page.remove();
   };
   window.addEventListener('afterprint', done);
-  // Let the logo load before the dialog opens.
-  const img = host.querySelector('img');
+  // Let the pictures (the logo, their photo) load before the print window opens.
   const go = () => {
     window.print();
     // Browsers that don't fire afterprint (or tests that replace print) still clean up.
     window.setTimeout(done, 1500);
   };
-  if (img && !img.complete) img.addEventListener('load', go, { once: true });
-  else go();
+  const waiting = [...host.querySelectorAll('img')].filter((i) => !i.complete);
+  if (!waiting.length) go();
+  else
+    void Promise.all(
+      waiting.map(
+        (i) =>
+          new Promise((r) => {
+            i.addEventListener('load', r, { once: true });
+            i.addEventListener('error', r, { once: true });
+          }),
+      ),
+    ).then(go);
 }
 
 /** See the stubs before printing them (or instead of printing). */

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { ENJOY, claimNo, minisFor, packLabel, readyText, type StickPack } from '../../domain/stick';
 import { MINI_STICKERS } from '../../domain/miniStickers';
 import { miniPic } from '../stick/MiniPicker';
@@ -13,7 +14,14 @@ const miniName = new Map(MINI_STICKERS.map((m) => [m.no, m.name]));
  * it in: their name, each pack, the mini stickers they picked. Once saved, it
  * shows their number and when it should be ready.
  */
-export function OrderCheck({ o, now }: { o: DisplayStick; now: number }) {
+export function OrderCheck({ o, now, photo }: { o: DisplayStick; now: number; photo?: Blob | null }) {
+  const [url, setUrl] = useState('');
+  useEffect(() => {
+    if (!photo) return setUrl('');
+    const u = URL.createObjectURL(photo);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [photo]);
   return (
     <section className="cd-full cd-order" aria-label="Your Couple-of-Stickers order">
       <div className="cd-order-head">
@@ -56,10 +64,18 @@ export function OrderCheck({ o, now }: { o: DisplayStick; now: number }) {
           </li>
         ))}
       </ol>
+      {url ? (
+        <figure className="cd-order-photo-pic">
+          <img src={url} alt="Your photo" />
+          <figcaption>Your photo: our illustrator works from this</figcaption>
+        </figure>
+      ) : null}
       <div className="cd-order-foot">
         {o.addOns.length ? <p>Also {o.addOns.join(', ')}</p> : null}
         <p className="cd-order-photo">
-          {o.photo === 'booth'
+          {url
+            ? ''
+            : o.photo === 'booth'
             ? 'We’ll take your photo at our photo booth.'
             : o.photo === 'message'
               ? 'Send your best photo to JoshWorks: a clear, well-lit one works best. Or ask us to take it at our photo booth!'

@@ -60,6 +60,12 @@ export function BoothView({ b }: { b: BoothShow }) {
             <b>May we keep this photo?</b>
             <span>We use it only for your order. If you don’t order, we delete it after 30 days. Just tell us yes or no.</span>
           </>
+        ) : b.forOrder ? (
+          <>
+            <span className="sl-eyebrow">Order {b.forOrder}</span>
+            <b>Saved for your stickers!</b>
+            <span>Our illustrator works from this photo.</span>
+          </>
         ) : (
           <>
             <span className="sl-eyebrow">Photo {b.number}</span>

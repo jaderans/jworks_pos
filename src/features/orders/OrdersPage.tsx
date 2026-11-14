@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Ban, Camera, ClipboardList, CloudDownload, HandCoins, Monitor, PackageCheck, Pencil, Plus, Printer, Search, Send, Trash2, UserRound, Volume2, Wallet, X } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
@@ -78,6 +78,19 @@ function Orders({ ev }: { ev: JWEvent }) {
   const art = useMemo(() => new Map((artList ?? []).map((a) => [a.code.toUpperCase(), a])), [artList]);
   const [stickEdit, setStickEdit] = useState<{ order: Order; sale: Sale } | null>(null);
   const [stubs, setStubs] = useState<StubOrder | null>(null);
+  const [params, setParams] = useSearchParams();
+  const reopen = params.get('stick');
+  useEffect(() => {
+    if (!reopen || !orders) return;
+    const o = orders.find((x) => x.id === reopen);
+    setParams({}, { replace: true });
+    if (o?.stick) void stickDetails(o);
+  }, [reopen, orders]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** The stubs, with their booth photo when this laptop has it. */
+  const openStubs = async (o: Order) => {
+    const photo = o.stick?.photoId ? ((await db.boothPhotos.get(o.stick.photoId))?.blob ?? null) : null;
+    setStubs({ number: o.number, eventName: ev.name, at: o.createdAt, stick: o.stick!, photo });
+  };
   const [checking, setChecking] = useState(false);
   const checkDrive = async () => {
     setChecking(true);
@@ -286,7 +299,7 @@ function Orders({ ev }: { ev: JWEvent }) {
                     onDelete={owner ? () => void removeOrder(o) : undefined}
                     art={art}
                     onStick={o.stick ? () => void stickDetails(o) : undefined}
-                    onStubs={o.stick ? () => setStubs({ number: o.number, eventName: ev.name, at: o.createdAt, stick: o.stick! }) : undefined}
+                    onStubs={o.stick ? () => void openStubs(o) : undefined}
                     onPhoto={o.stick ? () => navigate(`/booth?order=${o.id}`) : undefined}
                     onShowOff={o.stick ? () => showOff(o) : undefined}
                   />

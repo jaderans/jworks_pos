@@ -46,3 +46,8 @@
 
 .cd-order-paid { margin: 0; font-size: 1.15em; font-weight: 800; color: var(--cd-good); }
 .cd-order-addons { margin: 0; font-weight: 800; color: var(--cd-yellow); }
+
+.cd-order-photo-pic { margin: 0; display: grid; gap: 0.3em; justify-items: start; }
+.cd-order-photo-pic img { max-width: 100%; max-height: 28vh; object-fit: contain; border-radius: 0.6em; filter: drop-shadow(0 1vmin 2vmin rgba(0, 0, 0, 0.45)); }
+.cd-order-photo-pic figcaption { color: var(--cd-muted); font-size: 0.9em; }
+@media (max-aspect-ratio: 1/1) { .cd-order-photo-pic { justify-items: center; } }

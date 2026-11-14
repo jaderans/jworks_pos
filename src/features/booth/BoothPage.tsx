@@ -18,7 +18,7 @@ import { captureBoothPhoto } from '../../booth/frames';
 import { FramePreview } from '../../booth/FramePreview';
 import { PhotoImg } from '../../booth/PhotoImg';
 import { attachPhotoToOrder, deleteBoothPhoto, emailBoothPhoto, keepBoothPhoto, photoFileName, sendBoothPhotoToDrive } from '../../booth/photos';
-import { orderPhotoName } from '../../domain/stick';
+import { claimNo, orderPhotoName } from '../../domain/stick';
 import { boothSender, type BoothShow } from '../../display/channel';
 import { openCustomerScreen, useSecondScreen } from '../../display/screens';
 import type { BoothPhoto, BusinessSettings, PrintRates } from '../../db/types';
@@ -121,9 +121,10 @@ export default function BoothPage() {
     eventName,
     date,
     offer,
+    forOrder: kept?.usedFor?.kind === 'order' ? claimNo(kept.usedFor.number) : null,
     at: 0,
   };
-  const showKey = `${show.stage}|${show.camera}|${show.frame}|${show.mirror}|${show.count}|${kept?.id ?? ''}|${shotUrl}|${eventName}|${offer}`;
+  const showKey = `${show.stage}|${show.camera}|${show.frame}|${show.mirror}|${show.count}|${kept?.id ?? ''}|${shotUrl}|${eventName}|${offer}|${show.forOrder ?? ''}`;
   useEffect(() => {
     sender.current?.send({ ...show, at: Date.now() });
   }, [showKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -247,8 +248,8 @@ export default function BoothPage() {
                 ? `Done: it’s on the order as ${orderPhotoName(forOrder.number, forOrder.stick.nickname)}.`
                 : `They see themselves on the customer screen. When they say yes, it goes on the order as ${orderPhotoName(forOrder.number, forOrder.stick.nickname)}.`}
             </span>
-            <Button size="sm" variant={forOrder.stick.photoId ? 'primary' : undefined} onClick={() => navigate('/orders')}>
-              Back to Orders
+            <Button size="sm" variant={forOrder.stick.photoId ? 'primary' : undefined} onClick={() => navigate(`/orders?stick=${forOrder.id}`)}>
+              Back to the order
             </Button>
           </div>
         </Callout>

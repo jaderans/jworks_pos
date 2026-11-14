@@ -17,6 +17,9 @@ import {
   type Making, type PackCode, type StickOrder, type StickPack, type StickSettings,
 } from '../../domain/stick';
 import { saveStickOrder } from '../../services/stick';
+import { stickSender } from '../../display/channel';
+import { PhotoImg } from '../../booth/PhotoImg';
+import { orderPhotoName } from '../../domain/stick';
 import { MiniPicker } from './MiniPicker';
 import { printStubs } from './Stubs';
 import type { JWEvent, Order, Sale } from '../../db/types';
@@ -96,9 +99,17 @@ export function StickDialog({
   const paidWith = sale.payments.map((p) => (p.ref ? `${p.name} (ref ${p.ref})` : p.name)).join(' + ') || 'Free';
 
   // Keep the customer screen showing what's being filled in.
-  const draftKey = JSON.stringify([nickname, packs, addOns, est.from, est.to, photo]);
+  // Their photo from our booth, when this laptop has it.
+  const boothPhoto = useLiveQuery(async () => (existing?.stick?.photoId ? ((await db.boothPhotos.get(existing.stick.photoId)) ?? null) : null), [existing?.stick?.photoId]);
+  // Outside the register (Orders), the dialog shows the order on the customer screen itself.
+  const screen = useMemo(() => (onDraft ? null : stickSender()), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => screen?.close(), [screen]);
+  const draftKey = JSON.stringify([nickname, packs, addOns, est.from, est.to, photo, boothPhoto?.id ?? '']);
   useEffect(() => {
-    if (packs) onDraft?.({ number: existing?.number ?? null, nickname, packs, addOns, readyFrom: est.from, readyTo: est.to, photo, paid: sale.total, paidWith });
+    if (!packs) return;
+    const d = { number: existing?.number ?? null, nickname, packs, addOns, readyFrom: est.from, readyTo: est.to, photo, paid: sale.total, paidWith };
+    if (onDraft) onDraft(d);
+    else screen?.send({ ...d, photoPic: boothPhoto?.blob ?? null });
   }, [draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onDraft?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -152,6 +163,14 @@ export function StickDialog({
         </>
       }
     >
+      {boothPhoto ? (
+        <div className="stick-art">
+          <PhotoImg photo={boothPhoto} />
+          <span className="small">
+            <b>Their photo:</b> {orderPhotoName(existing!.number, nickname || existing!.stick!.nickname)}. It prints on the information stub for the illustrator.
+          </span>
+        </div>
+      ) : null}
       {packs && !packs.length ? <Callout tone="warn">No Couple-of-Stickers packs on this sale. Settings → Couple-of-Stickers says which products are packs.</Callout> : null}
       <Callout tone="good" title={`Paid ${peso(sale.total)} by ${paidWith}`}>
         {sale.receiptNo}

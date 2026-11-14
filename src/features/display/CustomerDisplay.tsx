@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { Maximize, Volume2 } from 'lucide-react';
 import { peso } from '../../lib/money';
 import { useLocal } from '../../hooks/data';
-import { HERE_MS, displayReceiver, type BoothShow, type DisplayCall, type DisplayReceiver, type DisplayShowcase } from '../../display/channel';
+import { HERE_MS, displayReceiver, type BoothShow, type DisplayCall, type DisplayReceiver, type DisplayShowcase, type StickShow } from '../../display/channel';
 import { OrderCheck } from './OrderCheck';
 import { Showcase } from './Showcase';
 import { audioReady, playInvite, playLanding, playSpin, playTick, unlockAudio } from '../../display/sound';
@@ -47,6 +47,7 @@ export default function CustomerDisplay() {
   const [calling, setCalling] = useState<DisplayCall | null>(null);
   const [booth, setBooth] = useState<BoothShow | null>(null);
   const [showcase, setShowcase] = useState<DisplayShowcase | null>(null);
+  const [stickShow, setStickShow] = useState<StickShow | null>(null);
   const [soundOn, setSoundOn] = useState(audioReady);
   const [videoSound, setVideoSound] = useState(false);
   const rx = useRef<DisplayReceiver | null>(null);
@@ -81,6 +82,10 @@ export default function CustomerDisplay() {
         if (b) setBusyAt(Date.now());
       },
       setShowcase,
+      (st) => {
+        setStickShow(st);
+        if (st) setBusyAt(Date.now());
+      },
     );
     rx.current = r;
     // Tell the register the screen is here, and whether it can play sound.
@@ -158,8 +163,12 @@ export default function CustomerDisplay() {
 
   const showingThanks = thanks && now < thanks.until && (!state || state.mode === 'thanks' || (state.mode === 'cart' && state.cart.count === 0));
   const boothOn = !!booth && now - booth.at < BOOTH_MS;
+  // Details open on Orders: the order for them to check, over everything but the booth.
+  const stickOn = !!stickShow && now - stickShow.at < BOOTH_MS;
   const view: View = boothOn
     ? 'booth'
+    : stickOn
+      ? 'order'
     : !state
     ? activeEventId
       ? 'idle'
@@ -194,6 +203,8 @@ export default function CustomerDisplay() {
         </section>
       ) : view === 'booth' && booth ? (
         <BoothView b={booth} />
+      ) : view === 'order' && stickOn && stickShow ? (
+        <OrderCheck o={stickShow} photo={stickShow.photoPic} now={now} />
       ) : view === 'order' && s?.stick ? (
         <OrderCheck o={s.stick} now={now} />
       ) : view === 'wheel' && s?.wheel ? (

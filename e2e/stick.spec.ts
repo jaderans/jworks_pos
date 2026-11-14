@@ -112,7 +112,19 @@ test('Couple-of-Stickers: paid by GCash with a keychain add-on, checked on the c
   await expect(page.getByText(/Their photo is on Couple-of-Stickers 01 as 01-Leanna/)).toBeVisible();
   await expect.poll(() => saved.length, { timeout: 15_000 }).toBe(1);
   expect(saved[0]).toMatchObject({ folder: 'photos', file: expect.objectContaining({ name: '01-Leanna.png' }) });
-  await page.getByRole('button', { name: 'Back to Orders' }).click();
+  await expect(screen.getByRole('region', { name: 'Photo booth' })).toContainText('Saved for your stickers!');
+  // Back to the order: its details open again, and the customer screen shows their picks and their photo.
+  await page.getByRole('button', { name: 'Back to the order' }).click();
+  const again = page.getByRole('dialog', { name: 'Couple-of-Stickers 01' });
+  await expect(again).toContainText('Their photo: 01-Leanna');
+  await expect(again.getByRole('img', { name: /^Photo B[A-Z]-001/ })).toBeVisible();
+  const back = screen.getByRole('region', { name: 'Your Couple-of-Stickers order' });
+  await expect(back).toContainText('Your number');
+  await expect(back.getByRole('img', { name: 'Your photo' })).toBeVisible();
+  await expect(back.locator('.cd-order-minis img')).toHaveCount(6);
+  await screen.screenshot({ path: `${SHOTS}/stick-check-photo.png` });
+  await again.getByRole('button', { name: 'Close' }).last().click();
+  await expect(back).toBeHidden();
 
   // On Orders: the details, the photo, the add-on; the design not in Drive yet, then in Drive.
   const card = page.getByRole('article', { name: /Order 01/ });
@@ -133,6 +145,8 @@ test('Couple-of-Stickers: paid by GCash with a keychain add-on, checked on the c
   const stubs = page.getByRole('dialog', { name: 'Stubs for 01' });
   await expect(stubs.getByRole('region', { name: 'Claim stub' })).toContainText('01');
   const info = stubs.getByRole('region', { name: 'Information stub' });
+  await expect(info.getByRole('img', { name: 'Their photo' })).toBeVisible();
+  await expect(info).toContainText('Reference: 01-Leanna');
   for (const t of ['Leanna', 'C · Illustrating', 'CS01-Leanna.png', 'Minis: 01, 02, 11, 28, 33, 43', '+ Keychain conversion', '+ Pin (add-on)', 'Paid: ₱350 · GCash (ref 5012) · A-0001', 'Soft copy: leanna@jw.test', 'our photo booth (01-Leanna)', 'Note: Holding hands']) await expect(info).toContainText(t);
   await stubs.locator('.stubs').screenshot({ path: `${SHOTS}/stick-stubs.png` });
   expect(await page.evaluate(() => (window as unknown as { __printed: string[] }).__printed.length)).toBe(0);

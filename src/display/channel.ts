@@ -1,4 +1,7 @@
-import type { DisplayState } from '../domain/display';
+import type { DisplayState, DisplayStick } from '../domain/display';
+
+/** An order being checked on the customer screen from outside the register (Orders), with their booth photo. Repeated every few seconds; dropped when that stops. */
+export type StickShow = DisplayStick & { photoPic: Blob | null; at: number };
 
 /**
  * The register and the customer screen talk over a BroadcastChannel: both are
@@ -33,6 +36,8 @@ export interface BoothShow {
   date: string;
   /** "from ₱100": what a sticker illustration of the photo starts at. */
   offer: string;
+  /** Taken for a Couple-of-Stickers order: its stub number. */
+  forOrder?: string | null;
   at: number;
 }
 
@@ -51,6 +56,7 @@ export interface DisplayShowcase {
 type Message =
   | { type: 'hello' }
   | { type: 'showcase'; show: DisplayShowcase }
+  | { type: 'stick'; stick: StickShow | null }
   /** The screen is open, every few seconds, and whether it can play sound (someone clicked it). */
   | { type: 'here'; sound: boolean }
   /** The customer tapped the wheel. */
@@ -111,6 +117,7 @@ export function displayReceiver(
   onCall?: (c: DisplayCall) => void,
   onBooth?: (b: BoothShow | null) => void,
   onShowcase?: (s: DisplayShowcase) => void,
+  onStick?: (s: StickShow | null) => void,
 ): DisplayReceiver {
   if (typeof BroadcastChannel === 'undefined') return { here: () => undefined, spin: () => undefined, close: () => undefined };
   const ch = new BroadcastChannel(NAME);
@@ -119,6 +126,7 @@ export function displayReceiver(
     if (e.data?.type === 'call' && e.data.call?.number) onCall?.(e.data.call);
     if (e.data?.type === 'booth') onBooth?.(e.data.booth ? { ...e.data.booth, at: Date.now() } : null);
     if (e.data?.type === 'showcase' && e.data.show?.number) onShowcase?.({ ...e.data.show, at: Date.now() });
+    if (e.data?.type === 'stick') onStick?.(e.data.stick ? { ...e.data.stick, at: Date.now() } : null);
   };
   ch.postMessage({ type: 'hello' } satisfies Message);
   return {
@@ -166,4 +174,28 @@ export function announceShowcase(show: Omit<DisplayShowcase, 'at'>): void {
   const ch = new BroadcastChannel(NAME);
   ch.postMessage({ type: 'showcase', show: { ...show, at: Date.now() } } satisfies Message);
   ch.close();
+}
+
+/** The details dialog's line to the customer screen, outside the register: like the booth's, repeated, and cleared on close. */
+export function stickSender(): { send(s: Omit<StickShow, 'at'> | null): void; close(): void } {
+  if (typeof BroadcastChannel === 'undefined') return { send: () => undefined, close: () => undefined };
+  const ch = new BroadcastChannel(NAME);
+  let last: StickShow | null = null;
+  const post = () => ch.postMessage({ type: 'stick', stick: last } satisfies Message);
+  ch.onmessage = (e: MessageEvent<Message>) => {
+    if (e.data?.type === 'hello' && last) post();
+  };
+  const beat = window.setInterval(() => last && post(), 4000);
+  return {
+    send(s) {
+      last = s ? { ...s, at: Date.now() } : null;
+      post();
+    },
+    close() {
+      window.clearInterval(beat);
+      last = null;
+      post();
+      ch.close();
+    },
+  };
 }
