@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { DisplayMedia,
+import type { DisplayMedia, StickerArt,
   AuditEntry, Batch, BundleRule, Category, CostPoint, Customer, EventProduct, HeldSale, JWEvent, LocalRow, Material,
   Member, PartnerDeal, PaymentMethod, Payout, Photo, Product, ProductCost, Quote, RosterEntry, Sale, Session,
   Coupon, CouponBatch, CouponClaim, EventTask, Order, OutboxItem, PrintOrder, SettingRow, SpendItem, StockMove, StudioFeedRow, Voucher,
@@ -46,6 +46,7 @@ export class JWDB extends Dexie {
   heldSales!: Table<HeldSale, string>;
   outbox!: Table<OutboxItem, string>;
   displayMedia!: Table<DisplayMedia, string>;
+  stickerArt!: Table<StickerArt, string>;
 
   constructor(name = 'jworks-pos') {
     super(name);
@@ -102,6 +103,8 @@ export class JWDB extends Dexie {
     });
     // The customer screen's ad images and videos (device-only).
     this.version(9).stores({ displayMedia: 'id, sort' });
+    // Custom sticker designs from Google Drive, for the customer screen (device-only).
+    this.version(10).stores({ stickerArt: 'id, code, updated' });
   }
 }
 

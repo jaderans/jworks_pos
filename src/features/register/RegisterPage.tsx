@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowDownUp, CalendarPlus, Disc3, Gift, Lock, Minus, Monitor, PackageOpen, PauseCircle, Percent, Plus, ScanLine, ShoppingCart, Ticket, Trash2, UserPlus, UserRound, X } from 'lucide-react';
+import { ArrowDownUp, CalendarPlus, Disc3, Gift, Lock, Minus, Monitor, Search, PackageOpen, PauseCircle, Percent, Plus, ScanLine, ShoppingCart, Ticket, Trash2, UserPlus, UserRound, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import {
   useBundleRules, useCategories, useCustomerSales, useCustomers, useEventProducts, usePaymentMethods, useProducts, useSales, useSessions, useSettingRows,
@@ -33,6 +33,7 @@ import { PaymentDialog } from './PaymentDialog';
 import { ReceiptDialog, receiptText } from './ReceiptDialog';
 import { CashMoveDialog, CloseRegisterDialog } from './SessionDialogs';
 import { CustomerPicker } from './CustomerPicker';
+import { FindOrderDialog } from '../orders/FindOrderDialog';
 import { DealsReview, PriceReview } from './PriceReview';
 import { CameraScanner } from '../../barcode/CameraScanner';
 import { useWedgeScanner } from '../../barcode/useWedgeScanner';
@@ -118,6 +119,7 @@ function Register({ ev }: { ev: JWEvent }) {
   const [payWith, setPayWith] = useState<string[]>([]);
   const [spin, setSpin] = useState<(Spin & { id: string }) | null>(null);
   const [spinning, setSpinning] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const secondScreen = useSecondScreen();
   const earned = useSaleCoupon(receipt?.id);
@@ -416,6 +418,11 @@ function Register({ ev }: { ev: JWEvent }) {
               <Button size="sm" className="hide-phone" variant={secondScreen ? 'teal' : undefined} onClick={() => void showCustomerScreen()}>
                 <Monitor size={16} /> {secondScreen ? 'Customer screen (2nd monitor)' : 'Customer screen'}
               </Button>
+              {app.can('orders') || app.can('printOrders') ? (
+                <Button size="sm" onClick={() => setFindOpen(true)}>
+                  <Search size={16} /> Find order
+                </Button>
+              ) : null}
               <Button size="sm" onClick={() => setCashMove(true)}>
                 <ArrowDownUp size={16} /> Cash in/out
               </Button>
@@ -544,6 +551,7 @@ function Register({ ev }: { ev: JWEvent }) {
       />
       <CameraScanner open={scanOpen} onClose={() => setScanOpen(false)} onCode={(c) => void onCode(c)} />
       <CashMoveDialog session={session} open={cashMove} onClose={() => setCashMove(false)} />
+      <FindOrderDialog open={findOpen} onClose={() => setFindOpen(false)} />
       <HeldSalesDialog open={heldOpen} onClose={() => setHeldOpen(false)} held={held ?? []} cart={cart} />
       <LineDialog lineKey={lineKey} onClose={() => setLineKey(null)} cart={cart} />
       <CustomDiscountDialog open={customOpen} onClose={() => setCustomOpen(false)} ev={ev} cart={cart} base={priced.subtotal - priced.bundleTotal} />

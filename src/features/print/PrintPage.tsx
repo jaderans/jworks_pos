@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Ban, Check as CheckIcon, FileDown, PackageCheck, Pencil, Plus, Printer, Settings2, Trash2, Truck, UserRound, Wallet, X } from 'lucide-react';
+import { Ban, Check as CheckIcon, FileDown, PackageCheck, Pencil, Plus, Printer, Search, Settings2, Trash2, Truck, UserRound, Wallet, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { alive, db } from '../../db/db';
 import { setSetting, settingValue } from '../../db/settings';
@@ -18,6 +18,7 @@ import {
   approvePrint, blankDelivery, cancelPrint, createPrintOrder, deletePrintOrder, markProofSent, printDeleteBlock, setPrintStatus, takePrintPayment, updatePrintOrder, type NewPrintOrder,
 } from '../../services/print';
 import { CustomerPicker } from '../register/CustomerPicker';
+import { FindOrderDialog } from '../orders/FindOrderDialog';
 import { CouponField, appliedFrom, useCouponCheck } from '../coupons/CouponField';
 import { claimId } from '../../domain/coupons';
 import type { BusinessSettings, Customer, IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../../db/types';
@@ -43,6 +44,7 @@ export default function PrintPage() {
   const [handing, setHanding] = useState<PrintOrder | null>(null);
   const [cancelling, setCancelling] = useState<PrintOrder | null>(null);
   const [ratesOpen, setRatesOpen] = useState(false);
+  const [finding, setFinding] = useState(false);
 
   const memberName = useMemo(() => new Map((members ?? []).map((m) => [m.id, m.name])), [members]);
   const custName = useMemo(() => new Map((customers ?? []).map((c) => [c.id, c.name])), [customers]);
@@ -99,6 +101,9 @@ export default function PrintPage() {
                 <Settings2 size={18} /> Rate card
               </Button>
             ) : null}
+            <Button onClick={() => setFinding(true)}>
+              <Search size={18} /> Find an order
+            </Button>
             <Button variant="primary" onClick={() => setEditing('new')}>
               <Plus size={18} /> New print order
             </Button>
@@ -190,6 +195,7 @@ export default function PrintPage() {
         }}
       />
       <CancelDialog order={cancelling} onClose={() => setCancelling(null)} />
+      <FindOrderDialog open={finding} onClose={() => setFinding(false)} />
       {ratesOpen ? <RateCardDialog rates={rates} onClose={() => setRatesOpen(false)} /> : null}
     </div>
   );
@@ -315,6 +321,7 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
   const [illustratorPct, setIllustratorPct] = useState<number | null>(rates.illustration.artistPct);
   const [files, setFiles] = useState('');
   const [notes, setNotes] = useState('');
+  const [designNo, setDesignNo] = useState('');
   const [couponCode, setCouponCode] = useState('');
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
@@ -351,6 +358,7 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
     setIllustratorPct(o?.illustratorPct ?? rates.illustration.artistPct);
     setFiles(o?.files ?? '');
     setNotes(o?.notes ?? '');
+    setDesignNo(o?.designNo ?? '');
     setCouponCode(o?.coupon?.code ?? '');
     setError('');
     // Each time it opens, the line builder starts over on sticker sheets.
@@ -392,7 +400,7 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
   const save = async () => {
     setError('');
     setBusy(true);
-    const o: NewPrintOrder = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact: customer ? customer.phone || customer.email || contact : contact, lines, delivery, printerId: printerId || null, illustratorId: illustratorId || null, files, notes, couponCode };
+    const o: NewPrintOrder = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact: customer ? customer.phone || customer.email || contact : contact, lines, delivery, printerId: printerId || null, illustratorId: illustratorId || null, files, notes, couponCode, designNo };
     try {
       if (isNew) {
         const created = await createPrintOrder(o, app.device);
@@ -715,6 +723,9 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
             <NumberInput id="po-art-pct" min={0} value={illustratorPct} onChange={setIllustratorPct} suffix="%" />
           </Field>
         ) : null}
+        <Field label="Design no." htmlFor="po-design" hint="For custom stickers: the number on the design file in Drive, e.g. CS01.">
+          <TextInput id="po-design" value={designNo} onChange={(e) => setDesignNo(e.target.value.toUpperCase())} placeholder="CS01" maxLength={12} />
+        </Field>
         <Field label="Files" htmlFor="po-files" hint="Drive or Messenger link to the designs.">
           <TextInput id="po-files" value={files} onChange={(e) => setFiles(e.target.value)} placeholder="https://drive.google.com/…" />
         </Field>

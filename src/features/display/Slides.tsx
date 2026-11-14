@@ -6,7 +6,7 @@ import { useBundleRules, useCategories, useEventProducts, useOrders, usePrintOrd
 import { wheelRuleText } from '../../domain/wheel';
 import { peso } from '../../lib/money';
 import { buildSlides, mixSlides, type DisplaySettings, type Slide } from '../../display/slides';
-import type { BusinessSettings, DisplayMedia, PrintRates } from '../../db/types';
+import type { BusinessSettings, PrintRates } from '../../db/types';
 import lockup from '../../assets/brand/lockup-on-dark.png';
 
 /** The slides for an event, made live from the POS, with this device's ads between them. */
@@ -22,6 +22,8 @@ export function useSlides(eventId: string | null, settings: DisplaySettings): { 
   const orders = useOrders();
   const prints = usePrintOrders();
   const ev = useLiveQuery(async () => (eventId ? db.events.get(eventId) : undefined), [eventId]);
+  const art = useLiveQuery(() => (settings.driveStickers ? db.stickerArt.orderBy('code').toArray() : []), [settings.driveStickers]);
+  const artUrls = useMediaUrls(art);
   const urls = useMediaUrls(settings.ownAds ? media : undefined);
   const slides = useMemo(() => {
     const made = eventId
@@ -42,14 +44,21 @@ export function useSlides(eventId: string | null, settings: DisplaySettings): { 
             ...(prints ?? []).filter((o) => o.status === 'ready').map((o) => ({ number: o.number, name: o.customerName.split(' ')[0] })),
           ],
           wheel: ev?.wheel?.on ? { rule: wheelRuleText(ev.wheel, categories ?? []), prizes: ev.wheel.prizes.map((p) => p.label) } : null,
+          stickers: (art ?? []).map((a) => {
+            // A design whose number matches an order shows where that order is.
+            const o = [...(orders ?? []), ...(prints ?? [])].find((x) => a.code && (x.designNo === a.code || x.number.replace(/-/g, '').toUpperCase() === a.code));
+            const status = !o ? null : o.status === 'ready' ? 'Ready for pickup' : o.status === 'picked-up' || o.status === 'done' ? null : 'Being made';
+            return { id: a.id, code: a.code, label: a.label, status };
+          }),
         })
       : [{ kind: 'brand' as const, key: 'brand' }];
     return mixSlides(made, settings.ownAds ? (media ?? []) : []);
-  }, [eventId, products, categories, eps, rules, rows, batches, sales, media, settings, orders, prints, ev]);
-  return { slides, urls };
+  }, [eventId, products, categories, eps, rules, rows, batches, sales, media, settings, orders, prints, ev, art]);
+  const all = useMemo(() => new Map([...urls, ...[...artUrls].map(([id, u]) => [`art:${id}`, u] as [string, string])]), [urls, artUrls]);
+  return { slides, urls: all };
 }
 
-function useMediaUrls(media: DisplayMedia[] | undefined): Map<string, string> {
+function useMediaUrls(media: { id: string; blob: Blob }[] | undefined): Map<string, string> {
   const urls = useMemo(() => new Map((media ?? []).map((m) => [m.id, URL.createObjectURL(m.blob)])), [media]);
   useEffect(() => () => urls.forEach((u) => URL.revokeObjectURL(u)), [urls]);
   return urls;
@@ -71,7 +80,7 @@ export function Slides({ slides, urls, seconds, variant }: { slides: Slide[]; ur
   if (!s) return null;
   return (
     <div className={`sl-stage ${variant}`} data-slide={s.kind}>
-      <SlideView key={`${n}:${s.key}`} s={s} url={s.kind === 'media' ? urls.get(s.id) : undefined} onEnded={next} />
+      <SlideView key={`${n}:${s.key}`} s={s} url={s.kind === 'media' ? urls.get(s.id) : s.kind === 'sticker' ? urls.get(`art:${s.id}`) : undefined} onEnded={next} />
       {slides.length > 1 && slides.length <= 14 ? (
         <div className="sl-dots" aria-hidden="true">
           {slides.map((x, i) => (
@@ -211,6 +220,18 @@ function SlideView({ s, url, onEnded }: { s: Slide; url?: string; onEnded: () =>
           <span className="sl-eyebrow">Prize wheel</span>
           <h2>{s.rule}: spin the prize wheel!</h2>
           {s.prizes.length ? <p className="sl-sub">Win {s.prizes.join(', ')} and more.</p> : null}
+        </div>
+      );
+    case 'sticker':
+      return (
+        <div className="sl sl-sticker">
+          {url ? <img src={url} alt={`${s.code} ${s.label}`.trim()} className="sl-sticker-art" /> : <div className="sl-sticker-art" />}
+          <div className="sl-sticker-text">
+            <span className="sl-eyebrow">Custom sticker</span>
+            {s.code ? <b className="sl-code">{s.code}</b> : null}
+            {s.label ? <h2>{s.label}</h2> : null}
+            {s.status ? <span className="sl-status">{s.status}</span> : <span className="sl-sub">Drawn by JoshWorks. Ask us for yours.</span>}
+          </div>
         </div>
       );
     case 'media':

@@ -6,6 +6,7 @@ import { useLocal } from '../../hooks/data';
 import { displayReceiver } from '../../display/channel';
 import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
 import { Slides, useSlides } from './Slides';
+import { refreshStickers } from '../../display/stickers';
 import { WheelSvg } from './WheelSvg';
 import type { WheelSlice } from '../../domain/wheel';
 import type { DisplayState } from '../../domain/display';
@@ -33,6 +34,16 @@ export default function CustomerDisplay() {
   const saved = useLocal<Partial<DisplaySettings>>('display', DEFAULT_DISPLAY);
   const settings = useMemo<DisplaySettings>(() => ({ ...DEFAULT_DISPLAY, ...(saved ?? {}) }), [saved]);
   const { slides, urls } = useSlides(state?.eventId ?? null, settings);
+  // New custom sticker designs from Drive, every few minutes while online.
+  useEffect(() => {
+    if (!settings.driveStickers) return;
+    const run = () => {
+      if (navigator.onLine) void refreshStickers().catch(() => null);
+    };
+    run();
+    const t = window.setInterval(run, 5 * 60_000);
+    return () => window.clearInterval(t);
+  }, [settings.driveStickers]);
 
   useEffect(
     () =>

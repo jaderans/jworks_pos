@@ -24,9 +24,11 @@ export interface DisplaySettings {
   priceSlides: boolean;
   bestSellers: boolean;
   ownAds: boolean;
+  /** Custom sticker designs from the Drive folder. */
+  driveStickers: boolean;
 }
 
-export const DEFAULT_DISPLAY: DisplaySettings = { idleSeconds: 20, slideSeconds: 8, sideAds: true, priceSlides: true, bestSellers: true, ownAds: true };
+export const DEFAULT_DISPLAY: DisplaySettings = { idleSeconds: 20, slideSeconds: 8, sideAds: true, priceSlides: true, bestSellers: true, ownAds: true, driveStickers: true };
 
 export type Slide =
   | { kind: 'brand'; key: string }
@@ -38,6 +40,7 @@ export type Slide =
   | { kind: 'best'; key: string; rows: { name: string; qty: number }[] }
   | { kind: 'ready'; key: string; rows: { number: string; name: string }[] }
   | { kind: 'wheel'; key: string; rule: string; prizes: string[] }
+  | { kind: 'sticker'; key: string; id: string; code: string; label: string; status: string | null }
   | { kind: 'media'; key: string; id: string; media: 'image' | 'video'; seconds: number };
 
 export interface SlideInput {
@@ -56,6 +59,8 @@ export interface SlideInput {
   ready?: { number: string; name: string }[];
   /** The event's prize wheel, when it's on: "Spend ₱250 or buy 15 Sticker items". */
   wheel?: { rule: string; prizes: string[] } | null;
+  /** Custom sticker designs from Drive, each with the status of the order its number matches, if any. */
+  stickers?: { id: string; code: string; label: string; status: string | null }[];
 }
 
 /** Products per price slide: readable from across the booth. */
@@ -122,6 +127,7 @@ export function buildSlides(i: SlideInput): Slide[] {
   }
   if (i.ready?.length) chunk(i.ready, 8).forEach((part, k) => out.push({ kind: 'ready', key: `ready:${k}`, rows: part }));
   if (i.wheel?.rule) out.push({ kind: 'wheel', key: 'wheel', rule: i.wheel.rule, prizes: i.wheel.prizes });
+  for (const s of i.stickers ?? []) out.push({ kind: 'sticker', key: `sticker:${s.id}`, ...s });
   if (i.settings.bestSellers) {
     const sold = new Map<string, { name: string; qty: number }>();
     for (const s of i.sales) {

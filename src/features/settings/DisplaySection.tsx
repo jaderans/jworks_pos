@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowDown, ArrowUp, Film, ImagePlus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, CloudDownload, ExternalLink, Film, ImagePlus, Trash2 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { db } from '../../db/db';
 import { setLocal } from '../../db/local';
 import { useLocal } from '../../hooks/data';
-import { Button, IconButton, Segmented, Toggle } from '../../components/ui';
+import { Button, Callout, IconButton, Segmented, Toggle } from '../../components/ui';
 import { Field, NumberInput } from '../../components/form';
 import { uid } from '../../lib/ids';
 import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
+import { refreshStickers } from '../../display/stickers';
+import { DriveError, driveFolders } from '../../drive/drive';
+import { relativeTime } from '../../lib/time';
 import type { DisplayMedia } from '../../db/types';
 
 /** Big videos make the device slow to open: anything over this is refused. */
@@ -26,6 +29,24 @@ export function DisplaySection() {
   const media = useLiveQuery(() => db.displayMedia.orderBy('sort').toArray(), []);
   const fileRef = useRef<HTMLInputElement>(null);
   const set = (ch: Partial<DisplaySettings>) => void setLocal('display', { ...s, ...ch });
+  const art = useLiveQuery(() => db.stickerArt.count(), []);
+  const synced = useLocal<{ at: number; total: number } | null>('stickerSync', null);
+  const [checking, setChecking] = useState(false);
+  const [driveNote, setDriveNote] = useState<{ tone: 'bad' | 'info'; text: string } | null>(null);
+  const [folder, setFolder] = useState('');
+  const checkDrive = async () => {
+    setChecking(true);
+    setDriveNote(null);
+    try {
+      const r = await refreshStickers();
+      app.toast(`${r.total} design${r.total === 1 ? '' : 's'} in Drive${r.added ? `, ${r.added} new` : ''}${r.removed ? `, ${r.removed} taken out` : ''}`, { tone: 'good' });
+      setFolder((await driveFolders().catch(() => null))?.stickers ?? '');
+    } catch (e) {
+      setDriveNote({ tone: e instanceof DriveError && e.kind === 'offline' ? 'info' : 'bad', text: e instanceof Error ? e.message : 'Couldn’t check Drive' });
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const add = async (files: FileList | null) => {
     const list = [...(files ?? [])];
@@ -88,7 +109,32 @@ export function DisplaySection() {
         <Toggle id="ds-prices" checked={s.priceSlides} onChange={(v) => set({ priceSlides: v })} label="Price slides: this event’s prices, bundle deals, printing and illustration rates, the booth coupon" />
         <Toggle id="ds-best" checked={s.bestSellers} onChange={(v) => set({ bestSellers: v })} label="Best sellers today (after 3 products have sold)" />
         <Toggle id="ds-own" checked={s.ownAds} onChange={(v) => set({ ownAds: v })} label="Your own ads, between the slides" />
+        <Toggle id="ds-stickers" checked={s.driveStickers} onChange={(v) => set({ driveStickers: v })} label="Custom sticker designs from Google Drive" />
       </div>
+      {s.driveStickers ? (
+        <div className="stack tight">
+          <b>Custom stickers from Google Drive</b>
+          <p className="muted small">
+            Put finished designs in Drive → JoshWorks POS → Custom stickers, named like <span className="mono">CS01-Couple.png</span>. The screen shows each one with its number and name,
+            and the order’s status when the number matches an order. It checks every 5 minutes while online and keeps them for offline.
+          </p>
+          <div className="row wrap">
+            <Button size="sm" onClick={() => void checkDrive()} disabled={checking}>
+              <CloudDownload size={16} /> {checking ? 'Checking Drive…' : 'Check Drive now'}
+            </Button>
+            {folder ? (
+              <a className="btn sm ghost" href={folder} target="_blank" rel="noreferrer">
+                <ExternalLink size={16} /> Open the folder
+              </a>
+            ) : null}
+            <span className="muted small" role="status">
+              {art ? `${art} design${art === 1 ? '' : 's'} on this device` : 'No designs yet'}
+              {synced ? `, checked ${relativeTime(synced.at)}` : ''}
+            </span>
+          </div>
+          {driveNote ? <Callout tone={driveNote.tone}>{driveNote.text}</Callout> : null}
+        </div>
+      ) : null}
       <div className="stack tight">
         <div className="row between wrap">
           <b>Your ads</b>

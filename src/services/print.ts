@@ -11,6 +11,7 @@ import { completeSale } from './sales';
 import { priceCart } from '../domain/cart';
 import { ORDER_LINE } from '../domain/orders';
 import { resolveCoupon, syncClaim } from './coupons';
+import { designNoOf } from './orders';
 import type { PayKind, PrintDelivery, PrintLine, PrintOrder, PrintRates, PrintStatus, Sale, Session } from '../db/types';
 
 /**
@@ -42,6 +43,8 @@ export interface NewPrintOrder {
   couponCode?: string;
   /** Who draws the sticker art, for orders with illustration. */
   illustratorId?: string | null;
+  /** The custom sticker design's number, e.g. CS01. */
+  designNo?: string;
 }
 
 export const blankDelivery = (): PrintDelivery => ({ method: 'pickup', courier: '', address: '', fee: 0, tracking: '' });
@@ -62,6 +65,7 @@ const clean = ({ couponCode: _code, ...o }: NewPrintOrder): Omit<NewPrintOrder, 
   customerName: o.customerName.trim(),
   contact: o.contact.trim(),
   files: o.files.trim(),
+  designNo: designNoOf(o.designNo),
   notes: o.notes.trim(),
   lines: o.lines.map((l) => ({ ...l, label: l.label.trim() })),
   delivery: { ...o.delivery, courier: o.delivery.courier.trim(), address: o.delivery.address.trim(), tracking: o.delivery.tracking.trim(), fee: o.delivery.method === 'courier' ? Math.max(0, o.delivery.fee) : 0 },
@@ -120,9 +124,9 @@ export async function updatePrintOrder(id: string, changes: NewPrintOrder & { pr
 async function updateClosedPrint(o: PrintOrder, { printerPct, illustratorPct, ...changes }: NewPrintOrder & { printerPct?: number; illustratorPct?: number }): Promise<void> {
   const fixed = clean({ ...changes, lines: o.lines, delivery: o.delivery });
   check(fixed);
-  const { customerId, customerName, contact, printerId, files, notes } = fixed;
+  const { customerId, customerName, contact, printerId, files, notes, designNo } = fixed;
   const details = {
-    customerId, customerName, contact, printerId, files, notes,
+    customerId, customerName, contact, printerId, files, notes, designNo,
     ...(fixed.illustratorId !== undefined ? { illustratorId: fixed.illustratorId } : {}),
     ...(printerPct !== undefined ? { printerPct } : {}),
     ...(illustratorPct !== undefined ? { illustratorPct } : {}),

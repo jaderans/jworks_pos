@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Ban, ClipboardList, HandCoins, PackageCheck, Pencil, Plus, Send, Trash2, UserRound, Wallet, X } from 'lucide-react';
+import { Ban, ClipboardList, HandCoins, PackageCheck, Pencil, Plus, Search, Send, Trash2, UserRound, Wallet, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import {
   useCustomers, useEventProducts, useMembers, useOrderSales, useOrders, usePaymentMethods, useProducts, useSessions, useSettingRows,
@@ -21,6 +21,7 @@ import { getMailer, isEmail, mailerReady } from '../../email/send';
 import { flushOutbox, queueEmail } from '../../email/outbox';
 import { orderReadyEmail, orderReadyText } from '../../email/templates';
 import { PaymentDialog } from '../register/PaymentDialog';
+import { FindOrderDialog } from './FindOrderDialog';
 import { ReceiptDialog } from '../register/ReceiptDialog';
 import { CustomerPicker } from '../register/CustomerPicker';
 import type { BusinessSettings, Customer, JWEvent, Order, OrderLine, OrderStatus, Sale, SalePayment } from '../../db/types';
@@ -65,6 +66,7 @@ function Orders({ ev }: { ev: JWEvent }) {
   const [depositFor, setDepositFor] = useState<Order | null>(null);
   const [cancelling, setCancelling] = useState<Order | null>(null);
   const [created, setCreated] = useState<Order | null>(null);
+  const [finding, setFinding] = useState(false);
   const [receipt, setReceipt] = useState<Sale | null>(null);
   const owner = app.can('viewProfit');
   const toStudio = async (o: Order) => {
@@ -167,9 +169,14 @@ function Orders({ ev }: { ev: JWEvent }) {
         title="Orders"
         subtitle="Pre-orders and commissions: take a deposit now, hand it over later. Deposits sit in the drawer but count as sales only at pickup."
         actions={
-          <Button variant="primary" onClick={() => setEditing('new')}>
-            <Plus size={18} /> New order
-          </Button>
+          <>
+            <Button onClick={() => setFinding(true)}>
+              <Search size={18} /> Find an order
+            </Button>
+            <Button variant="primary" onClick={() => setEditing('new')}>
+              <Plus size={18} /> New order
+            </Button>
+          </>
         }
       />
       <div className="row between wrap">
@@ -315,6 +322,7 @@ function Orders({ ev }: { ev: JWEvent }) {
           if (o) setCreated(o);
         }}
       />
+      <FindOrderDialog open={finding} onClose={() => setFinding(false)} />
       <CreatedDialog order={created} name={created ? nameOf(created) : ''} money={created ? money(created) : null} onClose={() => setCreated(null)} />
     </div>
   );
@@ -436,6 +444,7 @@ function OrderDialog({
   const [designerId, setDesignerId] = useState('');
   const [dueAt, setDueAt] = useState('');
   const [notes, setNotes] = useState('');
+  const [designNo, setDesignNo] = useState('');
   const [deposit, setDeposit] = useState<Cents | null>(null);
   const [depositEdited, setDepositEdited] = useState(false);
   const [takeNow, setTakeNow] = useState(true);
@@ -454,6 +463,7 @@ function OrderDialog({
     setDesignerId(o?.designerId ?? '');
     setDueAt(o?.dueAt ?? '');
     setNotes(o?.notes ?? '');
+    setDesignNo(o?.designNo ?? '');
     setDeposit(null);
     setDepositEdited(false);
     setTakeNow(true);
@@ -484,7 +494,7 @@ function OrderDialog({
     setBusy(true);
     setError('');
     try {
-      const fields = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact, lines, designerId: designerId || null, dueAt, notes, couponCode };
+      const fields = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact, lines, designerId: designerId || null, dueAt, notes, couponCode, designNo };
       if (isNew) {
         const o = await createOrder({ eventId: ev.id, ...fields }, app.device);
         onCreated(o, canTakeMoney && takeNow ? Math.min(depositAmount, total) : 0);
@@ -614,6 +624,9 @@ function OrderDialog({
                 </option>
               ))}
           </Select>
+        </Field>
+        <Field label="Design no." htmlFor="or-design" hint="For custom stickers: the number on the design file in Drive, e.g. CS01 for CS01-Couple.png.">
+          <TextInput id="or-design" value={designNo} onChange={(e) => setDesignNo(e.target.value.toUpperCase())} placeholder="CS01" maxLength={12} />
         </Field>
         <Field label="Notes" htmlFor="or-notes" className="span-2">
           <TextArea id="or-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Size, colors, the name to print, reference photo on Kaye’s phone…" />

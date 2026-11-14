@@ -466,6 +466,23 @@ export interface Photo {
   at: number;
 }
 
+/** A custom sticker design from Drive (Custom stickers folder), copied onto the device that runs the customer screen. */
+export interface StickerArt {
+  /** The Drive file's id. */
+  id: string;
+  /** The file name, e.g. CS01-Couple.png. */
+  name: string;
+  /** From the file name: CS01. */
+  code: string;
+  /** From the file name: Couple. */
+  label: string;
+  type: string;
+  blob: Blob;
+  /** When Drive last changed it. */
+  updated: number;
+  fetchedAt: number;
+}
+
 /** An ad image or video for the customer screen, kept on the device that shows it (not synced, not in backups). */
 export interface DisplayMedia {
   id: string;
@@ -574,6 +591,8 @@ export interface Order extends Syncable {
   pickupSaleId: string | null;
   /** A service coupon; it comes off the commission (custom) lines. */
   coupon?: AppliedCoupon | null;
+  /** The custom sticker design's number, e.g. CS01 (its Drive file is CS01-Couple.png). */
+  designNo?: string;
 }
 
 /** A discount code, e.g. KOMIKET50. */
@@ -983,4 +1002,6 @@ export interface PrintOrder extends Syncable {
   doneAt: number | null;
   /** A service coupon; it comes off the print work, not the delivery fee. */
   coupon?: AppliedCoupon | null;
+  /** The custom sticker design's number, e.g. CS01 (its Drive file is CS01-Couple.png). */
+  designNo?: string;
 }

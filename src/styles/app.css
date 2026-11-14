@@ -722,3 +722,8 @@ button.list-item { width: 100%; border: 0; border-bottom: 1px solid var(--line);
 .wheel-prize { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
 .wheel-svg { width: 100%; max-width: 300px; height: auto; justify-self: center; }
 .wheel-cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--teal-soft); }
+/* Find an order */
+.found-order { align-items: flex-start; flex-wrap: wrap; }
+.found-no { display: grid; gap: 4px; justify-items: start; min-width: 64px; }
+.found-money { display: grid; gap: 2px; justify-items: end; text-align: right; }
+.found-order .main-text span { white-space: normal; }

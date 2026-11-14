@@ -11,6 +11,9 @@ import { resolveCoupon, syncClaim } from './coupons';
 import { dropOrderFeed, refreshOrderFeed } from './studio';
 import type { Order, OrderLine, OrderStatus, Sale, SalePayment, Session } from '../db/types';
 
+/** "cs 01" → "CS01": how design numbers are kept, so they match their Drive files. */
+export const designNoOf = (s: string | undefined): string => (s ?? '').replace(/[\s_-]+/g, '').toUpperCase();
+
 const orderSales = async (orderId: string) => alive(await db.sales.where('orderId').equals(orderId).toArray());
 
 /** QA-01, QA-02… per event, with this device's register letter so two phones never give the same number. */
@@ -35,6 +38,8 @@ export interface NewOrder {
   notes: string;
   /** A service coupon code; checked against the commission pieces when the order is saved. */
   couponCode?: string;
+  /** The custom sticker design's number, e.g. CS01. */
+  designNo?: string;
 }
 
 const claimFor = (o: Order) => ({ source: 'order' as const, sourceId: o.id, service: `Order ${o.number}`, customerId: o.customerId, customerName: o.customerName, price: orderServicePrice(o) });
@@ -58,6 +63,7 @@ export async function createOrder({ couponCode, ...o }: NewOrder, device: Device
     ...o,
     id,
     coupon,
+    designNo: designNoOf(o.designNo),
     customerName: o.customerName.trim(),
     contact: o.contact.trim(),
     notes: o.notes.trim(),
@@ -79,15 +85,15 @@ export async function updateOrder(id: string, { couponCode, ...changes }: Partia
   const next = { ...o, ...changes };
   check(next);
   const coupon = await resolveCoupon(couponCode !== undefined ? couponCode : o.coupon?.code, orderServicePrice(next), claimId('order', id));
-  await patch(db.orders, id, { ...changes, coupon });
+  await patch(db.orders, id, { ...changes, coupon, ...(changes.designNo !== undefined ? { designNo: designNoOf(changes.designNo) } : {}) });
   await syncClaim(claimFor({ ...next, coupon }), coupon);
   await refreshOrderFeed(id);
 }
 
 /** A closed order keeps its items and price. Who it's for, who made it and the notes can still be fixed. */
 async function updateClosedOrder(o: Order, changes: Partial<NewOrder>): Promise<void> {
-  const { customerId, customerName, contact, designerId, dueAt, notes } = { ...o, ...changes };
-  const details = { customerId, customerName, contact, designerId, dueAt, notes };
+  const { customerId, customerName, contact, designerId, dueAt, notes, designNo } = { ...o, ...changes };
+  const details = { customerId, customerName, contact, designerId, dueAt, notes, designNo: designNoOf(designNo) };
   check({ ...o, ...details });
   await patch(db.orders, o.id, details);
   if (o.status === 'picked-up') await syncClaim(claimFor({ ...o, ...details }), o.coupon);

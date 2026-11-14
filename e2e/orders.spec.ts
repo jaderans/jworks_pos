@@ -133,3 +133,36 @@ test('edit a closed order, then delete it, and it leaves JoshWorks Studio’s li
   );
   expect(rows.filter((r) => r.id.startsWith('order:')).map((r) => r.deleted)).toEqual([1]);
 });
+
+test('recall an order at the counter by its custom sticker design no.', async ({ page }) => {
+  await setupOwner(page, 'Joshua Ranin', '1111');
+  await createEvent(page, 'Komiket Iloilo');
+  await page.goto('/#/orders');
+  await page.getByRole('button', { name: 'New order' }).click();
+  const d = page.getByRole('dialog', { name: 'New order' });
+  await d.getByLabel('Name', { exact: true }).fill('Leanna Rosales');
+  await d.getByLabel('Mobile, email or @handle').fill('0917 123 4567');
+  await d.getByRole('button', { name: 'Custom piece' }).click();
+  await d.getByLabel('What it is').fill('Couple sticker');
+  await d.getByLabel('Price each of Couple sticker').fill('240');
+  await d.getByLabel('Design no.').fill('cs01');
+  await d.getByRole('button', { name: 'Save order' }).click();
+  await page.getByRole('dialog', { name: 'Order saved' }).getByRole('button', { name: 'Done' }).click();
+
+  // At the register: the customer says "CS01".
+  await openRegister(page);
+  await page.getByRole('button', { name: 'Find order' }).click();
+  const find = page.getByRole('dialog', { name: 'Find an order' });
+  await find.getByRole('searchbox', { name: 'Order number, design no., name or phone' }).fill('CS01');
+  const hit = find.locator('.found-order');
+  await expect(hit).toHaveCount(1);
+  await expect(hit).toContainText('CS01');
+  await expect(hit).toContainText('Leanna Rosales');
+  await expect(hit).toContainText('1 × Couple sticker');
+  await expect(hit).toContainText('0917 123 4567');
+  await expect(hit).toContainText('₱240 due');
+  await page.screenshot({ path: `${SHOTS}/find-order.png` });
+  // Or by part of their phone number.
+  await find.getByRole('searchbox').fill('4567');
+  await expect(hit).toContainText('Leanna Rosales');
+});
