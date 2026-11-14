@@ -18,3 +18,11 @@
 .order-line-edit .grow { min-width: 160px; }
 .order-ticket { display: grid; justify-items: center; gap: 4px; padding: 18px; border: 2px dashed var(--teal); border-radius: var(--r); text-align: center; }
 .order-ticket b { font-family: var(--f-display); font-size: 2.6rem; line-height: 1.1; color: var(--teal); }
+
+/* A service order made from a photo booth picture */
+.po-photo { display: flex; gap: 12px; align-items: center; padding: 10px; border: 1px dashed var(--line); border-radius: var(--r); }
+.po-photo-img { width: 96px; height: 96px; object-fit: contain; background: #172022; border-radius: 8px; flex: none; }
+.po-photo p { margin: 0; }
+.po-photo-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: inherit; font: inherit; cursor: pointer; justify-self: start; }
+.po-photo-chip:hover { border-color: var(--teal); }
+.po-photo-thumb { width: 28px; height: 28px; object-fit: cover; border-radius: 50%; background: #172022; }

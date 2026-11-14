@@ -239,6 +239,22 @@ export function orderReadyText(b: BusinessSettings, o: { number: string; custome
   return `Hi ${name || 'there'}! Your ${b.name || 'JoshWorks'} order ${o.number} is ready for pickup at our booth at ${o.eventName}.${o.balance > 0 ? ` Balance: ${peso(o.balance)}.` : ' It is fully paid.'} See you!`;
 }
 
+/** A photo booth picture, sent to the customer with their yes. */
+export function boothPhotoEmail(b: BusinessSettings, o: { customerName: string; number: string; eventName: string; illustrationFrom: number }): EmailContent {
+  const name = o.customerName.split(/\s+/)[0];
+  const shop = b.name || 'JoshWorks';
+  return build(b, `Your photo from the ${shop} booth`, {
+    preheader: `Photo ${o.number}, in a ${shop} frame.`,
+    heading: 'Here’s your photo!',
+    paragraphs: [
+      `Hi ${esc(name || 'there')}, here’s your photo from the ${esc(shop)} booth${o.eventName ? ` at <strong>${esc(o.eventName)}</strong>` : ''}. It’s attached to this email.`,
+      `Want it as stickers, a pin or a keychain, or drawn as a sticker illustration${o.illustrationFrom > 0 ? ` (from ${peso(o.illustrationFrom)})` : ''}? Reply to this email or show us the photo number at the booth.`,
+    ],
+    highlight: { label: 'Photo number', value: o.number },
+    note: `We keep booth photos for 30 days, then delete them unless you order with one.`,
+  });
+}
+
 /** A customer's service coupon runs out soon. */
 export function couponReminderEmail(b: BusinessSettings, o: { customerName: string; code: string; terms: string; validTo: string; eventName: string }): EmailContent {
   const name = o.customerName.split(/\s+/)[0];

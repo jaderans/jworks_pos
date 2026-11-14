@@ -169,3 +169,22 @@
 .cd-call span:last-child { font-size: 1.4em; font-weight: 800; }
 @keyframes cd-call { from { opacity: 0; transform: translate(-50%, -50%) scale(0.85); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .cd-call { animation: none; } }
+
+/* The photo booth: the live mirror or the photo as a sticker on the left, what to do on the right. */
+.cd.view-booth { grid-template-columns: minmax(0, 1fr); }
+.cd-booth { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: center; gap: 5vmin; padding: 5vmin 7vmin; text-align: left; justify-items: stretch; place-content: stretch; }
+.cd-booth-pic { position: relative; display: grid; place-items: center; min-height: 0; }
+.cd-booth-canvas, .cd-booth-photo { max-width: 100%; max-height: 84vh; width: auto; height: auto; object-fit: contain; display: block; }
+.cd-booth-canvas { border-radius: 1.2vmin; }
+.cd-booth-photo { filter: drop-shadow(0 2vmin 3vmin rgba(0, 0, 0, 0.55)); transform: rotate(-3deg); animation: cd-pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.cd-booth-photo.frame-plain, .cd-booth-photo.frame-polaroid { border-radius: 0.6vmin; }
+.cd-booth-nocam { width: min(70vmin, 100%); aspect-ratio: 1; display: grid; place-items: center; border-radius: 2vmin; border: 0.5vmin dashed var(--cd-line); font-size: 2em; color: var(--cd-muted); }
+.cd-booth-count { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--f-display); font-size: 16em; line-height: 1; color: var(--cd-yellow); text-shadow: 0 1vmin 4vmin rgba(0, 0, 0, 0.6); animation: cd-count 1s ease-out both; pointer-events: none; }
+.cd-booth-text { display: grid; gap: 0.5em; }
+.cd-booth-text b { font-family: var(--f-display); font-size: 3.4em; line-height: 1.05; letter-spacing: -0.02em; }
+.cd-booth-text span:last-child { color: #d6eef0; font-size: 1.3em; }
+.cd-booth.stage-kept .cd-booth-text b { color: var(--cd-yellow); }
+@keyframes cd-count { from { transform: scale(1.6); opacity: 0; } 30% { opacity: 1; } to { transform: scale(0.9); opacity: 0.85; } }
+@keyframes cd-pop { from { transform: rotate(-3deg) scale(0.6); opacity: 0; } to { transform: rotate(-3deg) scale(1); opacity: 1; } }
+@media (max-aspect-ratio: 1/1) { .cd-booth { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; } }
+@media (prefers-reduced-motion: reduce) { .cd-booth-photo, .cd-booth-count { animation: none; } }

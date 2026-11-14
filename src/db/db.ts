@@ -2,8 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import type { DisplayMedia, StickerArt,
   AuditEntry, Batch, BundleRule, Category, CostPoint, Customer, EventProduct, HeldSale, JWEvent, LocalRow, Material,
   Member, PartnerDeal, PaymentMethod, Payout, Photo, Product, ProductCost, Quote, RosterEntry, Sale, Session,
-  Coupon, CouponBatch, CouponClaim, EventTask, Order, OutboxItem, PrintOrder, SettingRow, SpendItem, StockMove, StudioFeedRow, Voucher,
-} from './types';
+  Coupon, CouponBatch, CouponClaim, EventTask, Order, OutboxItem, PrintOrder, SettingRow, SpendItem, StockMove, StudioFeedRow, Voucher, BoothPhoto } from './types';
 
 /**
  * The on-device database (IndexedDB). This is the source of truth: the app
@@ -47,6 +46,7 @@ export class JWDB extends Dexie {
   outbox!: Table<OutboxItem, string>;
   displayMedia!: Table<DisplayMedia, string>;
   stickerArt!: Table<StickerArt, string>;
+  boothPhotos!: Table<BoothPhoto, string>;
 
   constructor(name = 'jworks-pos') {
     super(name);
@@ -105,6 +105,8 @@ export class JWDB extends Dexie {
     this.version(9).stores({ displayMedia: 'id, sort' });
     // Custom sticker designs from Google Drive, for the customer screen (device-only).
     this.version(10).stores({ stickerArt: 'id, code, updated' });
+    // Photo booth pictures (device-only, deleted after 30 days unless used for an order).
+    this.version(11).stores({ boothPhotos: 'id, at' });
   }
 }
 

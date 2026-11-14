@@ -3,7 +3,8 @@ import QRCode from 'qrcode';
 import { Maximize } from 'lucide-react';
 import { peso } from '../../lib/money';
 import { useLocal } from '../../hooks/data';
-import { displayReceiver, type DisplayCall } from '../../display/channel';
+import { displayReceiver, type BoothShow, type DisplayCall } from '../../display/channel';
+import { BoothView } from './BoothView';
 import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
 import { Slides, useSlides } from './Slides';
 import { refreshStickers } from '../../display/stickers';
@@ -17,8 +18,10 @@ import './display.css';
 const CALL_MS = 15_000;
 /** After a sale, the thank-you stays up this long unless the next customer's items come in. */
 const THANKS_MS = 15_000;
+/** The booth page repeats itself every 4 seconds; with nothing for this long, it was closed. */
+const BOOTH_MS = 12_000;
 
-type View = 'waiting' | 'idle' | 'welcome' | 'cart' | 'paying' | 'thanks' | 'wheel';
+type View = 'waiting' | 'idle' | 'welcome' | 'cart' | 'paying' | 'thanks' | 'wheel' | 'booth';
 
 /**
  * The customer screen, full screen on the second monitor (or a window dragged
@@ -34,6 +37,7 @@ export default function CustomerDisplay() {
   const [full, setFull] = useState(!!document.fullscreenElement);
   const [cursor, setCursor] = useState(true);
   const [calling, setCalling] = useState<DisplayCall | null>(null);
+  const [booth, setBooth] = useState<BoothShow | null>(null);
   const saved = useLocal<Partial<DisplaySettings>>('display', DEFAULT_DISPLAY);
   const settings = useMemo<DisplaySettings>(() => ({ ...DEFAULT_DISPLAY, ...(saved ?? {}) }), [saved]);
   // With no register sending yet (the cashier is on another page), the event picked on this laptop.
@@ -58,7 +62,10 @@ export default function CustomerDisplay() {
         if (busy) setBusyAt(Date.now());
         if (s.mode === 'thanks') setThanks({ s, until: Date.now() + THANKS_MS });
         else if (s.mode !== 'cart' || s.cart.count > 0) setThanks((t) => (s.mode === 'wheel' ? t : null));
-      }, setCalling),
+      }, setCalling, (b) => {
+        setBooth(b);
+        if (b) setBusyAt(Date.now());
+      }),
     [],
   );
 
@@ -117,7 +124,10 @@ export default function CustomerDisplay() {
   const goFull = () => void document.documentElement.requestFullscreen?.().catch(() => null);
 
   const showingThanks = thanks && now < thanks.until && (!state || state.mode === 'thanks' || (state.mode === 'cart' && state.cart.count === 0));
-  const view: View = !state
+  const boothOn = !!booth && now - booth.at < BOOTH_MS;
+  const view: View = boothOn
+    ? 'booth'
+    : !state
     ? activeEventId
       ? 'idle'
       : 'waiting'
@@ -144,6 +154,8 @@ export default function CustomerDisplay() {
           <p className="cd-tagline">Stickers · Pins · Custom art</p>
           <p className="cd-hint">Waiting for the register. Open Sell in the other window.</p>
         </section>
+      ) : view === 'booth' && booth ? (
+        <BoothView b={booth} />
       ) : view === 'wheel' && s?.wheel ? (
         <WheelView w={s.wheel} />
       ) : view === 'idle' ? (

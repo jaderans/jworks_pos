@@ -45,13 +45,15 @@ export interface NewPrintOrder {
   illustratorId?: string | null;
   /** The custom sticker design's number, e.g. CS01. */
   designNo?: string;
+  /** Made from a photo booth picture. */
+  boothPhotoId?: string;
 }
 
 export const blankDelivery = (): PrintDelivery => ({ method: 'pickup', courier: '', address: '', fee: 0, tracking: '' });
 
 function check(o: Pick<NewPrintOrder, 'lines' | 'customerId' | 'customerName' | 'delivery'>) {
   if (!o.customerId && !o.customerName.trim()) throw new Error('Add who the order is for.');
-  if (!o.lines.length) throw new Error('Add what to print.');
+  if (!o.lines.length) throw new Error('Add what to make.');
   for (const l of o.lines) {
     if (!l.label.trim()) throw new Error('Every line needs a description.');
     if (!(l.qty > 0)) throw new Error(`Set how many for ${l.label}.`);

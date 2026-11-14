@@ -439,7 +439,7 @@ export interface MailerSettings {
 export interface OutboxItem {
   id: string;
   at: number;
-  kind: 'receipt' | 'test' | 'summary' | 'coupon';
+  kind: 'receipt' | 'test' | 'summary' | 'coupon' | 'photo';
   saleId: string | null;
   to: string;
   toName: string;
@@ -465,6 +465,32 @@ export interface Photo {
   blob: Blob;
   mime: string;
   at: number;
+}
+
+/**
+ * A photo booth picture, kept with the customer's yes. Device-only: never
+ * synced or backed up. Unused ones are deleted after 30 days; one used for a
+ * service order stays with it and is copied to Drive → Booth photos.
+ */
+export interface BoothPhoto {
+  id: string;
+  /** BA-007 */
+  number: string;
+  at: number;
+  /** The framed picture, as saved. */
+  blob: Blob;
+  frame: string;
+  name: string;
+  contact: string;
+  eventId: string | null;
+  /** The customer said yes to keeping it: when, and who asked. */
+  consentAt: number;
+  consentBy: string | null;
+  /** The service order it's used for. */
+  usedFor?: { kind: 'print'; id: string; number: string } | null;
+  /** The copy in Drive → JoshWorks POS → Booth photos, for orders. */
+  drive?: { state: 'waiting' | 'saved'; url?: string; error?: string } | null;
+  emailedTo?: string;
 }
 
 /** A custom sticker design from Drive (Custom stickers folder), copied onto the device that runs the customer screen. */
@@ -1009,4 +1035,6 @@ export interface PrintOrder extends Syncable {
   coupon?: AppliedCoupon | null;
   /** The custom sticker design's number, e.g. CS01 (its Drive file is CS01-Couple.png). */
   designNo?: string;
+  /** A photo booth picture it was made from (on the laptop that took it). */
+  boothPhotoId?: string;
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Ban, Check as CheckIcon, FileDown, PackageCheck, Pencil, Plus, Printer, Search, Settings2, Trash2, Truck, UserRound, Volume2, Wallet, X } from 'lucide-react';
+import { Ban, Camera, Check as CheckIcon, FileDown, PackageCheck, Pencil, Plus, Printer, Search, Settings2, Trash2, Truck, UserRound, Volume2, Wallet, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { alive, db } from '../../db/db';
 import { setSetting, settingValue } from '../../db/settings';
@@ -21,9 +22,11 @@ import { CustomerPicker } from '../register/CustomerPicker';
 import { FindOrderDialog } from '../orders/FindOrderDialog';
 import { useCallOrder } from '../../display/voice';
 import { makeIntoRates } from '../../domain/makeInto';
+import { PhotoImg } from '../../booth/PhotoImg';
+import { attachBoothPhoto } from '../../booth/photos';
 import { CouponField, appliedFrom, useCouponCheck } from '../coupons/CouponField';
 import { claimId } from '../../domain/coupons';
-import type { BusinessSettings, Customer, IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../../db/types';
+import type { BoothPhoto, BusinessSettings, Customer, IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../../db/types';
 import '../orders/orders.css';
 
 const COLUMNS: { status: PrintStatus; hint: string }[] = [
@@ -48,6 +51,17 @@ export default function PrintPage() {
   const [ratesOpen, setRatesOpen] = useState(false);
   const [finding, setFinding] = useState(false);
   const callOrder = useCallOrder();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const photoId = params.get('photo');
+  const fromPhoto = useLiveQuery(async () => (photoId ? ((await db.boothPhotos.get(photoId)) ?? null) : null), [photoId]);
+  useEffect(() => {
+    if (fromPhoto) setEditing('new');
+  }, [fromPhoto?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const closeEditor = () => {
+    setEditing(null);
+    if (photoId) setParams({}, { replace: true });
+  };
 
   const memberName = useMemo(() => new Map((members ?? []).map((m) => [m.id, m.name])), [members]);
   const custName = useMemo(() => new Map((customers ?? []).map((c) => [c.id, c.name])), [customers]);
@@ -104,6 +118,9 @@ export default function PrintPage() {
                 <Settings2 size={18} /> Rate card
               </Button>
             ) : null}
+            <Button onClick={() => navigate('/booth')}>
+              <Camera size={18} /> Photo booth
+            </Button>
             <Button onClick={() => setFinding(true)}>
               <Search size={18} /> Find an order
             </Button>
@@ -192,7 +209,7 @@ export default function PrintPage() {
         </details>
       ) : null}
 
-      <PrintOrderDialog order={editing} rates={rates} onClose={() => setEditing(null)} />
+      <PrintOrderDialog fromPhoto={editing === 'new' && fromPhoto ? { photo: fromPhoto, as: params.get('as') === 'illustration' ? 'illustration' : 'print' } : null} order={editing} rates={rates} onClose={closeEditor} />
       <PayDialog order={paying} rates={rates} onClose={() => setPaying(null)} />
       <HandOverDialog
         order={handing}
@@ -256,6 +273,7 @@ function PrintCard(p: {
           ) : null}
         </div>
       </div>
+      {o.boothPhotoId ? <BoothPhotoChip id={o.boothPhotoId} /> : null}
       <ul className="order-lines">
         {o.lines.map((l, i) => (
           <li key={i}>
@@ -323,7 +341,18 @@ function PrintCard(p: {
 
 type LineKind = PrintLine['kind'];
 
-function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new' | null; rates: PrintRates; onClose: () => void }) {
+function PrintOrderDialog({
+  order,
+  rates,
+  onClose,
+  fromPhoto,
+}: {
+  order: PrintOrder | 'new' | null;
+  rates: PrintRates;
+  onClose: () => void;
+  /** A new order made from a photo booth picture: sticker printing, or an illustration drawn from it. */
+  fromPhoto?: { photo: BoothPhoto; as: 'print' | 'illustration' } | null;
+}) {
   const app = useApp();
   const members = useMembers();
   const customers = useCustomers();
@@ -391,7 +420,15 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
     setCustomPrice(null);
     setDesigns(1);
     setArtPrice(null);
-  }, [order]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (order === 'new' && fromPhoto) {
+      const p = fromPhoto.photo;
+      setCustomerName(p.name);
+      setContact(p.contact);
+      setFiles(p.drive?.url ?? '');
+      setNotes(fromPhoto.as === 'illustration' ? `Draw it from booth photo ${p.number}.` : `Print booth photo ${p.number}.`);
+      if (fromPhoto.as === 'illustration') setKind('illustration');
+    }
+  }, [order, fromPhoto?.photo.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const couponCheck = useCouponCheck(couponCode, sum(lines.map(lineTotal)), order && order !== 'new' ? claimId('print', order.id) : null);
 
   if (!order) return null;
@@ -426,8 +463,10 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
     const o: NewPrintOrder = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact: customer ? customer.phone || customer.email || contact : contact, lines, delivery, printerId: printerId || null, illustratorId: illustratorId || null, files, notes, couponCode, designNo };
     try {
       if (isNew) {
-        const created = await createPrintOrder(o, app.device);
+        const created = await createPrintOrder({ ...o, boothPhotoId: fromPhoto?.photo.id }, app.device);
         app.toast(`Service order ${created.number} saved`, { tone: 'good' });
+        // The photo stays with the order, and goes to Drive for the studio (or when there's internet).
+        if (fromPhoto) void attachBoothPhoto(fromPhoto.photo.id, created).catch(() => undefined);
       } else {
         await updatePrintOrder(order.id, { ...o, printerPct: printerPct ?? rates.printerPct, illustratorPct: illustratorPct ?? rates.illustration.artistPct });
         app.toast('Saved', { tone: 'good' });
@@ -760,6 +799,14 @@ function PrintOrderDialog({ order, rates, onClose }: { order: PrintOrder | 'new'
         <Field label="Design no." htmlFor="po-design" hint="For custom stickers: the number on the design file in Drive, e.g. CS01.">
           <TextInput id="po-design" value={designNo} onChange={(e) => setDesignNo(e.target.value.toUpperCase())} placeholder="CS01" maxLength={12} />
         </Field>
+        {fromPhoto && order === 'new' ? (
+          <div className="po-photo span-2">
+            <PhotoImg photo={fromPhoto.photo} className="po-photo-img" />
+            <p className="muted small">
+              From booth photo <b>{fromPhoto.photo.number}</b>. It stays with this order, and goes to Google Drive → JoshWorks POS → Booth photos when you save, with its link in Files.
+            </p>
+          </div>
+        ) : null}
         <Field label="Files" htmlFor="po-files" hint="Drive or Messenger link to the designs.">
           <TextInput id="po-files" value={files} onChange={(e) => setFiles(e.target.value)} placeholder="https://drive.google.com/…" />
         </Field>
@@ -1190,5 +1237,18 @@ function RateCardDialog({ rates, onClose }: { rates: PrintRates; onClose: () => 
         </table>
       </div>
     </Dialog>
+  );
+}
+
+/** The booth photo an order was made from, when it's on this laptop. */
+function BoothPhotoChip({ id }: { id: string }) {
+  const navigate = useNavigate();
+  const photo = useLiveQuery(() => db.boothPhotos.get(id), [id]);
+  if (!photo) return null;
+  return (
+    <button type="button" className="po-photo-chip" onClick={() => navigate('/booth')} title="Open the photo booth">
+      <PhotoImg photo={photo} className="po-photo-thumb" />
+      <span className="small">Booth photo {photo.number}</span>
+    </button>
   );
 }

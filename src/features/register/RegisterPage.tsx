@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowDownUp, CalendarPlus, Disc3, Gift, Lock, Minus, Monitor, Search, PackageOpen, PauseCircle, Percent, Plus, ScanLine, ShoppingCart, Ticket, Trash2, UserPlus, UserRound, X } from 'lucide-react';
+import { ArrowDownUp, CalendarPlus, Camera, Disc3, Gift, Lock, Minus, Monitor, Search, PackageOpen, PauseCircle, Percent, Plus, ScanLine, ShoppingCart, Ticket, Trash2, UserPlus, UserRound, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import {
   useBundleRules, useCategories, useCustomerSales, useCustomers, useEventProducts, usePaymentMethods, useProducts, useSales, useSessions, useSettingRows,
@@ -83,6 +83,7 @@ export function RegisterPage() {
 
 function Register({ ev }: { ev: JWEvent }) {
   const app = useApp();
+  const navigate = useNavigate();
   const products = useProducts();
   const categories = useCategories();
   const eps = useEventProducts(ev.id);
@@ -421,6 +422,11 @@ function Register({ ev }: { ev: JWEvent }) {
               {app.can('orders') || app.can('printOrders') ? (
                 <Button size="sm" onClick={() => setFindOpen(true)}>
                   <Search size={16} /> Find order
+                </Button>
+              ) : null}
+              {app.can('printOrders') ? (
+                <Button size="sm" className="hide-phone" onClick={() => navigate('/booth')}>
+                  <Camera size={16} /> Photo booth
                 </Button>
               ) : null}
               <Button size="sm" onClick={() => setCashMove(true)}>

@@ -1,0 +1,28 @@
+/* Photo booth: the camera or photo on the left, the controls on the right; the kept photos below. */
+.booth { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 18px; align-items: start; }
+.booth-stage { display: grid; place-items: center; min-height: 360px; padding: 18px; background: radial-gradient(circle at 75% 20%, rgba(31, 163, 168, 0.35), transparent 55%), radial-gradient(circle at 15% 85%, rgba(247, 216, 32, 0.16), transparent 50%), #172022; }
+.booth-live { position: relative; display: grid; place-items: center; width: 100%; }
+.booth-canvas, .booth-photo { display: block; max-width: 100%; max-height: min(68vh, 640px); width: auto; height: auto; }
+.booth-canvas { border-radius: 10px; }
+.booth-photo { filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.45)); }
+.booth-count { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--f-display); font-size: clamp(90px, 18vw, 220px); color: var(--yellow); text-shadow: 0 6px 24px rgba(0, 0, 0, 0.6); animation: booth-count 1s ease-out both; pointer-events: none; }
+.booth-flash { position: absolute; inset: 0; background: #fff; animation: booth-flash 0.35s ease-out forwards; pointer-events: none; border-radius: 10px; }
+.booth-nocam { display: grid; justify-items: center; gap: 12px; text-align: center; color: #d6eef0; max-width: 420px; }
+.booth-nocam p { margin: 0; }
+.booth-side { display: grid; gap: 14px; }
+.booth-panel { gap: 14px; }
+.booth-shoot { min-height: 64px; font-size: 1.15rem; }
+.booth-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.booth-actions-label { margin: 0; font-weight: 700; font-size: 0.9rem; }
+.booth-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.booth-thumb { width: 100%; display: grid; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); text-align: left; cursor: pointer; color: inherit; font: inherit; }
+.booth-thumb:hover { border-color: var(--teal); }
+.booth-thumb.on { border-color: var(--teal); box-shadow: 0 0 0 2px color-mix(in srgb, var(--teal) 35%, transparent); }
+.booth-thumb-img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #172022; border-radius: 8px; }
+.booth-thumb-text { display: grid; gap: 2px; font-size: 0.85rem; min-width: 0; }
+.booth-thumb-text > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.booth-thumb-text .badge { justify-self: start; }
+@keyframes booth-count { from { transform: scale(1.6); opacity: 0; } 30% { opacity: 1; } to { transform: scale(0.9); opacity: 0.85; } }
+@keyframes booth-flash { from { opacity: 0.95; } to { opacity: 0; } }
+@media (max-width: 900px) { .booth { grid-template-columns: minmax(0, 1fr); } .booth-stage { min-height: 260px; } }
+@media (prefers-reduced-motion: reduce) { .booth-count, .booth-flash { animation: none; } }

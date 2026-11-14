@@ -16,7 +16,7 @@ import type { BusinessSettings, MailerSettings } from '../../db/types';
 
 const STATUS_TONE = { queued: 'warn', sent: 'good', failed: 'bad' } as const;
 const STATUS_LABEL = { queued: 'Waiting', sent: 'Sent', failed: 'Failed' } as const;
-const KIND_LABEL = { receipt: 'Receipt', summary: 'End of day', test: 'Test', coupon: 'Coupon reminder' } as const;
+const KIND_LABEL = { receipt: 'Receipt', summary: 'End of day', test: 'Test', coupon: 'Coupon reminder', photo: 'Booth photo' } as const;
 
 /** Emailed receipts and the end-of-day summary, through the studio Gmail mailer that JoshWorks Studio uses. */
 export function EmailSection() {

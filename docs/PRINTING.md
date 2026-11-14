@@ -48,6 +48,21 @@ Anyone on the team can work service orders: the owner, cashiers and designers. O
   - **The studio keeps the rest.** For a ₱970 order with a ₱120 courier fee and 20% for the printer: the printer earns ₱170 (20% of ₱850), the courier gets ₱120, and the studio keeps ₱680, less material costs.
   - When the order changes in the POS (a payment, shipped), Studio shows **Changed in the POS**. **Update** brings it in line.
 
+## Photo booth
+
+**Services → Photo booth** (also on Sell, beside Find order) turns a customer's photo into a sticker preview.
+
+1. **Camera.** The laptop's webcam, a USB webcam, a phone used as a webcam (Windows Phone Link, Camo or DroidCam) or a DSLR (its webcam app, or an HDMI capture card). They all show in the **Camera** list. Chrome or Edge asks once to use the camera: allow it.
+2. **Frame.** **Die-cut sticker** (a white sticker edge with the JoshWorks mark, saved as a PNG with a see-through background, ready to print and cut), **Instant photo** (a white card with the JoshWorks logo, the event and the date) or **Photo only**. **Mirror it** flips it like a mirror; turn it off if there's writing on a shirt or a sign.
+3. **Take the photo** (or press the space bar). Open the **Customer screen** first: it shows the customer themselves in the frame, the 3-2-1 countdown, then the photo as a sticker.
+4. **Ask before keeping it.** The customer screen asks *"May we keep this photo? We use it only for your order. If you don't order, we delete it after 30 days."* Only if they say yes, tap **They said yes: keep it** (add their name and mobile or email if you like). If they say no, **They said no: delete it**: nothing is kept.
+5. **Use it.** A kept photo gets a number (BA-001) that the customer screen shows:
+   - **Sticker printing order** or **Illustration request** opens a new service order filled in from the photo (the illustration request starts on the Illustration tab). When it's saved, the photo is copied to Google Drive → JoshWorks POS → Booth photos, and its link goes in the order's **Files**, so whoever prints or draws it can get it. Offline, it waits and goes when there's internet. The order card shows the photo on the laptop that took it.
+   - **Email the photo** sends it to them through the studio mailer, with the photo number and what it can become.
+   - **Save a copy** downloads the file.
+
+**Privacy (Data Privacy Act).** Photos stay on the laptop that took them: never in backups, the team cloud or other phones. A photo not used for an order is deleted 30 days after it was taken; one used for an order stays as long as the order does (the Drive copy stays in Drive). **Delete** removes one at any time, for example when a customer asks.
+
 ## Fixing or deleting an order
 
 - **Edit:** the pencil works on any order. Once it's done or cancelled, what was printed, the delivery and the price stay as they are, but the customer, who printed it, the files and the notes can still be fixed.
