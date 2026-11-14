@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
-import { useCategories, useProducts, useSales } from '../../hooks/data';
+import { useCategories, useProducts, useSales, useSettingRows } from '../../hooks/data';
+import { settingValue } from '../../db/settings';
+import { peso } from '../../lib/money';
 import { Badge, Button, Callout, IconButton, Segmented, Toggle } from '../../components/ui';
 import { Field, MoneyInput, NumberInput, Select, TextInput } from '../../components/form';
 import { uid } from '../../lib/ids';
 import { updateEvent } from '../../services/events';
 import { BLANK_WHEEL, tryAgainChance, wheelProblem, wheelRuleText, wheelSlices, winsToday, type WheelConfig, type WheelPrize } from '../../domain/wheel';
 import { WheelSvg } from '../display/WheelSvg';
-import type { JWEvent } from '../../db/types';
+import type { JWEvent, PrintRates } from '../../db/types';
 
 const blankPrize = (): WheelPrize => ({ id: uid(), label: '', kind: 'item', productId: null, voucher: { kind: 'amount', value: 2000 }, chance: 10, perDay: null });
 
@@ -21,6 +23,9 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
   const products = useProducts();
   const categories = useCategories();
   const sales = useSales(ev.id);
+  const rates = settingValue<PrintRates>(useSettingRows(), 'printRates');
+  // Services from the rate card to pick from; any other can be typed.
+  const services = rates.illustration.tiers.map((t) => ({ label: `Sticker illustration, ${t.name.toLowerCase()} (1 design)`, value: t.price }));
   const [w, setW] = useState<WheelConfig>(ev.wheel ?? BLANK_WHEEL);
   const [busy, setBusy] = useState(false);
   useEffect(() => setW(ev.wheel ?? BLANK_WHEEL), [ev.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -90,21 +95,50 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
                       onChange={(kind) => setPrize(p.id, { kind })}
                       options={[
                         { value: 'item', label: 'A free product' },
+                        { value: 'service', label: 'A free service' },
                         { value: 'voucher', label: 'A discount code' },
                       ]}
                     />
                   </Field>
                   {p.kind === 'item' ? (
-                    <Field label="Product" htmlFor={`wp-${p.id}-product`} hint="Handed over free; it comes out of stock.">
+                    <Field
+                      label="Product"
+                      htmlFor={`wp-${p.id}-product`}
+                      hint={(() => {
+                        const picked = (products ?? []).find((x) => x.id === p.productId);
+                        if (picked && picked.trackStock !== 1) return `${picked.name} has no stock count, so only this event’s sold count goes up. Turn on Track stock on the product to take it out of the studio stock too.`;
+                        return 'Handed over free as a ₱0 sale: it comes out of stock, and the Sales log shows it as a wheel prize.';
+                      })()}
+                    >
                       <Select id={`wp-${p.id}-product`} value={p.productId ?? ''} onChange={(e) => setPrize(p.id, { productId: e.target.value || null })}>
                         <option value="">Pick a product…</option>
                         {(products ?? []).map((x) => (
                           <option key={x.id} value={x.id}>
                             {x.name}
+                            {x.trackStock === 1 ? '' : ' (no stock count)'}
                           </option>
                         ))}
                       </Select>
                     </Field>
+                  ) : p.kind === 'service' ? (
+                    <>
+                      <Field label="Service" htmlFor={`wp-${p.id}-service`} hint="It goes on Services as a free order to make, and in the Sales log as a wheel prize.">
+                        <TextInput
+                          id={`wp-${p.id}-service`}
+                          list="wp-services"
+                          value={p.service?.label ?? ''}
+                          placeholder="e.g. Sticker illustration, simple (1 design)"
+                          onChange={(e) => {
+                            const label = e.target.value;
+                            const preset = services.find((x) => x.label === label);
+                            setPrize(p.id, { service: { label, value: preset ? preset.value : (p.service?.value ?? 0) } });
+                          }}
+                        />
+                      </Field>
+                      <Field label="Worth" htmlFor={`wp-${p.id}-worth`} hint="What it would cost. It’s free for them.">
+                        <MoneyInput id={`wp-${p.id}-worth`} value={p.service?.value ?? null} onChange={(c) => setPrize(p.id, { service: { label: p.service?.label ?? '', value: c ?? 0 } })} />
+                      </Field>
+                    </>
                   ) : (
                     <Field label="Off their next purchase at this event" htmlFor={`wp-${p.id}-off`}>
                       <div className="row">
@@ -141,6 +175,13 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
               </div>
             ))}
           </div>
+          <datalist id="wp-services">
+            {services.map((x) => (
+              <option key={x.label} value={x.label}>
+                {peso(x.value)}
+              </option>
+            ))}
+          </datalist>
           <div className="row between wrap">
             <Button size="sm" onClick={() => setW({ ...w, prizes: [...w.prizes, blankPrize()] })}>
               <Plus size={15} /> Add a prize

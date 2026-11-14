@@ -30,9 +30,42 @@ export interface DisplaySettings {
   callOut: boolean;
   /** The voice that calls them, by name; '' for the best woman's voice on the laptop. */
   voice: string;
+  /** The wheel's sounds: a tick per slice, a tune while it spins, a fanfare for a prize. */
+  wheelSound: boolean;
+  /** 0 to 100, for the wheel's sounds. */
+  soundVolume: number;
+  /** The tune while it spins: '' the built-in one, 'none' for ticks only, or one of your sound files. */
+  spinTune: string;
+  /** For a prize: '' the built-in fanfare, or one of your sound files. */
+  winSound: string;
+  /** Your music in the background. */
+  music: boolean;
+  musicVolume: number;
+  /** Always, or only while the idle slides play (quiet while someone buys). */
+  musicWhen: 'always' | 'idle';
+  /** Your ad videos with their sound, full screen. */
+  videoSound: boolean;
 }
 
-export const DEFAULT_DISPLAY: DisplaySettings = { idleSeconds: 20, slideSeconds: 8, sideAds: true, priceSlides: true, bestSellers: true, ownAds: true, driveStickers: true, callOut: true, voice: '' };
+export const DEFAULT_DISPLAY: DisplaySettings = {
+  idleSeconds: 20,
+  slideSeconds: 8,
+  sideAds: true,
+  priceSlides: true,
+  bestSellers: true,
+  ownAds: true,
+  driveStickers: true,
+  callOut: true,
+  voice: '',
+  wheelSound: true,
+  soundVolume: 80,
+  spinTune: '',
+  winSound: '',
+  music: false,
+  musicVolume: 40,
+  musicWhen: 'always',
+  videoSound: false,
+};
 
 export type Slide =
   | { kind: 'brand'; key: string }
@@ -157,8 +190,9 @@ export interface AdMedia {
 }
 
 /** The owner's ads between the made slides: one ad after each made slide, round and round. */
-export function mixSlides(made: readonly Slide[], ads: readonly AdMedia[]): Slide[] {
-  const media: Slide[] = ads.filter((a) => a.on === 1).map((a) => ({ kind: 'media', key: `media:${a.id}`, id: a.id, media: a.kind, seconds: a.seconds }));
+export function mixSlides(made: readonly Slide[], ads: readonly (Omit<AdMedia, 'kind'> & { kind: string })[]): Slide[] {
+  // Music and sound files aren't slides.
+  const media: Slide[] = ads.filter((a): a is AdMedia => a.on === 1 && (a.kind === 'image' || a.kind === 'video')).map((a) => ({ kind: 'media', key: `media:${a.id}`, id: a.id, media: a.kind, seconds: a.seconds }));
   if (!media.length) return [...made];
   if (!made.length) return media;
   const out: Slide[] = [];

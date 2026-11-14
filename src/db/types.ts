@@ -514,7 +514,10 @@ export interface StickerArt {
 export interface DisplayMedia {
   id: string;
   name: string;
-  kind: 'image' | 'video';
+  /** Images and videos are ads; audio is music or a sound for the wheel. */
+  kind: 'image' | 'video' | 'audio';
+  /** Audio: background music, or a sound effect (the wheel's tune or prize sound). */
+  role?: 'music' | 'sound';
   mime: string;
   blob: Blob;
   /** How long an image shows; a video plays to its end. */

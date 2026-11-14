@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { WheelSlice } from '../../domain/wheel';
 import { LABEL_OUTER, wheelLabel } from '../../domain/wheelLabel';
-import { sliceUnderPointer, spinAngle } from '../../domain/wheelSpin';
+import { sliceUnderPointer, spinAngle, spinTarget } from '../../domain/wheelSpin';
 
 /** Prize colours in the JoshWorks palette; "Try again" is always the dark one. */
 const COLORS = ['#1fa3a8', '#f7d820', '#087a86', '#ee9d17', '#5fcf94', '#e07a5f'];
@@ -38,6 +38,7 @@ export function WheelSvg({
   className?: string;
 }) {
   const g = useRef<SVGGElement>(null);
+  const pointer = useRef<SVGPolygonElement>(null);
   const angle = useRef(0);
   const tick = useRef(onTick);
   tick.current = onTick;
@@ -50,6 +51,14 @@ export function WheelSvg({
       el.setAttribute('transform', `rotate(${a.toFixed(3)})`);
     };
     let raf = 0;
+    let flickT = 0;
+    const flick = () => {
+      const p = pointer.current;
+      if (!p) return;
+      p.setAttribute('transform', 'rotate(-16 0 -103)');
+      window.clearTimeout(flickT);
+      flickT = window.setTimeout(() => p.removeAttribute('transform'), 70);
+    };
     if (idle && !spinMs) {
       let last = performance.now();
       const drift = (now: number) => {
@@ -64,9 +73,9 @@ export function WheelSvg({
       set(turn);
       return;
     }
-    // From wherever it is now, a whole number of turns further, to land on `turn`.
+    // From wherever it is now (resting, or turning slowly while it waited), at least five turns on, to land where `turn` does.
     const from = angle.current;
-    const to = turn + 360 * Math.ceil(Math.max(0, from - turn) / 360);
+    const to = spinTarget(from, turn);
     const start = performance.now();
     let under = sliceUnderPointer(slices, from);
     const step = (now: number) => {
@@ -77,11 +86,15 @@ export function WheelSvg({
       if (s !== under) {
         under = s;
         tick.current?.();
+        flick();
       }
       if (t < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(flickT);
+    };
   }, [turn, spinMs, idle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   let k = 0;
@@ -126,7 +139,7 @@ export function WheelSvg({
         })}
       </g>
       <circle r={13} fill="#0f1516" stroke="#f7d820" strokeWidth={3} />
-      <polygon points="0,-90 -10,-116 10,-116" fill="#f7d820" stroke="#0f1516" strokeWidth={2} />
+      <polygon ref={pointer} points="0,-90 -10,-116 10,-116" fill="#f7d820" stroke="#0f1516" strokeWidth={2} />
     </svg>
   );
 }

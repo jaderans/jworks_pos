@@ -13,9 +13,11 @@ import type { Category, Sale } from '../db/types';
 export interface WheelPrize {
   id: string;
   label: string;
-  /** item: a product handed over free. voucher: a code off their next purchase at this event. */
-  kind: 'item' | 'voucher';
+  /** item: a product handed over free (out of stock). service: a JoshWorks service made for them free. voucher: a code off their next purchase at this event. */
+  kind: 'item' | 'service' | 'voucher';
   productId: string | null;
+  /** A free service: what it is and what it would cost. It becomes a ₱0 service order. */
+  service?: { label: string; value: Cents } | null;
   voucher: { kind: 'amount' | 'percent'; value: number } | null;
   /** Percent chance, 0 to 100. */
   chance: number;
@@ -58,6 +60,7 @@ export function wheelProblem(c: WheelConfig): string | null {
     if (!p.label.trim()) return 'Every prize needs a name.';
     if (!(p.chance > 0)) return `Give ${p.label} a chance above 0%.`;
     if (p.kind === 'item' && !p.productId) return `Pick the product for ${p.label}.`;
+    if (p.kind === 'service' && !p.service?.label.trim()) return `Say which service ${p.label} is.`;
     if (p.kind === 'voucher' && !(p.voucher && p.voucher.value > 0)) return `Set how much ${p.label} takes off.`;
     if (p.kind === 'voucher' && p.voucher?.kind === 'percent' && p.voucher.value > 100) return `${p.label} can’t take off more than 100%.`;
   }

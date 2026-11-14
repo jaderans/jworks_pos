@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowDown, ArrowUp, CloudDownload, ExternalLink, Film, ImagePlus, Trash2, Volume2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, CloudDownload, Disc3, ExternalLink, Film, ImagePlus, Music2, Pause, Play, Trash2, Volume2 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { db } from '../../db/db';
 import { setLocal } from '../../db/local';
@@ -12,11 +12,18 @@ import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
 import { refreshStickers } from '../../display/stickers';
 import { callOrder, loadVoices, rankVoices } from '../../display/voice';
 import { DriveError, driveFolders } from '../../drive/drive';
+import { playLanding, playSpin, unlockAudio } from '../../display/sound';
+import { wheelSoundChoice } from '../../display/wheelSounds';
+import { landingTurn, type WheelSlice } from '../../domain/wheel';
 import { relativeTime } from '../../lib/time';
 import type { DisplayMedia } from '../../db/types';
 
 /** Big videos make the device slow to open: anything over this is refused. */
 const MAX_MB = 150;
+/** Music and sound files. */
+const MAX_AUDIO_MB = 40;
+/** Eight even slices, for trying the wheel's sounds. */
+const TEST_SLICES: WheelSlice[] = Array.from({ length: 8 }, (_, i) => ({ id: String(i), label: '', from: i * 45, to: (i + 1) * 45 }));
 
 /**
  * Settings → Customer screen: how long before the idle slides, what plays, and
@@ -29,6 +36,42 @@ export function DisplaySection() {
   const s: DisplaySettings = { ...DEFAULT_DISPLAY, ...(saved ?? {}) };
   const media = useLiveQuery(() => db.displayMedia.orderBy('sort').toArray(), []);
   const fileRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLInputElement>(null);
+  const ads = media?.filter((m) => m.kind !== 'audio');
+  const audioFiles = media?.filter((m) => m.kind === 'audio');
+  const soundFiles = audioFiles?.filter((m) => m.role === 'sound') ?? [];
+  const [testing, setTesting] = useState(false);
+  const testWheel = async () => {
+    await unlockAudio();
+    const c = await wheelSoundChoice({ ...s, wheelSound: true });
+    if (!c) return;
+    setTesting(true);
+    const ms = 4000;
+    playSpin(TEST_SLICES, landingTurn(TEST_SLICES, '3', 0.5, 4), ms, c);
+    window.setTimeout(() => {
+      playLanding(true, c);
+      setTesting(false);
+    }, ms + 150);
+  };
+  const addAudio = async (files: FileList | null) => {
+    let added = 0;
+    for (const [i, file] of [...(files ?? [])].entries()) {
+      if (!file.type.startsWith('audio/')) {
+        app.toast(`${file.name} isn’t a music or sound file (MP3, M4A, WAV or OGG).`, { tone: 'bad' });
+        continue;
+      }
+      if (file.size > MAX_AUDIO_MB * 1024 * 1024) {
+        app.toast(`${file.name} is over ${MAX_AUDIO_MB} MB.`, { tone: 'bad' });
+        continue;
+      }
+      const last = media?.length ? media[media.length - 1].sort : 0;
+      // Short files are most likely sound effects; songs are music.
+      await db.displayMedia.put({ id: uid(), name: file.name.replace(/\.[^.]+$/, ''), kind: 'audio', role: file.size < 1.5 * 1024 * 1024 ? 'sound' : 'music', mime: file.type, blob: file, seconds: 0, on: 1, sort: last + i + 1, addedAt: Date.now() });
+      added++;
+    }
+    if (audioRef.current) audioRef.current.value = '';
+    if (added) app.toast(`${added} file${added === 1 ? '' : 's'} added`, { tone: 'good' });
+  };
   const set = (ch: Partial<DisplaySettings>) => void setLocal('display', { ...s, ...ch });
   const art = useLiveQuery(() => db.stickerArt.count(), []);
   const synced = useLocal<{ at: number; total: number } | null>('stickerSync', null);
@@ -74,10 +117,10 @@ export function DisplaySection() {
     if (added) app.toast(`${added} ad${added === 1 ? '' : 's'} added to the customer screen`, { tone: 'good' });
   };
   const patch = (m: DisplayMedia, ch: Partial<DisplayMedia>) => void db.displayMedia.update(m.id, ch);
-  const move = async (k: number, by: -1 | 1) => {
-    if (!media) return;
-    const a = media[k];
-    const b = media[k + by];
+  const move = async (list: DisplayMedia[] | undefined, k: number, by: -1 | 1) => {
+    if (!list) return;
+    const a = list[k];
+    const b = list[k + by];
     if (!a || !b) return;
     await db.transaction('rw', db.displayMedia, async () => {
       await db.displayMedia.update(a.id, { sort: b.sort });
@@ -134,6 +177,102 @@ export function DisplaySection() {
           </div>
         ) : null}
       </div>
+      <div className="stack tight" aria-label="Sounds and music" role="group">
+        <b>Sounds and music</b>
+        <p className="muted small">
+          The customer screen plays sound once someone clicks it: its <b>Full screen and sound</b> button, or a customer tapping the prize wheel. If it can’t, the register plays the wheel’s sounds instead.
+        </p>
+        <Toggle id="ds-wheel-sound" checked={s.wheelSound} onChange={(v) => set({ wheelSound: v })} label="Prize wheel sounds: a tick for each slice, an upbeat tune while it spins, a fanfare for a prize" />
+        {s.wheelSound ? (
+          <div className="form-grid">
+            <Field label="Tune while it spins" htmlFor="ds-tune">
+              <Select id="ds-tune" value={s.spinTune} onChange={(e) => set({ spinTune: e.target.value })}>
+                <option value="">The built-in upbeat tune</option>
+                <option value="none">Ticks only</option>
+                {soundFiles.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Prize sound" htmlFor="ds-win">
+              <Select id="ds-win" value={s.winSound} onChange={(e) => set({ winSound: e.target.value })}>
+                <option value="">The built-in fanfare</option>
+                {soundFiles.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={`Wheel volume: ${s.soundVolume}%`} htmlFor="ds-vol">
+              <input id="ds-vol" type="range" min={0} max={100} step={5} value={s.soundVolume} onChange={(e) => set({ soundVolume: Number(e.target.value) })} className="range" />
+            </Field>
+            <div style={{ alignSelf: 'end' }}>
+              <Button size="sm" onClick={() => void testWheel()} disabled={testing}>
+                <Disc3 size={16} /> {testing ? 'Spinning…' : 'Test the wheel sounds'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        <Toggle id="ds-music" checked={s.music} onChange={(v) => set({ music: v })} label="Background music from your files" />
+        {s.music ? (
+          <div className="form-grid">
+            <Field label="Music plays" htmlFor="ds-music-when">
+              <Segmented<DisplaySettings['musicWhen']>
+                label="Music plays"
+                value={s.musicWhen}
+                onChange={(v) => set({ musicWhen: v })}
+                options={[
+                  { value: 'always', label: 'All the time' },
+                  { value: 'idle', label: 'Only on the idle slides' },
+                ]}
+              />
+            </Field>
+            <Field label={`Music volume: ${s.musicVolume}%`} htmlFor="ds-music-vol">
+              <input id="ds-music-vol" type="range" min={0} max={100} step={5} value={s.musicVolume} onChange={(e) => set({ musicVolume: Number(e.target.value) })} className="range" />
+            </Field>
+          </div>
+        ) : null}
+        <Toggle id="ds-video-sound" checked={s.videoSound} onChange={(v) => set({ videoSound: v })} label="Play your ad videos with their sound (full screen; the music waits)" />
+        <div className="row between wrap">
+          <b className="small">Your music and sounds</b>
+          <Button size="sm" onClick={() => audioRef.current?.click()}>
+            <Music2 size={16} /> Add music or sounds
+          </Button>
+          <input ref={audioRef} type="file" accept="audio/*" multiple hidden aria-label="Music or sound files" onChange={(e) => void addAudio(e.target.files)} />
+        </div>
+        {audioFiles?.length ? (
+          <div className="card flush">
+            <div className="list">
+              {audioFiles.map((m, k) => (
+                <div key={m.id} className="list-item ad-row">
+                  <Music2 size={24} className="muted" aria-hidden="true" />
+                  <span className="main-text">
+                    <b>{m.name}</b>
+                    <span>{m.role === 'sound' ? 'A sound for the wheel' : 'Background music'}</span>
+                  </span>
+                  <Select aria-label={`What ${m.name} is`} value={m.role ?? 'music'} onChange={(e) => patch(m, { role: e.target.value as 'music' | 'sound' })} style={{ width: 'auto' }}>
+                    <option value="music">Music</option>
+                    <option value="sound">Wheel sound</option>
+                  </Select>
+                  <PreviewButton m={m} />
+                  <Toggle id={`au-on-${m.id}`} checked={m.on === 1} onChange={(v) => patch(m, { on: v ? 1 : 0 })} label={<span className="sr-only">Play {m.name}</span>} />
+                  <IconButton label={`Move ${m.name} up`} size="sm" plain disabled={k === 0} onClick={() => void move(audioFiles, k, -1)}>
+                    <ArrowUp size={15} />
+                  </IconButton>
+                  <IconButton label={`Remove ${m.name}`} size="sm" plain onClick={() => void remove(m)}>
+                    <Trash2 size={15} />
+                  </IconButton>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="muted small">No files yet. Add songs (MP3 or M4A) for background music, or short sounds for the wheel’s tune and prize. They stay on this laptop.</p>
+        )}
+      </div>
       {s.driveStickers ? (
         <div className="stack tight">
           <b>Custom stickers from Google Drive</b>
@@ -166,11 +305,11 @@ export function DisplaySection() {
           </Button>
           <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm" multiple hidden aria-label="Ad images or videos" onChange={(e) => void add(e.target.files)} />
         </div>
-        <p className="muted small">Posters (JPG or PNG, 16:9 looks best) and short MP4 videos, up to {MAX_MB} MB each. Videos play to the end, without sound.</p>
-        {media?.length ? (
+        <p className="muted small">Posters (JPG or PNG; 16:9 for a wide screen, 9:16 for a tall one) and short MP4 videos, up to {MAX_MB} MB each. Videos play to the end{s.videoSound ? ', with their sound when full screen' : ', without sound'}.</p>
+        {ads?.length ? (
           <div className="card flush">
             <div className="list">
-              {media.map((m, k) => (
+              {ads.map((m, k) => (
                 <div key={m.id} className="list-item ad-row">
                   {m.kind === 'image' ? <AdThumb m={m} /> : <Film size={28} className="muted" aria-hidden="true" />}
                   <span className="main-text">
@@ -183,10 +322,10 @@ export function DisplaySection() {
                     </div>
                   ) : null}
                   <Toggle id={`ad-on-${m.id}`} checked={m.on === 1} onChange={(v) => patch(m, { on: v ? 1 : 0 })} label={<span className="sr-only">Play {m.name}</span>} />
-                  <IconButton label={`Move ${m.name} up`} size="sm" plain disabled={k === 0} onClick={() => void move(k, -1)}>
+                  <IconButton label={`Move ${m.name} up`} size="sm" plain disabled={k === 0} onClick={() => void move(ads, k, -1)}>
                     <ArrowUp size={15} />
                   </IconButton>
-                  <IconButton label={`Move ${m.name} down`} size="sm" plain disabled={k === media.length - 1} onClick={() => void move(k, 1)}>
+                  <IconButton label={`Move ${m.name} down`} size="sm" plain disabled={k === ads.length - 1} onClick={() => void move(ads, k, 1)}>
                     <ArrowDown size={15} />
                   </IconButton>
                   <IconButton label={`Remove ${m.name}`} size="sm" plain onClick={() => void remove(m)}>
@@ -208,4 +347,34 @@ function AdThumb({ m }: { m: DisplayMedia }) {
   const url = useMemo(() => URL.createObjectURL(m.blob), [m.blob]);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
   return <img src={url} alt="" className="ad-thumb" />;
+}
+
+/** Listen to a music or sound file before using it. */
+function PreviewButton({ m }: { m: DisplayMedia }) {
+  const [playing, setPlaying] = useState(false);
+  const ref = useRef<HTMLAudioElement | null>(null);
+  useEffect(
+    () => () => {
+      ref.current?.pause();
+      if (ref.current) URL.revokeObjectURL(ref.current.src);
+    },
+    [],
+  );
+  const toggle = () => {
+    if (playing && ref.current) {
+      ref.current.pause();
+      setPlaying(false);
+      return;
+    }
+    if (!ref.current) {
+      ref.current = new Audio(URL.createObjectURL(m.blob));
+      ref.current.onended = () => setPlaying(false);
+    }
+    void ref.current.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+  };
+  return (
+    <IconButton label={playing ? `Stop ${m.name}` : `Play ${m.name}`} size="sm" plain onClick={toggle}>
+      {playing ? <Pause size={15} /> : <Play size={15} />}
+    </IconButton>
+  );
 }

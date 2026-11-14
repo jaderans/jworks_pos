@@ -4,8 +4,7 @@ import { ArrowDownUp, CalendarPlus, Camera, Disc3, Gift, Lock, Minus, Monitor, S
 import { useApp } from '../../app/AppContext';
 import {
   useBundleRules, useCategories, useCustomerSales, useCustomers, useEventProducts, usePaymentMethods, useProducts, useSales, useSessions, useSettingRows,
-  useSaleCoupon, useStockMoves, useVoucherSales, useVouchers,
-} from '../../hooks/data';
+  useSaleCoupon, useStockMoves, useVoucherSales, useVouchers, useLocal } from '../../hooks/data';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { alive, db } from '../../db/db';
 import { settingValue } from '../../db/settings';
@@ -18,11 +17,15 @@ import { uid } from '../../lib/ids';
 import { priceCart, type CartDiscount, type PricedCart } from '../../domain/cart';
 import { onHandByProduct, soldByProduct } from '../../domain/stock';
 import { checkVoucher, loyaltyDiscount, loyaltyState, normalizeCode, rewardText, type LoyaltyState, type VoucherCheck } from '../../domain/loyalty';
-import { displayCart, emptyDisplayCart, type DisplayState } from '../../domain/display';
+import { displayCart, emptyDisplayCart, type DisplayState, type DisplayWheel } from '../../domain/display';
 import { offText, termsText } from '../../domain/coupons';
-import { displaySender, type DisplaySender } from '../../display/channel';
+import { displaySender, type DisplaySender, type ScreenStatus } from '../../display/channel';
+import { playLanding, playSpin, unlockAudio } from '../../display/sound';
+import { wheelSoundChoice } from '../../display/wheelSounds';
+import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
+import { SPIN_MS } from '../../domain/wheelSpin';
 import { openCustomerScreen, useSecondScreen } from '../../display/screens';
-import { wheelQualifies } from '../../domain/wheel';
+import { wheelQualifies, wheelSlices } from '../../domain/wheel';
 import { spinWheel, type Spin } from '../../services/wheel';
 import { effectivePrice, findByCode, isOnSale, setEventProduct, updateProduct } from '../../services/catalog';
 import { completeSale, openSession } from '../../services/sales';
@@ -118,8 +121,13 @@ function Register({ ev }: { ev: JWEvent }) {
   const [customerOpen, setCustomerOpen] = useState(false);
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [payWith, setPayWith] = useState<string[]>([]);
-  const [spin, setSpin] = useState<(Spin & { id: string }) | null>(null);
+  const [spin, setSpin] = useState<(Spin & { id: string; sound: DisplayWheel['sound']; landsAt: number }) | null>(null);
   const [spinning, setSpinning] = useState(false);
+  /** The wheel is up on the customer screen, waiting for the customer to tap it. */
+  const [invite, setInvite] = useState<{ id: string; saleId: string; sound: DisplayWheel['sound'] } | null>(null);
+  const [, setLandedTick] = useState(0);
+  const displaySaved = useLocal<Partial<DisplaySettings>>('display', DEFAULT_DISPLAY);
+  const displaySettings: DisplaySettings = { ...DEFAULT_DISPLAY, ...(displaySaved ?? {}) };
   const [findOpen, setFindOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const secondScreen = useSecondScreen();
@@ -295,8 +303,20 @@ function Register({ ev }: { ev: JWEvent }) {
         customer: who,
         pay: null,
         thanks: null,
-        wheel: { id: spin.id, slices: spin.slices, turn: spin.turn, won: !!spin.prize, label: spin.label, detail: spin.prize?.kind === 'voucher' && spin.voucher ? `Your code: ${spin.voucher.code}` : spin.prize ? 'Collect it at the counter.' : 'Thank you for shopping!' },
+        wheel: {
+          id: spin.id,
+          slices: spin.slices,
+          waiting: false,
+          turn: spin.turn,
+          won: !!spin.prize,
+          label: spin.label,
+          detail: spin.prize?.kind === 'voucher' && spin.voucher ? `Your code: ${spin.voucher.code}` : spin.prize?.kind === 'service' ? 'We’ll make it for you: ask us at the counter.' : spin.prize ? 'Collect it at the counter.' : 'Thank you for shopping!',
+          sound: spin.sound,
+        },
       };
+    }
+    if (receipt && invite && ev.wheel) {
+      return { ...base, mode: 'wheel', cart: cartView, customer: who, pay: null, thanks: null, wheel: { id: invite.id, slices: wheelSlices(ev.wheel), waiting: true, turn: 0, won: false, label: '', detail: '', sound: invite.sound } };
     }
     if (receipt) {
       const buyer = receipt.customerId ? (customers ?? []).find((c) => c.id === receipt.customerId) : undefined;
@@ -325,35 +345,97 @@ function Register({ ev }: { ev: JWEvent }) {
       return { ...base, mode: 'paying', cart: cartView, customer: who, pay: { amount: priced.total, method: picked.map((m) => m.name).join(' + ') || 'Cash', qr: withQr?.qr ?? null }, thanks: null };
     }
     return { ...base, mode: 'cart', cart: cartView, customer: who, pay: null, thanks: null };
-  }, [business, ev.id, ev.name, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, spin, customers, customerSales, earned, paying, payWith, eventMethods]);
-  useCustomerScreen(display);
+  }, [business, ev.id, ev.name, ev.wheel, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, spin, invite, customers, customerSales, earned, paying, payWith, eventMethods]);
 
-  const spinFor = async (sale: Sale) => {
-    if (!session) return;
+  /**
+   * Spin for a sale: the customer tapped the wheel on their screen, or the
+   * cashier spun it. The screen plays the sounds when it can (it was clicked);
+   * otherwise this window does.
+   */
+  const spinFor = async (sale: Sale, from: 'customer' | 'cashier') => {
+    if (!session || spinningRef.current) return;
+    spinningRef.current = true;
     setSpinning(true);
+    if (from === 'cashier') void unlockAudio();
+    const st = screen.status();
+    const sound: DisplayWheel['sound'] = !displaySettings.wheelSound ? 'none' : from === 'customer' || (st.open && st.sound) ? 'screen' : 'register';
     try {
       const s = await spinWheel({ ev, saleId: sale.id, session, device: app.device, by: app.member?.id ?? null });
-      setSpin({ ...s, id: uid() });
+      // The same id as the waiting wheel, so it spins on from where it was turning.
+      setSpin({ ...s, id: inviteRef.current?.id ?? uid(), sound, landsAt: Date.now() + SPIN_MS });
+      setInvite(null);
+      window.setTimeout(() => setLandedTick((n) => n + 1), SPIN_MS + 200);
+      if (sound === 'register') {
+        const c = await wheelSoundChoice(displaySettings);
+        if (c) {
+          playSpin(s.slices, s.turn, SPIN_MS, c);
+          window.setTimeout(() => playLanding(!!s.prize, c), SPIN_MS + 150);
+        }
+      }
     } catch (e) {
       app.toast(e instanceof Error ? e.message : 'Couldn’t spin the wheel', { tone: 'bad' });
     } finally {
+      spinningRef.current = false;
       setSpinning(false);
     }
   };
+  // The customer's tap arrives from the screen: spin for the sale waiting on it.
+  const spinningRef = useRef(false);
+  const inviteRef = useRef(invite);
+  inviteRef.current = invite;
+  const tapRef = useRef<(id: string) => void>(() => undefined);
+  tapRef.current = (id: string) => {
+    if (receipt && invite?.id === id && !spin) void spinFor(receipt, 'customer');
+  };
+  const screen = useCustomerScreen(display, (id) => tapRef.current(id));
+  const [screenOpen, setScreenOpen] = useState(false);
+  useEffect(() => {
+    const t = window.setInterval(() => setScreenOpen(screen.status().open), 2000);
+    return () => window.clearInterval(t);
+  }, [screen]);
+  const letThemSpin = (sale: Sale) => {
+    const st = screen.status();
+    setInvite({ id: uid(), saleId: sale.id, sound: displaySettings.wheelSound && st.sound ? 'screen' : 'none' });
+  };
   const wheelBox =
     receipt && (spin || wheelQualifies(receipt, ev.wheel)) ? (
-      spin ? (
+      spin && Date.now() < spin.landsAt ? (
+        <Callout tone="info" title="The wheel is spinning…">
+          It lands in a few seconds{screenOpen ? ' on the customer screen' : ''}.
+        </Callout>
+      ) : spin ? (
         <Callout tone={spin.prize ? 'good' : 'info'} title={spin.prize ? `They won: ${spin.label}` : 'Try again: no prize this time'}>
           {spin.detail}
         </Callout>
+      ) : invite ? (
+        <div className="wheel-cta">
+          <span>
+            <b>Waiting for them to tap the wheel</b> on the customer screen.
+          </span>
+          <div className="row wrap">
+            <Button variant="teal" onClick={() => void spinFor(receipt, 'cashier')} disabled={spinning}>
+              <Disc3 size={18} /> Spin for them
+            </Button>
+            <Button variant="ghost" onClick={() => setInvite(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
       ) : (
         <div className="wheel-cta">
           <span>
-            <b>This sale spins the prize wheel.</b> It spins on the customer screen.
+            <b>This sale spins the prize wheel.</b> {screenOpen ? 'Let them tap it on the customer screen, or spin it for them.' : 'It spins on the customer screen when one is open.'}
           </span>
-          <Button variant="teal" onClick={() => void spinFor(receipt)} disabled={spinning}>
-            <Disc3 size={18} /> Spin the wheel
-          </Button>
+          <div className="row wrap">
+            {screenOpen ? (
+              <Button variant="teal" onClick={() => letThemSpin(receipt)}>
+                <Disc3 size={18} /> Let them spin
+              </Button>
+            ) : null}
+            <Button variant={screenOpen ? undefined : 'teal'} onClick={() => void spinFor(receipt, 'cashier')} disabled={spinning}>
+              <Disc3 size={18} /> {screenOpen ? 'Spin for them' : 'Spin the wheel'}
+            </Button>
+          </div>
         </div>
       )
     ) : null;
@@ -552,6 +634,7 @@ function Register({ ev }: { ev: JWEvent }) {
         onClose={() => {
           setReceipt(null);
           setSpin(null);
+          setInvite(null);
           searchRef.current?.focus({ preventScroll: true });
         }}
       />
@@ -771,10 +854,12 @@ function CartPanel({
 }
 
 /** Send the customer screen's state whenever it changes. */
-function useCustomerScreen(state: DisplayState) {
+function useCustomerScreen(state: DisplayState, onSpin: (id: string) => void): { status: () => ScreenStatus } {
   const sender = useRef<DisplaySender | null>(null);
+  const spinRef = useRef(onSpin);
+  spinRef.current = onSpin;
   useEffect(() => {
-    sender.current = displaySender();
+    sender.current = displaySender((id) => spinRef.current(id));
     return () => {
       sender.current?.close();
       sender.current = null;
@@ -784,6 +869,7 @@ function useCustomerScreen(state: DisplayState) {
   useEffect(() => {
     sender.current?.send(JSON.parse(json) as DisplayState);
   }, [json]);
+  return useMemo(() => ({ status: () => sender.current?.status() ?? { open: false, sound: false } }), []);
 }
 
 function OpenRegister({ ev }: { ev: JWEvent }) {

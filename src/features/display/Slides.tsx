@@ -65,7 +65,23 @@ function useMediaUrls(media: { id: string; blob: Blob }[] | undefined): Map<stri
 }
 
 /** One slide at a time: each for its time, a video to its end. */
-export function Slides({ slides, urls, seconds, variant }: { slides: Slide[]; urls: Map<string, string>; seconds: number; variant: 'full' | 'side' }) {
+export function Slides({
+  slides,
+  urls,
+  seconds,
+  variant,
+  videoSound = false,
+  onVideoSound,
+}: {
+  slides: Slide[];
+  urls: Map<string, string>;
+  seconds: number;
+  variant: 'full' | 'side';
+  /** Ad videos play with their sound (full screen, once the screen may play sound). */
+  videoSound?: boolean;
+  /** A video with sound starts or stops, so the music can make way. */
+  onVideoSound?: (playing: boolean) => void;
+}) {
   const [n, setN] = useState(0);
   const s = slides.length ? slides[n % slides.length] : null;
   const next = useCallback(() => setN((x) => x + 1), []);
@@ -80,7 +96,7 @@ export function Slides({ slides, urls, seconds, variant }: { slides: Slide[]; ur
   if (!s) return null;
   return (
     <div className={`sl-stage ${variant}`} data-slide={s.kind}>
-      <SlideView key={`${n}:${s.key}`} s={s} url={s.kind === 'media' ? urls.get(s.id) : s.kind === 'sticker' ? urls.get(`art:${s.id}`) : undefined} onEnded={next} />
+      <SlideView key={`${n}:${s.key}`} s={s} url={s.kind === 'media' ? urls.get(s.id) : s.kind === 'sticker' ? urls.get(`art:${s.id}`) : undefined} onEnded={next} videoSound={videoSound && variant === 'full'} onVideoSound={onVideoSound} />
       {slides.length > 1 && slides.length <= 14 ? (
         <div className="sl-dots" aria-hidden="true">
           {slides.map((x, i) => (
@@ -92,7 +108,14 @@ export function Slides({ slides, urls, seconds, variant }: { slides: Slide[]; ur
   );
 }
 
-function SlideView({ s, url, onEnded }: { s: Slide; url?: string; onEnded: () => void }) {
+function SlideView({ s, url, onEnded, videoSound = false, onVideoSound }: { s: Slide; url?: string; onEnded: () => void; videoSound?: boolean; onVideoSound?: (playing: boolean) => void }) {
+  // A video with its sound tells the screen while it plays, so the music makes way.
+  const sounding = s.kind === 'media' && s.media === 'video' && videoSound;
+  useEffect(() => {
+    if (!sounding) return;
+    onVideoSound?.(true);
+    return () => onVideoSound?.(false);
+  }, [sounding]); // eslint-disable-line react-hooks/exhaustive-deps
   switch (s.kind) {
     case 'brand':
       return (
@@ -238,7 +261,7 @@ function SlideView({ s, url, onEnded }: { s: Slide; url?: string; onEnded: () =>
       if (!url) return <div className="sl sl-media" />;
       return (
         <div className="sl sl-media">
-          {s.media === 'video' ? <video src={url} autoPlay muted playsInline onEnded={onEnded} onError={onEnded} /> : <img src={url} alt="" />}
+          {s.media === 'video' ? <video src={url} autoPlay muted={!videoSound} playsInline onEnded={onEnded} onError={onEnded} /> : <img src={url} alt="" />}
         </div>
       );
   }

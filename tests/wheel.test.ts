@@ -112,6 +112,19 @@ describe('spinning at the register', () => {
     expect([m.gross, m.freeItems]).toEqual([P(600), 1]);
   });
 
+  it('a service prize is a free service order to make, and a ₱0 Services sale in the log; nothing comes out of stock', async () => {
+    const svc: WheelPrize = { id: 'art', label: 'Free illustration', kind: 'service', productId: null, voucher: null, service: { label: 'Sticker illustration, simple (1 design)', value: P(100) }, chance: 100, perDay: null };
+    const { device, session, pack, sell, ev } = await setup([svc]);
+    const s = await sell(300);
+    const spin = await spinWheel({ ev: await ev(), saleId: s.id, session, device, by: null });
+    const orders = alive(await db.printOrders.toArray());
+    expect(orders).toHaveLength(1);
+    expect(orders[0]).toMatchObject({ customerName: `Wheel winner (${s.receiptNo})`, lines:[expect.objectContaining({ unitPrice: 0, label: 'Sticker illustration, simple (1 design) · wheel prize, worth ₱100' })] });
+    expect(spin.prizeSale).toMatchObject({ total: 0, kind: 'service', prizeFor: s.id, printOrderId: orders[0].id });
+    expect(spin.detail).toContain(orders[0].number);
+    expect(onHandByProduct(alive(await db.stockMoves.toArray())).get(pack.id)).toBe(9);
+  });
+
   it('a discount prize is a one-time voucher code for this event', async () => {
     const { device, session, sell, ev } = await setup([{ ...off20, chance: 100 }]);
     const s = await sell(260);

@@ -8,6 +8,9 @@ import { TRY_AGAIN, landingTurn, pickPrize, wheelQualifies, wheelSlices, winsTod
 import { completeSale } from './sales';
 import { effectivePrice } from './catalog';
 import { saveVoucher } from './customers';
+import { blankDelivery, createPrintOrder } from './print';
+import { customLine } from '../domain/print';
+import { ORDER_LINE } from '../domain/orders';
 import type { JWEvent, Sale, Session, Voucher } from '../db/types';
 
 /** A fair draw in [0, 1) from the browser's random source. */
@@ -37,8 +40,10 @@ export interface Spin {
 
 /**
  * Spin the wheel for a sale that qualifies. A product prize is handed over as
- * a ₱0 sale (it comes out of stock); a discount is a one-time voucher code for
- * this event. The result stays on the sale, so it spins only once.
+ * a ₱0 sale (it comes out of stock); a service prize becomes a ₱0 service
+ * order to make, and a ₱0 Services sale so the Sales log shows it; a discount
+ * is a one-time voucher code for this event. The result stays on the sale, so
+ * it spins only once.
  */
 export async function spinWheel(o: { ev: JWEvent; saleId: string; session: Session; device: DeviceInfo; by: string | null }): Promise<Spin> {
   const cfg = o.ev.wheel;
@@ -76,6 +81,42 @@ export async function spinWheel(o: { ev: JWEvent; saleId: string; session: Sessi
       });
       detail = `Free ${p.name}. Hand it over with their order.`;
     }
+  }
+  if (prize?.kind === 'service' && prize.service?.label.trim()) {
+    const svc = prize.service;
+    const cust = sale.customerId ? await db.customers.get(sale.customerId) : undefined;
+    const order = await createPrintOrder(
+      {
+        customerId: cust && cust.deleted !== 1 ? cust.id : null,
+        customerName: cust?.name ?? `Wheel winner (${sale.receiptNo})`,
+        contact: cust ? cust.phone || cust.email || '' : '',
+        lines: [customLine(`${svc.label.trim()} · wheel prize${svc.value > 0 ? `, worth ${peso(svc.value)}` : ''}`, 1, 0)],
+        delivery: blankDelivery(),
+        printerId: null,
+        files: '',
+        notes: `Won on the prize wheel with ${sale.receiptNo} at ${o.ev.name}. Free: nothing to pay.`,
+      },
+      o.device,
+    );
+    const priced = priceCart(
+      [{ key: 'prize', productId: `${ORDER_LINE}print:${order.id}`, name: `${svc.label.trim()} · service order ${order.number}`, categoryId: null, unitPrice: svc.value, qty: 1, free: true, freeReason: `Wheel prize for ${sale.receiptNo}`, designerId: null }],
+      [],
+      [],
+    );
+    prizeSale = await completeSale({
+      eventId: o.ev.id,
+      session: o.session,
+      device: o.device,
+      cashierId: o.by,
+      priced,
+      payments: [],
+      note: `Wheel prize: ${prize.label} (for ${sale.receiptNo}), service order ${order.number}`,
+      customerId: sale.customerId ?? null,
+      kind: 'service',
+      printOrderId: order.id,
+      prizeFor: sale.id,
+    });
+    detail = `A free ${svc.label.trim()}: service order ${order.number} on Services. Add their name and contact there.`;
   }
   if (prize?.kind === 'voucher' && prize.voucher) {
     const off = prize.voucher.kind === 'amount' ? `${peso(prize.voucher.value)} off` : `${prize.voucher.value}% off`;

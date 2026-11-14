@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowDownUp, Mail, ReceiptText } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ArrowDownUp, Disc3, Gift, Mail, PackageMinus, ReceiptText } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import { useApp } from '../../app/AppContext';
-import { useMembers, usePaymentMethods, useSales, useSessions, useSettingRows } from '../../hooks/data';
+import { useMembers, usePaymentMethods, useProducts, useSales, useSessions, useSettingRows } from '../../hooks/data';
 import { settingValue } from '../../db/settings';
 import { Dialog } from '../../components/Dialog';
 import { Badge, Button, Callout, EmptyState, Loading, PageHeader } from '../../components/ui';
@@ -30,7 +30,8 @@ export default function SalesLogPage() {
   const business = settingValue<BusinessSettings>(settingRows, 'business');
   const [q, setQ] = useState('');
   const [method, setMethod] = useState('all');
-  const [status, setStatus] = useState<'all' | 'completed' | 'voided' | 'moves'>('all');
+  const [status, setStatus] = useState<'all' | 'completed' | 'voided' | 'moves' | 'prizes'>('all');
+  const products = useProducts();
   const [register, setRegister] = useState('all');
   const [open, setOpen] = useState<Sale | null>(null);
   const [fixing, setFixing] = useState<{ move: CashMove; session: Session } | null>(null);
@@ -42,6 +43,34 @@ export default function SalesLogPage() {
   }, []);
 
   const memberName = useMemo(() => new Map((members ?? []).map((m) => [m.id, m.name])), [members]);
+  // The prize wheel: which sale won what, and what a prize took out of stock.
+  const tracked = useMemo(() => new Set((products ?? []).filter((p) => p.trackStock === 1).map((p) => p.id)), [products]);
+  const byId = useMemo(() => new Map((sales ?? []).map((s) => [s.id, s])), [sales]);
+  const prizeOf = useMemo(() => new Map((sales ?? []).filter((s) => s.prizeFor && s.status === 'completed').map((s) => [s.prizeFor!, s])), [sales]);
+  /** "1 × Chonky Cat Keychains came out of stock", for a prize sale. */
+  const fromStock = (s: Sale) => {
+    const out = s.lines.filter((l) => tracked.has(l.productId));
+    return out.length ? `${out.map((l) => `${l.qty} × ${l.name}`).join(', ')} came out of stock` : s.kind === 'service' ? 'A service: nothing comes out of stock' : 'No stock count on this product';
+  };
+  const wheelNote = (s: Sale): ReactNode => {
+    if (s.prizeFor) {
+      const won = byId.get(s.prizeFor);
+      return (
+        <Callout tone="good" title={`Wheel prize${won ? ` for ${won.receiptNo}` : ''}`}>
+          {s.status === 'voided' ? 'Voided: its items went back to stock.' : `${fromStock(s)}.`}
+        </Callout>
+      );
+    }
+    if (s.wheel) {
+      const prize = prizeOf.get(s.id);
+      return (
+        <Callout tone="info" title={`Spun the prize wheel: ${s.wheel.label}`}>
+          {prize ? `Handed over as ${prize.receiptNo}.` : s.wheel.code ? `Their code: ${s.wheel.code}.` : 'No prize this time.'}
+        </Callout>
+      );
+    }
+    return null;
+  };
   // One register letter can have several sessions (opened and closed again).
   const letters = useMemo(() => [...new Set((sessions ?? []).map((x) => x.letter))].sort(), [sessions]);
   const regSessions = useMemo(() => (sessions ?? []).filter((x) => register === 'all' || x.letter === register), [sessions, register]);
@@ -57,7 +86,7 @@ export default function SalesLogPage() {
       .filter(
         (s) =>
           status !== 'moves' &&
-          (status === 'all' || s.status === status) &&
+          (status === 'all' || (status === 'prizes' ? !!(s.prizeFor || s.wheel) : s.status === status)) &&
           (method === 'all' || s.payments.some((p) => p.methodId === method)) &&
           (!needle ||
             s.receiptNo.toLowerCase().includes(needle) ||
@@ -76,7 +105,7 @@ export default function SalesLogPage() {
           )
         : [];
     return [...saleRows, ...moveRows].sort((a, b) => b.at - a.at);
-  }, [regSales, regSessions, q, method, status, methods]);
+  }, [regSales, regSessions, q, method, status, methods]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!ev) return <div className="page"><EmptyState title="Pick an event">Sales are listed per event. Choose one from the top bar.</EmptyState></div>;
   if (!sales || !sessions) return <Loading />;
@@ -166,6 +195,7 @@ export default function SalesLogPage() {
           <option value="completed">Completed</option>
           <option value="voided">Voided</option>
           <option value="moves">Cash in and out</option>
+          <option value="prizes">Wheel prizes</option>
         </Select>
         {letters.length > 1 ? (
           <Select aria-label="Register" value={register} onChange={(e) => setRegister(e.target.value)} style={{ width: 'auto' }}>
@@ -238,7 +268,24 @@ export default function SalesLogPage() {
                     </div>
                   </td>
                   <td>
-                    {s.kind === 'deposit' ? <Badge tone="teal">Deposit</Badge> : s.kind === 'service' ? <Badge tone="yellow">Service</Badge> : null} {s.lines.map((l) => `${l.qty} × ${l.name}`).join(', ')}
+                    {s.kind === 'deposit' ? <Badge tone="teal">Deposit</Badge> : s.kind === 'service' ? <Badge tone="yellow">Service</Badge> : null}{' '}
+                    {s.prizeFor ? (
+                      <Badge tone="good">
+                        <Gift size={12} aria-hidden="true" /> Wheel prize{byId.get(s.prizeFor) ? ` for ${byId.get(s.prizeFor)!.receiptNo}` : ''}
+                      </Badge>
+                    ) : null}{' '}
+                    {s.lines.map((l) => `${l.qty} × ${l.name}`).join(', ')}
+                    {s.prizeFor && s.status === 'completed' ? (
+                      <div className="muted tiny prize-stock">
+                        <PackageMinus size={12} aria-hidden="true" /> {fromStock(s)}
+                      </div>
+                    ) : null}
+                    {s.wheel ? (
+                      <div className="muted tiny">
+                        <Disc3 size={12} aria-hidden="true" /> Wheel: {s.wheel.prizeId ? `won ${s.wheel.label}` : s.wheel.label}
+                        {prizeOf.get(s.id) ? ` → ${prizeOf.get(s.id)!.receiptNo}` : ''}
+                      </div>
+                    ) : null}
                     {s.status === 'voided' ? (
                       <div>
                         <Badge tone="bad">Voided</Badge>
@@ -263,6 +310,7 @@ export default function SalesLogPage() {
           setReceipt(s);
         }}
         cashierName={open?.cashierId ? memberName.get(open.cashierId) : undefined}
+        note={open ? wheelNote(sales.find((s) => s.id === open.id) ?? open) : null}
       />
       <ReceiptDialog sale={receipt} business={business} eventName={ev.name} onClose={() => setReceipt(null)} primaryLabel="Close" />
       {fixing ? (
@@ -277,7 +325,7 @@ export default function SalesLogPage() {
   );
 }
 
-function SaleDialog({ sale, onClose, onReceipt, cashierName }: { sale: Sale | null; onClose: () => void; onReceipt: (s: Sale) => void; cashierName?: string }) {
+function SaleDialog({ sale, onClose, onReceipt, cashierName, note }: { sale: Sale | null; onClose: () => void; onReceipt: (s: Sale) => void; cashierName?: string; note?: ReactNode }) {
   const app = useApp();
   const methods = usePaymentMethods();
   const [mode, setMode] = useState<'view' | 'void' | 'payment'>('view');
@@ -355,6 +403,7 @@ function SaleDialog({ sale, onClose, onReceipt, cashierName }: { sale: Sale | nu
         {cashierName ? ` · ${cashierName}` : ''}
       </p>
       {sale.status === 'voided' ? <Callout tone="bad" title="Voided">{sale.voidReason || 'No reason given.'}</Callout> : null}
+      {note}
       <div className="receipt">
         {sale.lines.map((l, i) => (
           <div key={i} className="rline">

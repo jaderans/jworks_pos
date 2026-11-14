@@ -46,3 +46,21 @@ export async function payCash(page: Page) {
   await dialog.getByRole('button', { name: /Complete sale/ }).click();
   await expect(page.getByRole('dialog', { name: /^Sale [A-Z]-\d{4}/ })).toBeVisible();
 }
+
+/** Anything on the customer screen that pokes outside the window (for portrait and odd-sized monitors). */
+export async function offScreen(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    for (const el of document.querySelectorAll('.cd *')) {
+      if (el.closest('.cd-confetti, .sl-dots, .cd-fullbtn')) continue;
+      // Shapes inside a turning SVG have rotated boxes; the SVG itself is what has to fit.
+      if (el.closest('svg') && el.tagName.toLowerCase() !== 'svg') continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      if (r.left < -1 || r.top < -1 || r.right > W + 1 || r.bottom > H + 1) out.push(`${el.tagName.toLowerCase()}.${String((el as HTMLElement).className || '').split(' ')[0]} at ${Math.round(r.left)},${Math.round(r.top)} size ${Math.round(r.width)}x${Math.round(r.height)}`);
+    }
+    return out.slice(0, 8);
+  });
+}

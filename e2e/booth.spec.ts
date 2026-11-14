@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { SHOTS, createEvent, setupOwner } from './helpers';
+import { SHOTS, createEvent, offScreen, setupOwner } from './helpers';
 
 // Chrome's stand-in camera: a moving test pattern, allowed without asking.
 test.use({ launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] }, permissions: ['camera'] });
@@ -51,6 +51,11 @@ test('photo booth: a photo in the frame on both screens, kept with a yes, emaile
   await expect(booth).toContainText('May we keep this photo?');
   await expect(booth.getByRole('img', { name: 'Your photo' })).toBeVisible();
   await screen.screenshot({ path: `${SHOTS}/booth-screen-preview.png` });
+  await screen.setViewportSize({ width: 1080, height: 1920 });
+  await screen.waitForTimeout(400);
+  expect(await offScreen(screen)).toEqual([]);
+  await screen.screenshot({ path: `${SHOTS}/booth-portrait.png` });
+  await screen.setViewportSize({ width: 1920, height: 1080 });
 
   // They said no: nothing is kept.
   await page.getByRole('button', { name: 'They said no: delete it' }).click();

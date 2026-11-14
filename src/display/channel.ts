@@ -36,31 +36,65 @@ export interface BoothShow {
   at: number;
 }
 
-type Message = { type: 'hello' } | { type: 'state'; state: DisplayState } | { type: 'call'; call: DisplayCall } | { type: 'booth'; booth: BoothShow | null };
+type Message =
+  | { type: 'hello' }
+  /** The screen is open, every few seconds, and whether it can play sound (someone clicked it). */
+  | { type: 'here'; sound: boolean }
+  /** The customer tapped the wheel. */
+  | { type: 'spin'; id: string }
+  | { type: 'state'; state: DisplayState }
+  | { type: 'call'; call: DisplayCall }
+  | { type: 'booth'; booth: BoothShow | null };
+
+/** The screen says it's open this often; the register counts it gone after a few missed. */
+export const HERE_MS = 5000;
+
+export interface ScreenStatus {
+  open: boolean;
+  /** It can play sound: someone clicked in it since it opened. */
+  sound: boolean;
+}
 
 export interface DisplaySender {
   send(state: DisplayState): void;
+  /** Is a customer screen open on this computer right now? */
+  status(): ScreenStatus;
   close(): void;
 }
 
-export function displaySender(): DisplaySender {
-  if (typeof BroadcastChannel === 'undefined') return { send: () => undefined, close: () => undefined };
+export function displaySender(onSpin?: (id: string) => void): DisplaySender {
+  if (typeof BroadcastChannel === 'undefined') return { send: () => undefined, status: () => ({ open: false, sound: false }), close: () => undefined };
   const ch = new BroadcastChannel(NAME);
   let last: DisplayState | null = null;
+  let seen = { at: 0, sound: false };
   ch.onmessage = (e: MessageEvent<Message>) => {
-    if (e.data?.type === 'hello' && last) ch.postMessage({ type: 'state', state: last } satisfies Message);
+    if (e.data?.type === 'hello') {
+      seen = { at: Date.now(), sound: seen.sound };
+      if (last) ch.postMessage({ type: 'state', state: last } satisfies Message);
+    }
+    if (e.data?.type === 'here') seen = { at: Date.now(), sound: !!e.data.sound };
+    if (e.data?.type === 'spin' && e.data.id) onSpin?.(e.data.id);
   };
   return {
     send(state) {
       last = state;
       ch.postMessage({ type: 'state', state } satisfies Message);
     },
+    status: () => ({ open: Date.now() - seen.at < HERE_MS * 2.5, sound: Date.now() - seen.at < HERE_MS * 2.5 && seen.sound }),
     close: () => ch.close(),
   };
 }
 
-export function displayReceiver(onState: (s: DisplayState) => void, onCall?: (c: DisplayCall) => void, onBooth?: (b: BoothShow | null) => void): () => void {
-  if (typeof BroadcastChannel === 'undefined') return () => undefined;
+export interface DisplayReceiver {
+  /** Tell the register the screen is here, and whether it can play sound. */
+  here(sound: boolean): void;
+  /** The customer tapped the wheel. */
+  spin(id: string): void;
+  close(): void;
+}
+
+export function displayReceiver(onState: (s: DisplayState) => void, onCall?: (c: DisplayCall) => void, onBooth?: (b: BoothShow | null) => void): DisplayReceiver {
+  if (typeof BroadcastChannel === 'undefined') return { here: () => undefined, spin: () => undefined, close: () => undefined };
   const ch = new BroadcastChannel(NAME);
   ch.onmessage = (e: MessageEvent<Message>) => {
     if (e.data?.type === 'state' && e.data.state?.v === 1) onState(e.data.state);
@@ -68,7 +102,11 @@ export function displayReceiver(onState: (s: DisplayState) => void, onCall?: (c:
     if (e.data?.type === 'booth') onBooth?.(e.data.booth ? { ...e.data.booth, at: Date.now() } : null);
   };
   ch.postMessage({ type: 'hello' } satisfies Message);
-  return () => ch.close();
+  return {
+    here: (sound) => ch.postMessage({ type: 'here', sound } satisfies Message),
+    spin: (id) => ch.postMessage({ type: 'spin', id } satisfies Message),
+    close: () => ch.close(),
+  };
 }
 
 /** Show "Now calling" on the customer screen, from any page of the app on this computer. */

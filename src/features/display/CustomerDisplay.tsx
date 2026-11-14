@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { Maximize } from 'lucide-react';
+import { Maximize, Volume2 } from 'lucide-react';
 import { peso } from '../../lib/money';
 import { useLocal } from '../../hooks/data';
-import { displayReceiver, type BoothShow, type DisplayCall } from '../../display/channel';
+import { HERE_MS, displayReceiver, type BoothShow, type DisplayCall, type DisplayReceiver } from '../../display/channel';
+import { audioReady, playInvite, playLanding, playSpin, playTick, unlockAudio } from '../../display/sound';
+import { wheelSoundChoice } from '../../display/wheelSounds';
+import { SPIN_MS } from '../../domain/wheelSpin';
+import { Confetti } from './Confetti';
+import { Music } from './Music';
 import { BoothView } from './BoothView';
 import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
 import { Slides, useSlides } from './Slides';
 import { refreshStickers } from '../../display/stickers';
 import { WheelSvg } from './WheelSvg';
-import type { WheelSlice } from '../../domain/wheel';
-import type { DisplayState } from '../../domain/display';
+import type { DisplayState, DisplayWheel } from '../../domain/display';
 import lockup from '../../assets/brand/lockup-on-dark.png';
 import './display.css';
 
@@ -38,6 +42,9 @@ export default function CustomerDisplay() {
   const [cursor, setCursor] = useState(true);
   const [calling, setCalling] = useState<DisplayCall | null>(null);
   const [booth, setBooth] = useState<BoothShow | null>(null);
+  const [soundOn, setSoundOn] = useState(audioReady);
+  const [videoSound, setVideoSound] = useState(false);
+  const rx = useRef<DisplayReceiver | null>(null);
   const saved = useLocal<Partial<DisplaySettings>>('display', DEFAULT_DISPLAY);
   const settings = useMemo<DisplaySettings>(() => ({ ...DEFAULT_DISPLAY, ...(saved ?? {}) }), [saved]);
   // With no register sending yet (the cashier is on another page), the event picked on this laptop.
@@ -54,20 +61,40 @@ export default function CustomerDisplay() {
     return () => window.clearInterval(t);
   }, [settings.driveStickers]);
 
-  useEffect(
-    () =>
-      displayReceiver((s) => {
+  useEffect(() => {
+    const r = displayReceiver(
+      (s) => {
         setState(s);
         const busy = s.mode === 'paying' || s.mode === 'thanks' || s.mode === 'wheel' || (s.mode === 'cart' && s.cart.count > 0);
         if (busy) setBusyAt(Date.now());
         if (s.mode === 'thanks') setThanks({ s, until: Date.now() + THANKS_MS });
         else if (s.mode !== 'cart' || s.cart.count > 0) setThanks((t) => (s.mode === 'wheel' ? t : null));
-      }, setCalling, (b) => {
+      },
+      setCalling,
+      (b) => {
         setBooth(b);
         if (b) setBusyAt(Date.now());
-      }),
-    [],
-  );
+      },
+    );
+    rx.current = r;
+    // Tell the register the screen is here, and whether it can play sound.
+    const beat = () => r.here(audioReady());
+    beat();
+    const t = window.setInterval(beat, HERE_MS);
+    // Browsers play sound only after a click in the page: any click on the screen allows it.
+    const unlock = () =>
+      void unlockAudio().then((ok) => {
+        setSoundOn(ok);
+        r.here(ok);
+      });
+    window.addEventListener('pointerdown', unlock);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener('pointerdown', unlock);
+      r.close();
+      rx.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 1000);
@@ -145,6 +172,9 @@ export default function CustomerDisplay() {
               ? 'idle'
               : 'welcome';
   const s = showingThanks && thanks ? thanks.s : state;
+  const callingNow = !!calling && now - calling.at < CALL_MS;
+  const musicNow = (settings.musicWhen === 'always' || view === 'idle') && view !== 'wheel' && !callingNow && !videoSound;
+  const wantsSound = settings.music || settings.wheelSound || settings.videoSound;
 
   return (
     <div className={`cd view-${view}${cursor ? '' : ' no-cursor'}`} data-view={view}>
@@ -157,10 +187,17 @@ export default function CustomerDisplay() {
       ) : view === 'booth' && booth ? (
         <BoothView b={booth} />
       ) : view === 'wheel' && s?.wheel ? (
-        <WheelView w={s.wheel} />
+        <WheelView
+          w={s.wheel}
+          settings={settings}
+          onTap={(id) => {
+            void unlockAudio().then(setSoundOn);
+            rx.current?.spin(id);
+          }}
+        />
       ) : view === 'idle' ? (
         <section className="cd-full slides" aria-label="Welcome">
-          <Slides slides={slides} urls={urls} seconds={settings.slideSeconds} variant="full" />
+          <Slides slides={slides} urls={urls} seconds={settings.slideSeconds} variant="full" videoSound={settings.videoSound && soundOn} onVideoSound={setVideoSound} />
         </section>
       ) : (
         <>
@@ -224,7 +261,7 @@ export default function CustomerDisplay() {
           </aside>
         </>
       )}
-      {calling && now - calling.at < CALL_MS ? (
+      {callingNow && calling ? (
         <div className="cd-call" role="status" aria-live="assertive">
           <span className="sl-eyebrow">Now calling</span>
           <b className="num">{calling.number}</b>
@@ -233,29 +270,82 @@ export default function CustomerDisplay() {
       ) : null}
       {!full ? (
         <button type="button" className="cd-fullbtn" onClick={goFull}>
-          <Maximize size={18} aria-hidden="true" /> Full screen
+          <Maximize size={18} aria-hidden="true" /> {wantsSound && !soundOn ? 'Full screen and sound' : 'Full screen'}
+        </button>
+      ) : wantsSound && !soundOn ? (
+        <button type="button" className="cd-fullbtn" onClick={() => void unlockAudio().then(setSoundOn)}>
+          <Volume2 size={18} aria-hidden="true" /> Turn on sound
         </button>
       ) : null}
+      {settings.music ? <Music play={soundOn && musicNow} volume={settings.musicVolume / 100} /> : null}
     </div>
   );
 }
 
-/** How long the wheel turns before it stops on the prize. */
-const SPIN_MS = 6000;
-
-function WheelView({ w }: { w: { id: string; slices: WheelSlice[]; turn: number; won: boolean; label: string; detail: string } }) {
+/**
+ * The prize wheel, full screen. While it waits it turns slowly and asks the
+ * customer to tap it; the tap goes to the register, which draws the prize and
+ * sends where it lands. Then it spins with its sounds (when this screen plays
+ * them), and a prize gets confetti.
+ */
+function WheelView({ w, settings, onTap }: { w: DisplayWheel; settings: DisplaySettings; onTap: (id: string) => void }) {
+  const [tapped, setTapped] = useState('');
   const [landed, setLanded] = useState(false);
+  const [burst, setBurst] = useState(0);
+  const here = w.sound === 'screen' && settings.wheelSound;
+  const volume = settings.soundVolume / 100;
   useEffect(() => {
     setLanded(false);
-    const t = window.setTimeout(() => setLanded(true), SPIN_MS + 200);
-    return () => window.clearTimeout(t);
-  }, [w.id, w.turn]);
+    if (w.waiting) {
+      if (here) playInvite(volume);
+      return;
+    }
+    let stop = () => undefined as void;
+    let gone = false;
+    if (here)
+      void wheelSoundChoice(settings).then((c) => {
+        // The wheel ticks for itself as it turns (onTick); this is the tune.
+        if (c && !gone) stop = playSpin(w.slices, w.turn, SPIN_MS, c, false);
+      });
+    const t = window.setTimeout(() => {
+      setLanded(true);
+      if (w.won) setBurst(Date.now());
+      if (here) void wheelSoundChoice(settings).then((c) => c && playLanding(w.won, c));
+    }, SPIN_MS + 150);
+    return () => {
+      gone = true;
+      window.clearTimeout(t);
+      stop();
+    };
+  }, [w.id, w.waiting]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const wheel = <WheelSvg slices={w.slices} idle={w.waiting} turn={w.turn} spinMs={w.waiting ? 0 : SPIN_MS} onTick={here ? () => playTick(volume) : undefined} className="cd-wheel-svg" />;
   return (
     <section className="cd-full cd-wheel" aria-label="Prize wheel">
-      {/* A new spin starts from rest: each spin id draws a fresh wheel. */}
-      <WheelSvg key={w.id} slices={w.slices} turn={w.turn} spinMs={SPIN_MS} className="cd-wheel-svg" />
+      {w.waiting ? (
+        <button
+          type="button"
+          className="cd-wheel-tap"
+          aria-label="Spin the wheel"
+          disabled={tapped === w.id}
+          onClick={() => {
+            setTapped(w.id);
+            onTap(w.id);
+          }}
+        >
+          {wheel}
+        </button>
+      ) : (
+        wheel
+      )}
       <div className={`cd-wheel-result${landed ? ' on' : ''}`} role="status" aria-live="polite">
-        {landed ? (
+        {w.waiting ? (
+          <>
+            <span className="sl-eyebrow">Prize wheel</span>
+            <b>{tapped === w.id ? 'Here it goes…' : 'Tap the wheel to spin!'}</b>
+            <span>Good luck!</span>
+          </>
+        ) : landed ? (
           <>
             <span className="sl-eyebrow">{w.won ? 'You won' : 'So close'}</span>
             <b>{w.label}</b>
@@ -268,6 +358,7 @@ function WheelView({ w }: { w: { id: string; slices: WheelSlice[]; turn: number;
           </>
         )}
       </div>
+      <Confetti burst={burst} />
     </section>
   );
 }

@@ -88,7 +88,7 @@
 /* A portrait or small screen: the order on top, the QR or brand below. */
 @media (max-aspect-ratio: 1/1) {
   .cd { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); }
-  .cd.view-idle, .cd.view-waiting { grid-template-rows: minmax(0, 1fr); }
+  .cd.view-idle, .cd.view-waiting, .cd.view-wheel, .cd.view-booth { grid-template-rows: minmax(0, 1fr); }
 }
 
 /* Slides: price lists, deals, rates and ads. Full screen when idle, beside the cart while buying. */
@@ -188,3 +188,22 @@
 @keyframes cd-pop { from { transform: rotate(-3deg) scale(0.6); opacity: 0; } to { transform: rotate(-3deg) scale(1); opacity: 1; } }
 @media (max-aspect-ratio: 1/1) { .cd-booth { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; } }
 @media (prefers-reduced-motion: reduce) { .cd-booth-photo, .cd-booth-count { animation: none; } }
+
+/* The wheel waiting for the customer: the whole wheel is the button, breathing gently. */
+.cd-wheel-tap { all: unset; display: grid; place-items: center; justify-self: center; width: min(82vmin, 100%); border-radius: 50%; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.cd-wheel-tap:focus-visible { outline: 0.5vmin solid var(--cd-yellow); outline-offset: 1vmin; }
+.cd-wheel-tap .cd-wheel-svg { width: 100%; animation: cd-breathe 2.4s ease-in-out infinite; }
+.cd-wheel-tap:disabled .cd-wheel-svg { animation: none; }
+@keyframes cd-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.025); } }
+.cd-confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 6; }
+
+/* A tall (portrait) monitor: there's room to read from further away, so everything is bigger. */
+@media (max-aspect-ratio: 1/1) {
+  .cd { font-size: clamp(14px, 3.1vmin, 48px); }
+  .sl-stage.full { font-size: 1.4em; padding: 8vmin 7vmin; }
+  .cd-side .sl-stage.side { font-size: 0.95em; }
+  .cd-booth-canvas, .cd-booth-photo { max-height: 58vh; }
+  .cd-booth { gap: 3vmin; padding: 6vmin 5vmin; }
+  .cd-wheel { gap: 3vmin; padding: 6vmin 5vmin; }
+  .cd-wheel-svg, .cd-wheel-tap { width: min(88vmin, 100%); }
+}
