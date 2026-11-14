@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type {
+import type { DisplayMedia,
   AuditEntry, Batch, BundleRule, Category, CostPoint, Customer, EventProduct, HeldSale, JWEvent, LocalRow, Material,
   Member, PartnerDeal, PaymentMethod, Payout, Photo, Product, ProductCost, Quote, RosterEntry, Sale, Session,
   Coupon, CouponBatch, CouponClaim, EventTask, Order, OutboxItem, PrintOrder, SettingRow, SpendItem, StockMove, StudioFeedRow, Voucher,
@@ -45,6 +45,7 @@ export class JWDB extends Dexie {
   photos!: Table<Photo, string>;
   heldSales!: Table<HeldSale, string>;
   outbox!: Table<OutboxItem, string>;
+  displayMedia!: Table<DisplayMedia, string>;
 
   constructor(name = 'jworks-pos') {
     super(name);
@@ -99,6 +100,8 @@ export class JWDB extends Dexie {
       coupons: 'id, code, batchId, eventId, saleId, customerId, updatedAt, _sync',
       couponClaims: 'id, couponId, code, eventId, updatedAt, _sync',
     });
+    // The customer screen's ad images and videos (device-only).
+    this.version(9).stores({ displayMedia: 'id, sort' });
   }
 }
 

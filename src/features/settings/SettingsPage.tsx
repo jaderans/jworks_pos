@@ -14,6 +14,7 @@ import { savePaymentMethod, setOwnerPin, verifyOwnerPin } from '../../services/t
 import { backupOwner } from '../../services/setup';
 import { CloudSection } from './CloudSection';
 import { EmailSection } from './EmailSection';
+import { DisplaySection } from './DisplaySection';
 import type { BusinessSettings, PaymentMethod, SecuritySettings } from '../../db/types';
 
 export default function SettingsPage() {
@@ -29,6 +30,7 @@ export default function SettingsPage() {
       <PageHeader title="Settings" subtitle={owner ? 'Business, devices, payments, email, backups and cloud sync.' : 'This device and how the app looks.'} />
       {owner ? <BusinessSection /> : null}
       <DeviceSection />
+      {app.can('sell') ? <DisplaySection /> : null}
       {owner ? <PinSection /> : null}
       {owner ? <PaymentsSection /> : null}
       {owner ? <EmailSection /> : null}

@@ -1,16 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Maximize } from 'lucide-react';
 import { peso } from '../../lib/money';
+import { useLocal } from '../../hooks/data';
 import { displayReceiver } from '../../display/channel';
+import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
+import { Slides, useSlides } from './Slides';
 import type { DisplayState } from '../../domain/display';
 import lockup from '../../assets/brand/lockup-on-dark.png';
 import './display.css';
 
 /** After a sale, the thank-you stays up this long unless the next customer's items come in. */
 const THANKS_MS = 15_000;
-/** With nothing rung up for this long, the screen goes to its idle slides. */
-const IDLE_MS = 20_000;
 
 type View = 'waiting' | 'idle' | 'welcome' | 'cart' | 'paying' | 'thanks';
 
@@ -27,6 +28,9 @@ export default function CustomerDisplay() {
   const [qr, setQr] = useState('');
   const [full, setFull] = useState(!!document.fullscreenElement);
   const [cursor, setCursor] = useState(true);
+  const saved = useLocal<Partial<DisplaySettings>>('display', DEFAULT_DISPLAY);
+  const settings = useMemo<DisplaySettings>(() => ({ ...DEFAULT_DISPLAY, ...(saved ?? {}) }), [saved]);
+  const { slides, urls } = useSlides(state?.eventId ?? null, settings);
 
   useEffect(
     () =>
@@ -103,7 +107,7 @@ export default function CustomerDisplay() {
         ? 'paying'
         : state.mode === 'cart' && state.cart.count > 0
           ? 'cart'
-          : now - busyAt >= IDLE_MS
+          : now - busyAt >= settings.idleSeconds * 1000
             ? 'idle'
             : state.mode === 'closed'
               ? 'idle'
@@ -112,12 +116,15 @@ export default function CustomerDisplay() {
 
   return (
     <div className={`cd view-${view}${cursor ? '' : ' no-cursor'}`} data-view={view}>
-      {view === 'idle' || view === 'waiting' ? (
+      {view === 'waiting' ? (
         <section className="cd-full" aria-label="Welcome">
           <img src={lockup} alt={s?.business || 'JoshWorks'} className="cd-lockup big" />
           <p className="cd-tagline">Stickers · Pins · Custom art</p>
-          {s?.eventName ? <p className="cd-event">See you at {s.eventName}</p> : null}
-          {view === 'waiting' ? <p className="cd-hint">Waiting for the register. Open Sell in the other window.</p> : null}
+          <p className="cd-hint">Waiting for the register. Open Sell in the other window.</p>
+        </section>
+      ) : view === 'idle' ? (
+        <section className="cd-full slides" aria-label="Welcome">
+          <Slides slides={slides} urls={urls} seconds={settings.slideSeconds} variant="full" />
         </section>
       ) : (
         <>
@@ -170,6 +177,8 @@ export default function CustomerDisplay() {
                 <img src={qr} alt="Receipt QR code" />
                 <span>Scan for your receipt {s?.thanks?.receiptNo}</span>
               </div>
+            ) : settings.sideAds ? (
+              <Slides slides={slides} urls={urls} seconds={settings.slideSeconds} variant="side" />
             ) : (
               <div className="cd-brand">
                 <p className="cd-tagline">Stickers · Pins · Custom art</p>

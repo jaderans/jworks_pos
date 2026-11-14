@@ -29,6 +29,8 @@ export interface DisplayState {
   v: 1;
   /** closed: no register open. cart: ringing up (or nothing yet). paying: the payment step. thanks: the sale is done. */
   mode: 'closed' | 'cart' | 'paying' | 'thanks';
+  /** The event being sold at: the screen's price slides come from it. */
+  eventId: string;
   business: string;
   eventName: string;
   cart: DisplayCart;

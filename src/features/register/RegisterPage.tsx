@@ -274,7 +274,7 @@ function Register({ ev }: { ev: JWEvent }) {
 
   // What the customer screen shows, sent on every change.
   const display = useMemo<DisplayState>(() => {
-    const base = { v: 1 as const, business: business.name || 'JoshWorks', eventName: ev.name };
+    const base = { v: 1 as const, eventId: ev.id, business: business.name || 'JoshWorks', eventName: ev.name };
     if (!session) return { ...base, mode: 'closed', cart: emptyDisplayCart(), customer: null, pay: null, thanks: null };
     const cartView = displayCart(priced, activeRules);
     const who = customer
@@ -307,7 +307,7 @@ function Register({ ev }: { ev: JWEvent }) {
       return { ...base, mode: 'paying', cart: cartView, customer: who, pay: { amount: priced.total, method: picked.map((m) => m.name).join(' + ') || 'Cash', qr: withQr?.qr ?? null }, thanks: null };
     }
     return { ...base, mode: 'cart', cart: cartView, customer: who, pay: null, thanks: null };
-  }, [business, ev.name, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, customers, customerSales, earned, paying, payWith, eventMethods]);
+  }, [business, ev.id, ev.name, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, customers, customerSales, earned, paying, payWith, eventMethods]);
   useCustomerScreen(display);
 
   const showCustomerScreen = async () => {

@@ -9,6 +9,12 @@ test('the customer screen follows the sale: items and total, paying, thank-you, 
   await createEvent(page, 'Hilway November 2026');
   await setEventPrice(page, 'Cat Meme (Solo)', 25);
   await setEventPrice(page, 'Enamel Pins', 50);
+
+  // A poster for the customer screen's ads, kept on this laptop.
+  await page.goto('/#/settings');
+  const ads = page.locator('#s-display');
+  await ads.getByLabel('Ad images or videos').setInputFiles('src/assets/brand/logo-256.png');
+  await expect(ads.locator('.ad-row')).toContainText('logo-256');
   await openRegister(page);
 
   // The register opens the customer screen in its own window.
@@ -25,6 +31,8 @@ test('the customer screen follows the sale: items and total, paying, thank-you, 
   await expect(order.locator('.cd-lines li').first()).toContainText('3 ×Cat Meme (Solo)₱75');
   await expect(order.locator('.cd-total')).toContainText('₱125');
   await expect(order.locator('.cd-total')).toContainText('4 items');
+  // Slides play beside the cart.
+  await expect(screen.locator('.cd-side .sl-stage')).toBeVisible();
   await screen.screenshot({ path: `${SHOTS}/display-cart.png` });
 
   // Paying: the amount, big.
@@ -53,6 +61,14 @@ test('the customer screen follows the sale: items and total, paying, thank-you, 
   // With nothing rung up for 20 seconds, it goes to the full-screen idle view.
   await expect(screen.locator('.cd')).toHaveAttribute('data-view', 'idle', { timeout: 30_000 });
   await expect(screen.getByRole('region', { name: 'Welcome' })).toBeVisible();
+  // Full screen, the slides go round: the ad poster, then this event's prices.
+  const stage = screen.locator('.cd-full .sl-stage');
+  await expect(stage).toHaveAttribute('data-slide', 'media', { timeout: 20_000 });
+  await expect(stage.locator('.sl-media img')).toBeVisible();
+  await expect(stage).toHaveAttribute('data-slide', 'prices', { timeout: 20_000 });
+  await expect(stage).toContainText('Cat Meme (Solo)');
+  await expect(stage).toContainText('₱25');
+  await screen.screenshot({ path: `${SHOTS}/display-idle-prices.png` });
   const wide = await screen.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(wide).toBeLessThanOrEqual(0);
 

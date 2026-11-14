@@ -459,6 +459,20 @@ export interface Photo {
   at: number;
 }
 
+/** An ad image or video for the customer screen, kept on the device that shows it (not synced, not in backups). */
+export interface DisplayMedia {
+  id: string;
+  name: string;
+  kind: 'image' | 'video';
+  mime: string;
+  blob: Blob;
+  /** How long an image shows; a video plays to its end. */
+  seconds: number;
+  on: 0 | 1;
+  sort: number;
+  addedAt: number;
+}
+
 export interface HeldSale {
   id: string;
   eventId: string;
