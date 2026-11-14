@@ -71,8 +71,8 @@ test('receipts email out (also after being offline) and closing the register sen
   expect(summary.to).toBe('owner@jw.test');
   expect(summary.subject).toContain('Komiket Iloilo');
   expect(summary.text).toContain('Sales today: ₱100');
-  expect(summary.text).toContain('INVENTORY');
-  expect(summary.text).toContain('Cat Meme (Solo): sold 5 today');
+  expect(summary.text).toContain('SOLD TODAY');
+  expect(summary.text).toContain('Cat Meme (Solo): 5 sold');
   expect(summary.attachments).toHaveLength(1);
   expect(summary.attachments[0].name).toMatch(/end of day 20\d\d-\d\d-\d\d\.pdf$/);
   expect(summary.attachments[0].type).toBe('application/pdf');
