@@ -16,6 +16,8 @@
   --teal-brand: #41ACBA;
   --teal-soft: #DCEFF1;
   --teal-track: #C2E5EA;
+  /* A pointed-at row: a light teal tint (a chosen row uses --teal-soft). Same as Studio. */
+  --hover: #EAF5F7;
   --on-teal: #FFFFFF;
   --yellow: #FEC756;
   --yellow-hover: #F5B93C;
@@ -61,6 +63,7 @@
     --teal-brand: #41ACBA;
     --teal-soft: #14313A;
     --teal-track: #1E4650;
+    --hover: #1A2A2F;
     --on-teal: #0A1B1C;
     --yellow: #FEC756;
     --yellow-hover: #FFD27A;
@@ -93,6 +96,7 @@
   --teal-brand: #41ACBA;
   --teal-soft: #14313A;
   --teal-track: #1E4650;
+  --hover: #1A2A2F;
   --on-teal: #0A1B1C;
   --yellow: #FEC756;
   --yellow-hover: #FFD27A;
@@ -539,7 +543,7 @@ img { max-width: 100%; display: block; }
 .table tbody tr:last-child td, .table tbody tr:last-child th { border-bottom: 0; }
 .table td.r, .table th.r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .table tr.click { cursor: pointer; }
-.table tr.click:hover td { background: var(--surface-2); }
+.table tr.click:hover td { background: var(--hover); }
 .table tr.muted td { color: var(--muted); }
 .table tr.voided td { color: var(--muted); text-decoration: line-through; }
 .table tfoot td { font-weight: 800; background: var(--surface-2); border-top: 1px solid var(--line-strong); border-bottom: 0; }
@@ -600,8 +604,12 @@ img { max-width: 100%; display: block; }
 .list { display: grid; }
 .list-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); min-width: 0; }
 .list-item:last-child { border-bottom: 0; }
-.list-item.click { cursor: pointer; }
-.list-item.click:hover { background: var(--surface-2); }
+.list-item.click { cursor: pointer; transition: background-color 0.12s ease; }
+.list-item.click:hover { background: var(--hover); }
+/* A row that is a button looks like the rows around it, never like a grey browser button. */
+button.list-item { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; text-align: left; }
+.list-item.click:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; border-radius: 0; background: var(--hover); }
+.list-item.on, .list-item.on:hover { background: var(--teal-soft); box-shadow: inset 3px 0 0 var(--teal); }
 .list-item .main-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
 .list-item .main-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-item .main-text span { font-size: 0.84rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
