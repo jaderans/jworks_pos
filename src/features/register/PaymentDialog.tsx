@@ -33,18 +33,25 @@ export function PaymentDialog({
   total,
   methods,
   onPay,
+  onMethods,
 }: {
   open: boolean;
   onClose: () => void;
   total: Cents;
   methods: PaymentMethod[];
   onPay: (payments: SalePayment[]) => Promise<void>;
+  /** The methods picked so far (for the customer screen's QR). */
+  onMethods?: (methodIds: string[]) => void;
 }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [split, setSplit] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const byId = useMemo(() => new Map(methods.map((m) => [m.id, m])), [methods]);
+  const picked = rows.map((r) => r.methodId).join(',');
+  useEffect(() => {
+    if (open) onMethods?.(picked ? picked.split(',') : []);
+  }, [open, picked, onMethods]);
 
   useEffect(() => {
     if (!open) return;

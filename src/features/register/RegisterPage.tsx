@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowDownUp, CalendarPlus, Gift, Lock, Minus, PackageOpen, PauseCircle, Percent, Plus, ScanLine, ShoppingCart, Ticket, Trash2, UserPlus, UserRound, X } from 'lucide-react';
+import { ArrowDownUp, CalendarPlus, Gift, Lock, Minus, Monitor, PackageOpen, PauseCircle, Percent, Plus, ScanLine, ShoppingCart, Ticket, Trash2, UserPlus, UserRound, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import {
   useBundleRules, useCategories, useCustomerSales, useCustomers, useEventProducts, usePaymentMethods, useProducts, useSales, useSessions, useSettingRows,
-  useStockMoves, useVoucherSales, useVouchers,
+  useSaleCoupon, useStockMoves, useVoucherSales, useVouchers,
 } from '../../hooks/data';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { alive, db } from '../../db/db';
@@ -18,13 +18,17 @@ import { uid } from '../../lib/ids';
 import { priceCart, type CartDiscount, type PricedCart } from '../../domain/cart';
 import { onHandByProduct, soldByProduct } from '../../domain/stock';
 import { checkVoucher, loyaltyDiscount, loyaltyState, normalizeCode, rewardText, type LoyaltyState, type VoucherCheck } from '../../domain/loyalty';
+import { displayCart, emptyDisplayCart, type DisplayState } from '../../domain/display';
+import { offText, termsText } from '../../domain/coupons';
+import { displaySender, type DisplaySender } from '../../display/channel';
+import { openCustomerScreen, useSecondScreen } from '../../display/screens';
 import { effectivePrice, findByCode, isOnSale, setEventProduct, updateProduct } from '../../services/catalog';
 import { completeSale, openSession } from '../../services/sales';
 import { issueEarnedCoupon } from '../../services/coupons';
 import { updateEvent } from '../../services/events';
 import { useCart, type CartApi, type CartState } from './useCart';
 import { PaymentDialog } from './PaymentDialog';
-import { ReceiptDialog } from './ReceiptDialog';
+import { ReceiptDialog, receiptText } from './ReceiptDialog';
 import { CashMoveDialog, CloseRegisterDialog } from './SessionDialogs';
 import { CustomerPicker } from './CustomerPicker';
 import { DealsReview, PriceReview } from './PriceReview';
@@ -109,7 +113,10 @@ function Register({ ev }: { ev: JWEvent }) {
   const [showUnpriced, setShowUnpriced] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [voucherOpen, setVoucherOpen] = useState(false);
+  const [payWith, setPayWith] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
+  const secondScreen = useSecondScreen();
+  const earned = useSaleCoupon(receipt?.id);
 
   const session = sessions?.find((s) => s.deviceId === app.device.deviceId && s.closedAt === null);
   const epMap = useMemo(() => new Map((eps ?? []).map((e) => [e.productId, e])), [eps]);
@@ -265,6 +272,51 @@ function Register({ ev }: { ev: JWEvent }) {
     cart.togglePreset(id);
   };
 
+  // What the customer screen shows, sent on every change.
+  const display = useMemo<DisplayState>(() => {
+    const base = { v: 1 as const, business: business.name || 'JoshWorks', eventName: ev.name };
+    if (!session) return { ...base, mode: 'closed', cart: emptyDisplayCart(), customer: null, pay: null, thanks: null };
+    const cartView = displayCart(priced, activeRules);
+    const who = customer
+      ? { name: customer.name, loyalty: loyalty && loyaltyRules.enabled ? (loyalty.rewards ? `${rewardText(loyaltyRules)} ready to use` : `${loyalty.balance} stamp${loyalty.balance === 1 ? '' : 's'} · ${loyalty.toNext} more for ${rewardText(loyaltyRules)}`) : null }
+      : null;
+    if (receipt) {
+      const buyer = receipt.customerId ? (customers ?? []).find((c) => c.id === receipt.customerId) : undefined;
+      const card = buyer && loyaltyRules.enabled ? loyaltyState(buyer.id, customerSales ?? [], loyaltyRules) : null;
+      const couponLine = earned ? `Service coupon ${earned.coupon.code}: ${termsText(earned.batch, business.name || 'JoshWorks')}` : undefined;
+      return {
+        ...base,
+        mode: 'thanks',
+        cart: cartView,
+        customer: who,
+        pay: null,
+        thanks: {
+          receiptNo: receipt.receiptNo,
+          total: receipt.total,
+          change: receipt.change,
+          paidWith: receipt.payments.map((p) => p.name).join(' + '),
+          receipt: receiptText(receipt, business, ev.name, couponLine),
+          coupon: earned ? { code: earned.coupon.code, text: `${offText(earned.batch)} a ${business.name || 'JoshWorks'} service of ${peso(earned.batch.minSpend)} or more` } : null,
+          loyalty: card ? `${card.balance} stamp${card.balance === 1 ? '' : 's'} on your card` : null,
+        },
+      };
+    }
+    if (paying) {
+      const picked = payWith.map((id) => eventMethods.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m);
+      const withQr = picked.find((m) => m.kind !== 'cash' && m.qr);
+      return { ...base, mode: 'paying', cart: cartView, customer: who, pay: { amount: priced.total, method: picked.map((m) => m.name).join(' + ') || 'Cash', qr: withQr?.qr ?? null }, thanks: null };
+    }
+    return { ...base, mode: 'cart', cart: cartView, customer: who, pay: null, thanks: null };
+  }, [business, ev.name, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, customers, customerSales, earned, paying, payWith, eventMethods]);
+  useCustomerScreen(display);
+
+  const showCustomerScreen = async () => {
+    const r = await openCustomerScreen();
+    if (r === 'blocked') app.toast('The browser blocked the customer screen. Allow pop-ups for this site, then try again.', { tone: 'bad' });
+    else if (r === 'moved') app.toast('The customer screen is on the second monitor. Click Full screen there.', { tone: 'good' });
+    else if (secondScreen) app.toast('Drag the customer screen to the second monitor, then click Full screen there.', { tone: 'info' });
+  };
+
   const closeDialog = closingSession ? (
     <CloseRegisterDialog session={closingSession} sales={sales ?? []} open onClose={() => setClosingSession(null)} />
   ) : null;
@@ -316,6 +368,9 @@ function Register({ ev }: { ev: JWEvent }) {
                   <PauseCircle size={16} /> Held ({held.length})
                 </Button>
               ) : null}
+              <Button size="sm" className="hide-phone" variant={secondScreen ? 'teal' : undefined} onClick={() => void showCustomerScreen()}>
+                <Monitor size={16} /> {secondScreen ? 'Customer screen (2nd monitor)' : 'Customer screen'}
+              </Button>
               <Button size="sm" onClick={() => setCashMove(true)}>
                 <ArrowDownUp size={16} /> Cash in/out
               </Button>
@@ -430,7 +485,7 @@ function Register({ ev }: { ev: JWEvent }) {
         <div className="phone-cart">{cartPanel}</div>
       </Dialog>
 
-      <PaymentDialog open={paying} onClose={() => setPaying(false)} total={priced.total} methods={eventMethods} onPay={pay} />
+      <PaymentDialog open={paying} onClose={() => setPaying(false)} total={priced.total} methods={eventMethods} onPay={pay} onMethods={setPayWith} />
       <ReceiptDialog
         sale={receipt}
         business={business}
@@ -652,6 +707,22 @@ function CartPanel({
       </div>
     </div>
   );
+}
+
+/** Send the customer screen's state whenever it changes. */
+function useCustomerScreen(state: DisplayState) {
+  const sender = useRef<DisplaySender | null>(null);
+  useEffect(() => {
+    sender.current = displaySender();
+    return () => {
+      sender.current?.close();
+      sender.current = null;
+    };
+  }, []);
+  const json = JSON.stringify(state);
+  useEffect(() => {
+    sender.current?.send(JSON.parse(json) as DisplayState);
+  }, [json]);
 }
 
 function OpenRegister({ ev }: { ev: JWEvent }) {

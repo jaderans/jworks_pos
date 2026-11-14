@@ -20,12 +20,13 @@
 
 1. Open the app (no internet needed) and pick the event at the top.
 2. **Sell**: check the event's prices on the price list next to **Open register** (event prices, bundle deals and discounts; anything without a price is flagged), then **Open register** with the float you counted.
-3. Sell. For GCash or bank transfers, type the reference number from the customer's screen and check it arrived before handing over the items.
-4. Regulars and new fans: tap **Customer** in the cart to add them (ask before ticking "OK to message"). They earn stamps, and **Use reward** appears when one is ready. A code from a post goes in **Voucher**.
-5. Custom requests (a name sticker, a commission): **Orders → New order**, take a deposit, give them the order number. When it's done, **Ready** (they get an email or you paste the copied message), then **Hand over** to collect the balance.
-6. Money that isn't a sale (water, tricycle, extra coins, a GCash cash-in or cash-out): **Cash in/out**. Pick **Cash** or **GCash**: only cash changes the drawer. Recorded one wrong? **Sales log** → tap it → fix or remove it (owner PIN), on the phone running that register.
-7. Mistakes: **Sales** → tap the sale → *Void* (with a reason) or *Change payment*. Cashiers need the owner PIN.
-8. How much is in? **Sales log → Money in**: the total and each method after cash in and out, and what the open drawers should hold.
+3. **Customer screen** (if you brought a monitor or TV): plug it into the laptop, then tap **Customer screen** at the top of the register. Chrome or Edge asks once to manage windows: allow it, and the screen opens on the second monitor. Click **Full screen** there. It needs no internet.
+4. Sell. For GCash or bank transfers, type the reference number from the customer's screen and check it arrived before handing over the items.
+5. Regulars and new fans: tap **Customer** in the cart to add them (ask before ticking "OK to message"). They earn stamps, and **Use reward** appears when one is ready. A code from a post goes in **Voucher**.
+6. Custom requests (a name sticker, a commission): **Orders → New order**, take a deposit, give them the order number. When it's done, **Ready** (they get an email or you paste the copied message), then **Hand over** to collect the balance.
+7. Money that isn't a sale (water, tricycle, extra coins, a GCash cash-in or cash-out): **Cash in/out**. Pick **Cash** or **GCash**: only cash changes the drawer. Recorded one wrong? **Sales log** → tap it → fix or remove it (owner PIN), on the phone running that register.
+8. Mistakes: **Sales** → tap the sale → *Void* (with a reason) or *Change payment*. Cashiers need the owner PIN.
+9. How much is in? **Sales log → Money in**: the total and each method after cash in and out, and what the open drawers should hold.
 
 ## Closing
 

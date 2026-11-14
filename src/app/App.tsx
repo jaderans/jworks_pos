@@ -30,6 +30,7 @@ const CustomersPage = lazy(() => import('../features/customers/CustomersPage'));
 const OrdersPage = lazy(() => import('../features/orders/OrdersPage'));
 const PrintPage = lazy(() => import('../features/print/PrintPage'));
 const ComparePage = lazy(() => import('../features/events/ComparePage'));
+const CustomerDisplay = lazy(() => import('../features/display/CustomerDisplay'));
 
 export function App() {
   return (
@@ -44,19 +45,27 @@ export function App() {
 function Gate() {
   const [done, setDone] = useState<boolean | null>(null);
   const location = useLocation();
+  // The customer screen is a second window of this app: it only shows what the register sends.
+  const isDisplay = location.pathname === '/display';
   usePwaUpdates();
   useEffect(() => {
     isSetupDone().then(setDone);
   }, []);
   useEffect(() => {
-    if (!done) return;
+    if (!done || isDisplay) return;
     void startSync();
     startOutbox();
     startDailySummary();
     startPrintFeed();
     // Studio jobs on this device that took a service coupon count as uses.
     void readStudioClaims().catch(() => null);
-  }, [done]);
+  }, [done, isDisplay]);
+  if (isDisplay)
+    return (
+      <Lazy>
+        <CustomerDisplay />
+      </Lazy>
+    );
   if (done === null) return <Loading />;
   if (location.pathname === '/join')
     return (
