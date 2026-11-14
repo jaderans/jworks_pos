@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Ban, Check as CheckIcon, FileDown, PackageCheck, Pencil, Plus, Printer, Search, Settings2, Trash2, Truck, UserRound, Wallet, X } from 'lucide-react';
+import { Ban, Check as CheckIcon, FileDown, PackageCheck, Pencil, Plus, Printer, Search, Settings2, Trash2, Truck, UserRound, Volume2, Wallet, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { alive, db } from '../../db/db';
 import { setSetting, settingValue } from '../../db/settings';
@@ -19,6 +19,7 @@ import {
 } from '../../services/print';
 import { CustomerPicker } from '../register/CustomerPicker';
 import { FindOrderDialog } from '../orders/FindOrderDialog';
+import { useCallOrder } from '../../display/voice';
 import { CouponField, appliedFrom, useCouponCheck } from '../coupons/CouponField';
 import { claimId } from '../../domain/coupons';
 import type { BusinessSettings, Customer, IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../../db/types';
@@ -45,6 +46,7 @@ export default function PrintPage() {
   const [cancelling, setCancelling] = useState<PrintOrder | null>(null);
   const [ratesOpen, setRatesOpen] = useState(false);
   const [finding, setFinding] = useState(false);
+  const callOrder = useCallOrder();
 
   const memberName = useMemo(() => new Map((members ?? []).map((m) => [m.id, m.name])), [members]);
   const custName = useMemo(() => new Map((customers ?? []).map((c) => [c.id, c.name])), [customers]);
@@ -140,7 +142,13 @@ export default function PrintPage() {
                     onProof={() => void act('Proof marked as sent', () => markProofSent(o.id))}
                     onApprove={() => void act('Approved', async () => app.toast(`Ready by ${fmtIsoDate(await approvePrint(o.id))}`))}
                     onPrint={() => void startPrinting(o)}
-                    onReady={() => void act(`${o.number} is ready`, () => setPrintStatus(o.id, 'ready'))}
+                    onReady={() =>
+                      void act(`${o.number} is ready`, async () => {
+                        await setPrintStatus(o.id, 'ready');
+                        if (o.delivery.method === 'pickup') callOrder(o.number, nameOf(o));
+                      })
+                    }
+                    onCall={() => callOrder(o.number, nameOf(o), true)}
                     onHandOver={() => setHanding(o)}
                     onDelete={owner ? () => void removeOrder(o) : undefined}
                   />
@@ -215,6 +223,8 @@ function PrintCard(p: {
   onPrint: () => void;
   onReady: () => void;
   onHandOver: () => void;
+  /** Call the order out loud again. */
+  onCall: () => void;
   /** Owner only. */
   onDelete?: () => void;
 }) {
@@ -289,9 +299,16 @@ function PrintCard(p: {
             <PackageCheck size={15} /> Ready
           </Button>
         ) : (
-          <Button size="sm" variant="primary" onClick={p.onHandOver}>
-            {o.delivery.method === 'courier' ? <Truck size={15} /> : <PackageCheck size={15} />} {o.delivery.method === 'courier' ? 'Shipped' : 'Picked up'}
-          </Button>
+          <>
+            <Button size="sm" variant="primary" onClick={p.onHandOver}>
+              {o.delivery.method === 'courier' ? <Truck size={15} /> : <PackageCheck size={15} />} {o.delivery.method === 'courier' ? 'Shipped' : 'Picked up'}
+            </Button>
+            {o.delivery.method === 'pickup' ? (
+              <Button size="sm" variant="ghost" onClick={p.onCall}>
+                <Volume2 size={15} /> Call
+              </Button>
+            ) : null}
+          </>
         )}
         {t.balance > 0 ? (
           <Button size="sm" variant="ghost" onClick={p.onPay}>

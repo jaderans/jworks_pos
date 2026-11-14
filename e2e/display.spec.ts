@@ -77,3 +77,35 @@ test('the customer screen follows the sale: items and total, paying, thank-you, 
   expect(await screen.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
   expect(errors).toEqual([]);
 });
+
+test('a ready order is called: "Now calling" on the customer screen', async ({ page }) => {
+  test.setTimeout(90_000);
+  await setupOwner(page, 'Joshua Ranin', '1111');
+  await createEvent(page, 'Hilway November 2026');
+  await openRegister(page);
+  const [screen] = await Promise.all([page.waitForEvent('popup'), page.getByRole('button', { name: /^Customer screen/ }).click()]);
+  await screen.setViewportSize({ width: 1920, height: 1080 });
+
+  await page.goto('/#/orders');
+  await page.getByRole('button', { name: 'New order' }).click();
+  const d = page.getByRole('dialog', { name: 'New order' });
+  await d.getByLabel('Name', { exact: true }).fill('Leanna Rosales');
+  await d.getByRole('button', { name: 'Custom piece' }).click();
+  await d.getByLabel('What it is').fill('Couple sticker');
+  await d.getByLabel('Price each of Couple sticker').fill('240');
+  await d.getByLabel('Take a deposit now').uncheck();
+  await d.getByRole('button', { name: 'Save order' }).click();
+  await page.getByRole('dialog', { name: 'Order saved' }).getByRole('button', { name: 'Done' }).click();
+
+  const card = page.getByRole('article', { name: /Order Q[A-Z]-01/ });
+  await card.getByRole('button', { name: 'Ready' }).click();
+  const call = screen.getByRole('status').filter({ hasText: 'Now calling' });
+  await expect(call).toContainText(/Q[A-Z]-01/);
+  await expect(call).toContainText('Leanna, your order is ready!');
+  // Behind it, the event's slides: the cashier isn't on Sell, so the screen uses the event picked on this laptop.
+  await expect(screen.locator('.cd-full .sl-stage')).toBeVisible();
+  await screen.waitForTimeout(700);
+  await screen.screenshot({ path: `${SHOTS}/display-calling.png` });
+  // Call again from the card.
+  await expect(page.getByRole('article', { name: /Order Q[A-Z]-01/ }).getByRole('button', { name: 'Call' })).toBeVisible();
+});

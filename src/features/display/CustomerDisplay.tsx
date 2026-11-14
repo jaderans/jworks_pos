@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { Maximize } from 'lucide-react';
 import { peso } from '../../lib/money';
 import { useLocal } from '../../hooks/data';
-import { displayReceiver } from '../../display/channel';
+import { displayReceiver, type DisplayCall } from '../../display/channel';
 import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
 import { Slides, useSlides } from './Slides';
 import { refreshStickers } from '../../display/stickers';
@@ -13,6 +13,8 @@ import type { DisplayState } from '../../domain/display';
 import lockup from '../../assets/brand/lockup-on-dark.png';
 import './display.css';
 
+/** "Now calling" stays up this long. */
+const CALL_MS = 15_000;
 /** After a sale, the thank-you stays up this long unless the next customer's items come in. */
 const THANKS_MS = 15_000;
 
@@ -31,9 +33,12 @@ export default function CustomerDisplay() {
   const [qr, setQr] = useState('');
   const [full, setFull] = useState(!!document.fullscreenElement);
   const [cursor, setCursor] = useState(true);
+  const [calling, setCalling] = useState<DisplayCall | null>(null);
   const saved = useLocal<Partial<DisplaySettings>>('display', DEFAULT_DISPLAY);
   const settings = useMemo<DisplaySettings>(() => ({ ...DEFAULT_DISPLAY, ...(saved ?? {}) }), [saved]);
-  const { slides, urls } = useSlides(state?.eventId ?? null, settings);
+  // With no register sending yet (the cashier is on another page), the event picked on this laptop.
+  const activeEventId = useLocal<string | null>('activeEventId', null) ?? null;
+  const { slides, urls } = useSlides(state?.eventId ?? activeEventId, settings);
   // New custom sticker designs from Drive, every few minutes while online.
   useEffect(() => {
     if (!settings.driveStickers) return;
@@ -53,7 +58,7 @@ export default function CustomerDisplay() {
         if (busy) setBusyAt(Date.now());
         if (s.mode === 'thanks') setThanks({ s, until: Date.now() + THANKS_MS });
         else if (s.mode !== 'cart' || s.cart.count > 0) setThanks((t) => (s.mode === 'wheel' ? t : null));
-      }),
+      }, setCalling),
     [],
   );
 
@@ -113,7 +118,9 @@ export default function CustomerDisplay() {
 
   const showingThanks = thanks && now < thanks.until && (!state || state.mode === 'thanks' || (state.mode === 'cart' && state.cart.count === 0));
   const view: View = !state
-    ? 'waiting'
+    ? activeEventId
+      ? 'idle'
+      : 'waiting'
     : showingThanks
       ? 'thanks'
       : state.mode === 'wheel' && state.wheel
@@ -205,6 +212,13 @@ export default function CustomerDisplay() {
           </aside>
         </>
       )}
+      {calling && now - calling.at < CALL_MS ? (
+        <div className="cd-call" role="status" aria-live="assertive">
+          <span className="sl-eyebrow">Now calling</span>
+          <b className="num">{calling.number}</b>
+          {calling.name ? <span>{calling.name}, your order is ready!</span> : <span>Your order is ready!</span>}
+        </div>
+      ) : null}
       {!full ? (
         <button type="button" className="cd-fullbtn" onClick={goFull}>
           <Maximize size={18} aria-hidden="true" /> Full screen

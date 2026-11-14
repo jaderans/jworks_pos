@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Ban, ClipboardList, HandCoins, PackageCheck, Pencil, Plus, Search, Send, Trash2, UserRound, Wallet, X } from 'lucide-react';
+import { Ban, ClipboardList, HandCoins, PackageCheck, Pencil, Plus, Search, Send, Trash2, UserRound, Volume2, Wallet, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import {
   useCustomers, useEventProducts, useMembers, useOrderSales, useOrders, usePaymentMethods, useProducts, useSessions, useSettingRows,
@@ -22,6 +22,7 @@ import { flushOutbox, queueEmail } from '../../email/outbox';
 import { orderReadyEmail, orderReadyText } from '../../email/templates';
 import { PaymentDialog } from '../register/PaymentDialog';
 import { FindOrderDialog } from './FindOrderDialog';
+import { useCallOrder } from '../../display/voice';
 import { ReceiptDialog } from '../register/ReceiptDialog';
 import { CustomerPicker } from '../register/CustomerPicker';
 import type { BusinessSettings, Customer, JWEvent, Order, OrderLine, OrderStatus, Sale, SalePayment } from '../../db/types';
@@ -67,6 +68,7 @@ function Orders({ ev }: { ev: JWEvent }) {
   const [cancelling, setCancelling] = useState<Order | null>(null);
   const [created, setCreated] = useState<Order | null>(null);
   const [finding, setFinding] = useState(false);
+  const callOrder = useCallOrder();
   const [receipt, setReceipt] = useState<Sale | null>(null);
   const owner = app.can('viewProfit');
   const toStudio = async (o: Order) => {
@@ -139,6 +141,7 @@ function Orders({ ev }: { ev: JWEvent }) {
 
   const markReady = async (o: Order) => {
     await setOrderStatus(o.id, 'ready');
+    callOrder(o.number, nameOf(o));
     const c = customerOf(o);
     const to = c?.email || (isEmail(o.contact) ? o.contact : '');
     const m = money(o);
@@ -225,6 +228,7 @@ function Orders({ ev }: { ev: JWEvent }) {
                     onStart={() => setOrderStatus(o.id, 'in-progress')}
                     onReady={() => markReady(o)}
                     onHandOver={() => handOver(o)}
+                    onCall={() => callOrder(o.number, nameOf(o), true)}
                     onStudio={owner ? () => toStudio(o) : undefined}
                     onDelete={owner ? () => void removeOrder(o) : undefined}
                   />
@@ -329,7 +333,7 @@ function Orders({ ev }: { ev: JWEvent }) {
 }
 
 function OrderCard({
-  order: o, money: m, customer, maker, otherEvent, onEdit, onCancel, onDeposit, onStart, onReady, onHandOver, onStudio, onDelete,
+  order: o, money: m, customer, maker, otherEvent, onEdit, onCancel, onDeposit, onStart, onReady, onHandOver, onCall, onStudio, onDelete,
 }: {
   order: Order;
   money: OrderMoney;
@@ -342,6 +346,8 @@ function OrderCard({
   onStart: () => void;
   onReady: () => void;
   onHandOver: () => void;
+  /** Call the order out loud again. */
+  onCall: () => void;
   /** Owner only: send it to JoshWorks Studio as a job. */
   onStudio?: () => void;
   /** Owner only. */
@@ -407,9 +413,14 @@ function OrderCard({
             <PackageCheck size={15} /> Ready
           </Button>
         ) : (
-          <Button size="sm" variant="primary" onClick={onHandOver}>
-            <HandCoins size={15} /> Hand over
-          </Button>
+          <>
+            <Button size="sm" variant="primary" onClick={onHandOver}>
+              <HandCoins size={15} /> Hand over
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onCall}>
+              <Volume2 size={15} /> Call
+            </Button>
+          </>
         )}
         {m.balance > 0 && o.status !== 'ready' ? (
           <Button size="sm" variant="ghost" onClick={onDeposit}>

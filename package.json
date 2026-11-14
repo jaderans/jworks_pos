@@ -1,7 +1,7 @@
 {
   "name": "jworks-pos",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "JoshWorks POS: offline-first event register, production cost, profit share, reports and pricing calculator.",
   "type": "module",
   "scripts": {

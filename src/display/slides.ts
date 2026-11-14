@@ -26,9 +26,13 @@ export interface DisplaySettings {
   ownAds: boolean;
   /** Custom sticker designs from the Drive folder. */
   driveStickers: boolean;
+  /** Call ready orders out loud: a chime, then the number. */
+  callOut: boolean;
+  /** The voice that calls them, by name; '' for the best woman's voice on the laptop. */
+  voice: string;
 }
 
-export const DEFAULT_DISPLAY: DisplaySettings = { idleSeconds: 20, slideSeconds: 8, sideAds: true, priceSlides: true, bestSellers: true, ownAds: true, driveStickers: true };
+export const DEFAULT_DISPLAY: DisplaySettings = { idleSeconds: 20, slideSeconds: 8, sideAds: true, priceSlides: true, bestSellers: true, ownAds: true, driveStickers: true, callOut: true, voice: '' };
 
 export type Slide =
   | { kind: 'brand'; key: string }

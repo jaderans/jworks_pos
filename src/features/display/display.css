@@ -156,3 +156,16 @@
 .sl-stage.side .sl-sticker { grid-template-columns: minmax(0, 1fr); text-align: center; justify-items: center; }
 .sl-stage.side .sl-sticker-art { max-height: 40vmin; }
 .sl-stage.side .sl-status { justify-self: center; }
+
+/* "Now calling": over whatever is on screen, while the voice calls the order. */
+.cd-call {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; display: grid; justify-items: center; gap: 0.3em; text-align: center;
+  min-width: min(70vw, 28em); padding: 1.2em 2em 1.4em; border-radius: 1em; background: var(--cd-yellow); color: #2b2526;
+  /* The second shadow dims everything else on screen while the number is called. */
+  box-shadow: 0 1.5em 4em rgba(0, 0, 0, 0.55), 0 0 0 100vmax rgba(8, 12, 13, 0.72); animation: cd-call 0.5s ease-out;
+}
+.cd-call .sl-eyebrow { color: #2b2526; }
+.cd-call b { font-family: var(--f-display); font-size: 5em; line-height: 1; letter-spacing: 0.02em; }
+.cd-call span:last-child { font-size: 1.4em; font-weight: 800; }
+@keyframes cd-call { from { opacity: 0; transform: translate(-50%, -50%) scale(0.85); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .cd-call { animation: none; } }

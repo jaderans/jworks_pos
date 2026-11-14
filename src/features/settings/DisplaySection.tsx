@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowDown, ArrowUp, CloudDownload, ExternalLink, Film, ImagePlus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, CloudDownload, ExternalLink, Film, ImagePlus, Trash2, Volume2 } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import { db } from '../../db/db';
 import { setLocal } from '../../db/local';
 import { useLocal } from '../../hooks/data';
 import { Button, Callout, IconButton, Segmented, Toggle } from '../../components/ui';
-import { Field, NumberInput } from '../../components/form';
+import { Field, NumberInput, Select } from '../../components/form';
 import { uid } from '../../lib/ids';
 import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
 import { refreshStickers } from '../../display/stickers';
+import { callOrder, loadVoices, rankVoices } from '../../display/voice';
 import { DriveError, driveFolders } from '../../drive/drive';
 import { relativeTime } from '../../lib/time';
 import type { DisplayMedia } from '../../db/types';
@@ -34,6 +35,10 @@ export function DisplaySection() {
   const [checking, setChecking] = useState(false);
   const [driveNote, setDriveNote] = useState<{ tone: 'bad' | 'info'; text: string } | null>(null);
   const [folder, setFolder] = useState('');
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  useEffect(() => {
+    void loadVoices().then((v) => setVoices(rankVoices(v)));
+  }, []);
   const checkDrive = async () => {
     setChecking(true);
     setDriveNote(null);
@@ -110,6 +115,24 @@ export function DisplaySection() {
         <Toggle id="ds-best" checked={s.bestSellers} onChange={(v) => set({ bestSellers: v })} label="Best sellers today (after 3 products have sold)" />
         <Toggle id="ds-own" checked={s.ownAds} onChange={(v) => set({ ownAds: v })} label="Your own ads, between the slides" />
         <Toggle id="ds-stickers" checked={s.driveStickers} onChange={(v) => set({ driveStickers: v })} label="Custom sticker designs from Google Drive" />
+        <Toggle id="ds-call" checked={s.callOut} onChange={(v) => set({ callOut: v })} label="Call ready orders out loud: a chime, then “Order Q A zero seven, your order is ready”" />
+        {s.callOut ? (
+          <div className="row wrap" style={{ alignItems: 'flex-end' }}>
+            <Field label="Voice" htmlFor="ds-voice" hint="“Needs internet” voices sound the most natural; with no signal it uses one that works offline." className="grow">
+              <Select id="ds-voice" value={s.voice} onChange={(e) => set({ voice: e.target.value })}>
+                <option value="">The best woman’s voice on this laptop</option>
+                {voices.map((v) => (
+                  <option key={v.name} value={v.name}>
+                    {v.name} · {v.localService ? 'works offline' : 'needs internet'}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Button size="sm" onClick={() => void callOrder('QA-07', 'Leanna', s.voice)}>
+              <Volume2 size={16} /> Test the voice
+            </Button>
+          </div>
+        ) : null}
       </div>
       {s.driveStickers ? (
         <div className="stack tight">

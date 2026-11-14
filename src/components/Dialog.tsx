@@ -40,6 +40,8 @@ export function Dialog({
     const t = window.setTimeout(() => {
       const root = ref.current;
       if (!root) return;
+      // A field already has the focus (autofocus, or someone started typing): don't pull it away mid-word.
+      if (root.contains(document.activeElement) && document.activeElement !== root) return;
       const target =
         (initialFocus ? root.querySelector<HTMLElement>(initialFocus) : null) ??
         root.querySelector<HTMLElement>('[autofocus], .dialog-body input:not([type=hidden]):not([disabled]), .dialog-body select, .dialog-body textarea') ??
