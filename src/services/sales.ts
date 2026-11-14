@@ -104,6 +104,7 @@ export interface CompleteSaleInput {
   kind?: 'deposit' | 'service';
   orderId?: string;
   printOrderId?: string;
+  prizeFor?: string;
 }
 
 /** Save a sale and take its items out of stock, in one transaction. */
@@ -138,6 +139,7 @@ export async function completeSale(input: CompleteSaleInput): Promise<Sale> {
       kind: input.kind,
       orderId: input.orderId,
       printOrderId: input.printOrderId,
+      prizeFor: input.prizeFor,
     });
     await db.sales.put(sale);
     const ids = [...new Set(sale.lines.map((l) => l.productId))];

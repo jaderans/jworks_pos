@@ -134,3 +134,15 @@
 .cd-side .sl-stage.side { padding: 5vmin 4vmin; }
 @keyframes cd-fade { from { opacity: 0; transform: translateY(0.5em); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .sl { animation: none; } }
+
+/* The prize wheel, full screen: the wheel on the left, what it lands on beside it. */
+.cd.view-wheel { grid-template-columns: minmax(0, 1fr); }
+.cd-wheel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: center; gap: 4vmin; padding: 5vmin 7vmin; text-align: left; justify-items: stretch; place-content: stretch; }
+.cd-wheel-svg { width: min(82vmin, 100%); height: auto; justify-self: center; }
+.cd-wheel-result { display: grid; gap: 0.5em; }
+.cd-wheel-result b { font-family: var(--f-display); font-size: 3.4em; line-height: 1.05; letter-spacing: -0.02em; }
+.cd-wheel-result span:last-child { color: #d6eef0; font-size: 1.3em; }
+.cd-wheel-result.on b { color: var(--cd-yellow); animation: cd-fade 0.5s ease-out; }
+@media (max-aspect-ratio: 1/1) { .cd-wheel { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; } }
+.sl-ready li { justify-content: flex-start; gap: 1em; }
+.sl-ready li b { font-family: var(--f-display); color: var(--cd-yellow); font-size: 1.2em; min-width: 5em; }

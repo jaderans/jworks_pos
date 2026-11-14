@@ -6,6 +6,8 @@ import { useLocal } from '../../hooks/data';
 import { displayReceiver } from '../../display/channel';
 import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
 import { Slides, useSlides } from './Slides';
+import { WheelSvg } from './WheelSvg';
+import type { WheelSlice } from '../../domain/wheel';
 import type { DisplayState } from '../../domain/display';
 import lockup from '../../assets/brand/lockup-on-dark.png';
 import './display.css';
@@ -13,7 +15,7 @@ import './display.css';
 /** After a sale, the thank-you stays up this long unless the next customer's items come in. */
 const THANKS_MS = 15_000;
 
-type View = 'waiting' | 'idle' | 'welcome' | 'cart' | 'paying' | 'thanks';
+type View = 'waiting' | 'idle' | 'welcome' | 'cart' | 'paying' | 'thanks' | 'wheel';
 
 /**
  * The customer screen, full screen on the second monitor (or a window dragged
@@ -36,10 +38,10 @@ export default function CustomerDisplay() {
     () =>
       displayReceiver((s) => {
         setState(s);
-        const busy = s.mode === 'paying' || s.mode === 'thanks' || (s.mode === 'cart' && s.cart.count > 0);
+        const busy = s.mode === 'paying' || s.mode === 'thanks' || s.mode === 'wheel' || (s.mode === 'cart' && s.cart.count > 0);
         if (busy) setBusyAt(Date.now());
         if (s.mode === 'thanks') setThanks({ s, until: Date.now() + THANKS_MS });
-        else if (s.mode !== 'cart' || s.cart.count > 0) setThanks(null);
+        else if (s.mode !== 'cart' || s.cart.count > 0) setThanks((t) => (s.mode === 'wheel' ? t : null));
       }),
     [],
   );
@@ -103,7 +105,9 @@ export default function CustomerDisplay() {
     ? 'waiting'
     : showingThanks
       ? 'thanks'
-      : state.mode === 'paying'
+      : state.mode === 'wheel' && state.wheel
+        ? 'wheel'
+        : state.mode === 'paying'
         ? 'paying'
         : state.mode === 'cart' && state.cart.count > 0
           ? 'cart'
@@ -122,6 +126,8 @@ export default function CustomerDisplay() {
           <p className="cd-tagline">Stickers · Pins · Custom art</p>
           <p className="cd-hint">Waiting for the register. Open Sell in the other window.</p>
         </section>
+      ) : view === 'wheel' && s?.wheel ? (
+        <WheelView w={s.wheel} />
       ) : view === 'idle' ? (
         <section className="cd-full slides" aria-label="Welcome">
           <Slides slides={slides} urls={urls} seconds={settings.slideSeconds} variant="full" />
@@ -194,6 +200,46 @@ export default function CustomerDisplay() {
         </button>
       ) : null}
     </div>
+  );
+}
+
+/** How long the wheel turns before it stops on the prize. */
+const SPIN_MS = 6000;
+
+function WheelView({ w }: { w: { id: string; slices: WheelSlice[]; turn: number; won: boolean; label: string; detail: string } }) {
+  const [turn, setTurn] = useState(0);
+  const [landed, setLanded] = useState(false);
+  useEffect(() => {
+    // Start from rest, then turn on the next frames, so every spin animates.
+    setTurn(0);
+    setLanded(false);
+    let a = 0;
+    const b = requestAnimationFrame(() => (a = requestAnimationFrame(() => setTurn(w.turn))));
+    const t = window.setTimeout(() => setLanded(true), SPIN_MS + 200);
+    return () => {
+      cancelAnimationFrame(b);
+      cancelAnimationFrame(a);
+      window.clearTimeout(t);
+    };
+  }, [w.id, w.turn]);
+  return (
+    <section className="cd-full cd-wheel" aria-label="Prize wheel">
+      <WheelSvg slices={w.slices} turn={turn} spinMs={turn ? SPIN_MS : 0} className="cd-wheel-svg" />
+      <div className={`cd-wheel-result${landed ? ' on' : ''}`} role="status" aria-live="polite">
+        {landed ? (
+          <>
+            <span className="sl-eyebrow">{w.won ? 'You won' : 'So close'}</span>
+            <b>{w.label}</b>
+            <span>{w.detail}</span>
+          </>
+        ) : (
+          <>
+            <span className="sl-eyebrow">Prize wheel</span>
+            <b>Good luck!</b>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 

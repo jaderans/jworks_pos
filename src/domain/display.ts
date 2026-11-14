@@ -1,5 +1,6 @@
 import { peso, type Cents } from '../lib/money';
 import type { BundleLike, PricedCart } from './cart';
+import type { WheelSlice } from './wheel';
 
 /**
  * The customer screen: what the customer sees on the second monitor while the
@@ -27,8 +28,8 @@ export interface DisplayCart {
 
 export interface DisplayState {
   v: 1;
-  /** closed: no register open. cart: ringing up (or nothing yet). paying: the payment step. thanks: the sale is done. */
-  mode: 'closed' | 'cart' | 'paying' | 'thanks';
+  /** closed: no register open. cart: ringing up (or nothing yet). paying: the payment step. thanks: the sale is done. wheel: the prize wheel spins. */
+  mode: 'closed' | 'cart' | 'paying' | 'thanks' | 'wheel';
   /** The event being sold at: the screen's price slides come from it. */
   eventId: string;
   business: string;
@@ -37,6 +38,8 @@ export interface DisplayState {
   customer: { name: string; loyalty: string | null } | null;
   pay: { amount: Cents; method: string; qr: string | null } | null;
   thanks: { receiptNo: string; total: Cents; change: Cents; paidWith: string; receipt: string; coupon: { code: string; text: string } | null; loyalty: string | null } | null;
+  /** A spin: the slices, how far the wheel turns, and what it lands on. */
+  wheel?: { id: string; slices: WheelSlice[]; turn: number; won: boolean; label: string; detail: string } | null;
 }
 
 export const emptyDisplayCart = (): DisplayCart => ({ lines: [], savings: [], subtotal: 0, total: 0, count: 0, nudge: null });

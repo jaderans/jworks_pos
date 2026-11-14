@@ -715,3 +715,10 @@ button.list-item { width: 100%; border: 0; border-bottom: 1px solid var(--line);
 /* Settings: the customer screen's ads */
 .ad-row { flex-wrap: wrap; }
 .ad-thumb { width: 64px; height: 36px; object-fit: cover; border-radius: 6px; background: var(--sunk); flex: none; }
+
+/* Event → Wheel */
+.wheel-setup { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1100px) { .wheel-setup { grid-template-columns: minmax(0, 1fr) 320px; } .wheel-preview { position: sticky; top: 16px; } }
+.wheel-prize { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.wheel-svg { width: 100%; max-width: 300px; height: auto; justify-self: center; }
+.wheel-cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--teal-soft); }

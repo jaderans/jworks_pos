@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowDownUp, CalendarPlus, Gift, Lock, Minus, Monitor, PackageOpen, PauseCircle, Percent, Plus, ScanLine, ShoppingCart, Ticket, Trash2, UserPlus, UserRound, X } from 'lucide-react';
+import { ArrowDownUp, CalendarPlus, Disc3, Gift, Lock, Minus, Monitor, PackageOpen, PauseCircle, Percent, Plus, ScanLine, ShoppingCart, Ticket, Trash2, UserPlus, UserRound, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import {
   useBundleRules, useCategories, useCustomerSales, useCustomers, useEventProducts, usePaymentMethods, useProducts, useSales, useSessions, useSettingRows,
@@ -22,6 +22,8 @@ import { displayCart, emptyDisplayCart, type DisplayState } from '../../domain/d
 import { offText, termsText } from '../../domain/coupons';
 import { displaySender, type DisplaySender } from '../../display/channel';
 import { openCustomerScreen, useSecondScreen } from '../../display/screens';
+import { wheelQualifies } from '../../domain/wheel';
+import { spinWheel, type Spin } from '../../services/wheel';
 import { effectivePrice, findByCode, isOnSale, setEventProduct, updateProduct } from '../../services/catalog';
 import { completeSale, openSession } from '../../services/sales';
 import { issueEarnedCoupon } from '../../services/coupons';
@@ -114,6 +116,8 @@ function Register({ ev }: { ev: JWEvent }) {
   const [customerOpen, setCustomerOpen] = useState(false);
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [payWith, setPayWith] = useState<string[]>([]);
+  const [spin, setSpin] = useState<(Spin & { id: string }) | null>(null);
+  const [spinning, setSpinning] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const secondScreen = useSecondScreen();
   const earned = useSaleCoupon(receipt?.id);
@@ -280,6 +284,17 @@ function Register({ ev }: { ev: JWEvent }) {
     const who = customer
       ? { name: customer.name, loyalty: loyalty && loyaltyRules.enabled ? (loyalty.rewards ? `${rewardText(loyaltyRules)} ready to use` : `${loyalty.balance} stamp${loyalty.balance === 1 ? '' : 's'} · ${loyalty.toNext} more for ${rewardText(loyaltyRules)}`) : null }
       : null;
+    if (receipt && spin) {
+      return {
+        ...base,
+        mode: 'wheel',
+        cart: cartView,
+        customer: who,
+        pay: null,
+        thanks: null,
+        wheel: { id: spin.id, slices: spin.slices, turn: spin.turn, won: !!spin.prize, label: spin.label, detail: spin.prize?.kind === 'voucher' && spin.voucher ? `Your code: ${spin.voucher.code}` : spin.prize ? 'Collect it at the counter.' : 'Thank you for shopping!' },
+      };
+    }
     if (receipt) {
       const buyer = receipt.customerId ? (customers ?? []).find((c) => c.id === receipt.customerId) : undefined;
       const card = buyer && loyaltyRules.enabled ? loyaltyState(buyer.id, customerSales ?? [], loyaltyRules) : null;
@@ -307,8 +322,38 @@ function Register({ ev }: { ev: JWEvent }) {
       return { ...base, mode: 'paying', cart: cartView, customer: who, pay: { amount: priced.total, method: picked.map((m) => m.name).join(' + ') || 'Cash', qr: withQr?.qr ?? null }, thanks: null };
     }
     return { ...base, mode: 'cart', cart: cartView, customer: who, pay: null, thanks: null };
-  }, [business, ev.id, ev.name, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, customers, customerSales, earned, paying, payWith, eventMethods]);
+  }, [business, ev.id, ev.name, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, spin, customers, customerSales, earned, paying, payWith, eventMethods]);
   useCustomerScreen(display);
+
+  const spinFor = async (sale: Sale) => {
+    if (!session) return;
+    setSpinning(true);
+    try {
+      const s = await spinWheel({ ev, saleId: sale.id, session, device: app.device, by: app.member?.id ?? null });
+      setSpin({ ...s, id: uid() });
+    } catch (e) {
+      app.toast(e instanceof Error ? e.message : 'Couldn’t spin the wheel', { tone: 'bad' });
+    } finally {
+      setSpinning(false);
+    }
+  };
+  const wheelBox =
+    receipt && (spin || wheelQualifies(receipt, ev.wheel)) ? (
+      spin ? (
+        <Callout tone={spin.prize ? 'good' : 'info'} title={spin.prize ? `They won: ${spin.label}` : 'Try again: no prize this time'}>
+          {spin.detail}
+        </Callout>
+      ) : (
+        <div className="wheel-cta">
+          <span>
+            <b>This sale spins the prize wheel.</b> It spins on the customer screen.
+          </span>
+          <Button variant="teal" onClick={() => void spinFor(receipt)} disabled={spinning}>
+            <Disc3 size={18} /> Spin the wheel
+          </Button>
+        </div>
+      )
+    ) : null;
 
   const showCustomerScreen = async () => {
     const r = await openCustomerScreen();
@@ -490,8 +535,10 @@ function Register({ ev }: { ev: JWEvent }) {
         sale={receipt}
         business={business}
         eventName={ev.name}
+        extra={wheelBox}
         onClose={() => {
           setReceipt(null);
+          setSpin(null);
           searchRef.current?.focus({ preventScroll: true });
         }}
       />

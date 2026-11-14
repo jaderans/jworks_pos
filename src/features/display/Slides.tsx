@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, alive } from '../../db/db';
 import { settingValue } from '../../db/settings';
-import { useBundleRules, useCategories, useEventProducts, useProducts, useSales, useSettingRows } from '../../hooks/data';
+import { useBundleRules, useCategories, useEventProducts, useOrders, usePrintOrders, useProducts, useSales, useSettingRows } from '../../hooks/data';
+import { wheelRuleText } from '../../domain/wheel';
 import { peso } from '../../lib/money';
 import { buildSlides, mixSlides, type DisplaySettings, type Slide } from '../../display/slides';
 import type { BusinessSettings, DisplayMedia, PrintRates } from '../../db/types';
@@ -18,6 +19,9 @@ export function useSlides(eventId: string | null, settings: DisplaySettings): { 
   const rows = useSettingRows();
   const batches = useLiveQuery(async () => (eventId ? alive(await db.couponBatches.where('eventId').equals(eventId).toArray()) : []), [eventId]);
   const media = useLiveQuery(() => db.displayMedia.orderBy('sort').toArray(), []);
+  const orders = useOrders();
+  const prints = usePrintOrders();
+  const ev = useLiveQuery(async () => (eventId ? db.events.get(eventId) : undefined), [eventId]);
   const urls = useMediaUrls(settings.ownAds ? media : undefined);
   const slides = useMemo(() => {
     const made = eventId
@@ -32,10 +36,16 @@ export function useSlides(eventId: string | null, settings: DisplaySettings): { 
           sales: sales ?? [],
           business: settingValue<BusinessSettings>(rows, 'business').name || 'JoshWorks',
           settings,
+          // First names only: the screen faces the public.
+          ready: [
+            ...(orders ?? []).filter((o) => o.status === 'ready').map((o) => ({ number: o.number, name: o.customerName.split(' ')[0] })),
+            ...(prints ?? []).filter((o) => o.status === 'ready').map((o) => ({ number: o.number, name: o.customerName.split(' ')[0] })),
+          ],
+          wheel: ev?.wheel?.on ? { rule: wheelRuleText(ev.wheel, categories ?? []), prizes: ev.wheel.prizes.map((p) => p.label) } : null,
         })
       : [{ kind: 'brand' as const, key: 'brand' }];
     return mixSlides(made, settings.ownAds ? (media ?? []) : []);
-  }, [eventId, products, categories, eps, rules, rows, batches, sales, media, settings]);
+  }, [eventId, products, categories, eps, rules, rows, batches, sales, media, settings, orders, prints, ev]);
   return { slides, urls };
 }
 
@@ -177,6 +187,30 @@ function SlideView({ s, url, onEnded }: { s: Slide; url?: string; onEnded: () =>
               </li>
             ))}
           </ol>
+        </div>
+      );
+    case 'ready':
+      return (
+        <div className="sl sl-ready">
+          <span className="sl-eyebrow">Ready for pickup</span>
+          <h2>Is your order here?</h2>
+          <ul>
+            {s.rows.map((r) => (
+              <li key={r.number}>
+                <b className="mono">{r.number}</b>
+                <span className="sl-name">{r.name}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="sl-sub">Come to the counter with your order number.</p>
+        </div>
+      );
+    case 'wheel':
+      return (
+        <div className="sl sl-coupon">
+          <span className="sl-eyebrow">Prize wheel</span>
+          <h2>{s.rule}: spin the prize wheel!</h2>
+          {s.prizes.length ? <p className="sl-sub">Win {s.prizes.join(', ')} and more.</p> : null}
         </div>
       );
     case 'media':

@@ -1,4 +1,5 @@
 import type { Cents } from '../lib/money';
+import type { WheelConfig, WheelResult } from '../domain/wheel';
 
 /**
  * Every record that syncs between devices carries these fields.
@@ -155,6 +156,8 @@ export interface JWEvent extends Syncable {
   share: ShareSettings;
   counters: { leads: number; orgOfficers: number };
   notes: string;
+  /** The prize wheel at this event. Older events have none. */
+  wheel?: WheelConfig | null;
 }
 
 export interface EventProduct extends Syncable {
@@ -296,6 +299,10 @@ export interface Sale extends Syncable {
   orderId?: string;
   /** The print order a service payment is for. */
   printOrderId?: string;
+  /** What this sale won on the prize wheel (it spins once). */
+  wheel?: WheelResult;
+  /** A ₱0 sale of a wheel prize: the sale that won it. */
+  prizeFor?: string;
 }
 
 export interface StockMove extends Syncable {

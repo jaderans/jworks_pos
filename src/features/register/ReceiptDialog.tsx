@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import QRCode from 'qrcode';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { CheckCircle2, Clock, Mail, Ticket, XCircle } from 'lucide-react';
@@ -46,12 +46,15 @@ export function ReceiptDialog({
   business,
   eventName,
   primaryLabel = 'New sale',
+  extra,
 }: {
   sale: Sale | null;
   onClose: () => void;
   business: BusinessSettings;
   eventName: string;
   primaryLabel?: string;
+  /** Shown under the change, e.g. the prize wheel. */
+  extra?: ReactNode;
 }) {
   const [qr, setQr] = useState('');
   const [showQr, setShowQr] = useState(false);
@@ -130,6 +133,7 @@ export function ReceiptDialog({
           <b>{peso(sale.total)}</b>
         </div>
       )}
+      {extra}
       {showQr && qr ? (
         <div className="center stack" style={{ justifyItems: 'center' }}>
           <img src={qr} alt="Receipt as a QR code" className="qr-img" style={{ width: 260, height: 260 }} />

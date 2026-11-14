@@ -36,6 +36,8 @@ export type Slide =
   | { kind: 'illustration'; key: string; tiers: { name: string; note: string; price: Cents; sets: { designs: number; price: Cents; saved: Cents }[] }[] }
   | { kind: 'coupon'; key: string; head: string; detail: string }
   | { kind: 'best'; key: string; rows: { name: string; qty: number }[] }
+  | { kind: 'ready'; key: string; rows: { number: string; name: string }[] }
+  | { kind: 'wheel'; key: string; rule: string; prizes: string[] }
   | { kind: 'media'; key: string; id: string; media: 'image' | 'video'; seconds: number };
 
 export interface SlideInput {
@@ -50,6 +52,10 @@ export interface SlideInput {
   business: string;
   today?: string;
   settings: Pick<DisplaySettings, 'priceSlides' | 'bestSellers'>;
+  /** Orders waiting at the counter: commission and print orders marked Ready. */
+  ready?: { number: string; name: string }[];
+  /** The event's prize wheel, when it's on: "Spend ₱250 or buy 15 Sticker items". */
+  wheel?: { rule: string; prizes: string[] } | null;
 }
 
 /** Products per price slide: readable from across the booth. */
@@ -114,6 +120,8 @@ export function buildSlides(i: SlideInput): Slide[] {
         detail: `For services of ${peso(earn.minSpend)} or more: sticker printing, illustration, commissions${earn.validTo ? `. Good until ${fmtIsoDate(earn.validTo)}` : ''}.`,
       });
   }
+  if (i.ready?.length) chunk(i.ready, 8).forEach((part, k) => out.push({ kind: 'ready', key: `ready:${k}`, rows: part }));
+  if (i.wheel?.rule) out.push({ kind: 'wheel', key: 'wheel', rule: i.wheel.rule, prizes: i.wheel.prizes });
   if (i.settings.bestSellers) {
     const sold = new Map<string, { name: string; qty: number }>();
     for (const s of i.sales) {
