@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { expect, test, type Page } from '@playwright/test';
-import { SHOTS, createEvent, payCash, setEventPrice, setupOwner, tapProduct } from './helpers';
+import { SHOTS, createEvent, payCash, setEventPrice, setupOwner, tapProduct, skipStickDetails } from './helpers';
 
 /**
  * Cloud sync against the Firebase emulators (run `npx firebase-tools emulators:start --only auth,firestore`).
@@ -80,6 +80,8 @@ test('owner, cashier and designer sync through the cloud', async ({ browser }) =
   const owner = await (await browser.newContext()).newPage();
   const cashier = await (await browser.newContext()).newPage();
   const designer = await (await browser.newContext()).newPage();
+  await skipStickDetails(owner);
+  await skipStickDetails(cashier);
   const errors: string[] = [];
   for (const p of [owner, cashier, designer]) p.on('pageerror', (e) => errors.push(e.message));
 

@@ -64,3 +64,14 @@ export async function offScreen(page: Page): Promise<string[]> {
     return out.slice(0, 8);
   });
 }
+
+/**
+ * Selling a Couple-of-Stickers pack opens its details right after payment.
+ * In tests about something else, close them with "Later" whenever they appear.
+ */
+export async function skipStickDetails(page: Page): Promise<void> {
+  const d = page.getByRole('dialog', { name: /^Couple-of-Stickers for/ });
+  await page.addLocatorHandler(d, async () => {
+    await d.getByRole('button', { name: 'Later' }).click();
+  });
+}

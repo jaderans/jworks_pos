@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Ban, ClipboardList, HandCoins, PackageCheck, Pencil, Plus, Search, Send, Trash2, UserRound, Volume2, Wallet, X } from 'lucide-react';
+import { Ban, ClipboardList, CloudDownload, HandCoins, Monitor, PackageCheck, Pencil, Plus, Printer, Search, Send, Trash2, UserRound, Volume2, Wallet, X } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db/db';
+import { StickDialog } from '../stick/StickDialog';
+import { printStubs } from '../stick/Stubs';
+import { miniPic } from '../stick/MiniPicker';
+import { handOverStick } from '../../services/stick';
+import { DEFAULT_STICK, claimNo, designFileName, minisFor, packLabel, type StickSettings } from '../../domain/stick';
+import { announceShowcase } from '../../display/channel';
+import { refreshStickers } from '../../display/stickers';
+import '../stick/stick.css';
 import { useApp } from '../../app/AppContext';
 import {
   useCustomers, useEventProducts, useMembers, useOrderSales, useOrders, usePaymentMethods, useProducts, useSessions, useSettingRows,
@@ -10,7 +20,7 @@ import { Dialog } from '../../components/Dialog';
 import { Badge, Button, Callout, EmptyState, IconButton, Loading, PageHeader, Segmented } from '../../components/ui';
 import { Check, Field, MoneyInput, NumberInput, Select, TextArea, TextInput } from '../../components/form';
 import { peso, type Cents } from '../../lib/money';
-import { fmtDateTime } from '../../lib/time';
+import { fmtDateTime, fmtTime } from '../../lib/time';
 import { effectivePrice, isOnSale } from '../../services/catalog';
 import { ORDER_STATUS_LABEL, dueText, isOpenOrder, orderDeleteBlock, orderDiscount, orderMoney, orderServicePrice, orderTotal, suggestedDeposit, type OrderMoney } from '../../domain/orders';
 import { claimId } from '../../domain/coupons';
@@ -26,7 +36,7 @@ import { useCallOrder } from '../../display/voice';
 import { makeIntoName, makeIntoPrice, makeIntoRates } from '../../domain/makeInto';
 import { ReceiptDialog } from '../register/ReceiptDialog';
 import { CustomerPicker } from '../register/CustomerPicker';
-import type { BusinessSettings, Customer, JWEvent, Order, OrderLine, OrderStatus, PrintRates, Sale, SalePayment } from '../../db/types';
+import type { BusinessSettings, Customer, JWEvent, Order, OrderLine, OrderStatus, PrintRates, Sale, SalePayment, StickerArt } from '../../db/types';
 import './orders.css';
 
 export default function OrdersPage() {
@@ -62,6 +72,36 @@ function Orders({ ev }: { ev: JWEvent }) {
   const sessions = useSessions(ev.id);
   const methods = usePaymentMethods();
   const business = settingValue<BusinessSettings>(useSettingRows(), 'business');
+  const stickSettings: StickSettings = { ...DEFAULT_STICK, ...settingValue<Partial<StickSettings>>(useSettingRows(), 'stick') };
+  // Finished Couple-of-Stickers designs from Drive, by their number.
+  const artList = useLiveQuery(() => db.stickerArt.toArray(), []);
+  const art = useMemo(() => new Map((artList ?? []).map((a) => [a.code.toUpperCase(), a])), [artList]);
+  const [stickEdit, setStickEdit] = useState<{ order: Order; sale: Sale } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const checkDrive = async () => {
+    setChecking(true);
+    try {
+      const r = await refreshStickers();
+      app.toast(`${r.total} design${r.total === 1 ? '' : 's'} in Drive${r.added ? `, ${r.added} new` : ''}`, { tone: 'good' });
+    } catch (e) {
+      app.toast(e instanceof Error ? e.message : 'Couldn’t check Drive', { tone: 'bad' });
+    } finally {
+      setChecking(false);
+    }
+  };
+  const stickDetails = async (o: Order) => {
+    const sale = o.stick ? await db.sales.get(o.stick.saleId) : undefined;
+    if (sale) setStickEdit({ order: o, sale });
+    else app.toast('The sale it was paid with isn’t on this device.', { tone: 'bad' });
+  };
+  /** Show the finished sticker on the customer screen, with the order number. */
+  const showOff = (o: Order) => {
+    const pack = o.stick?.packs.find((p) => art.has(p.designNo.toUpperCase()));
+    const a = pack ? art.get(pack.designNo.toUpperCase()) : undefined;
+    if (!o.stick || !pack || !a) return;
+    announceShowcase({ number: o.number, name: o.stick.nickname.split(/\s+/)[0], label: designFileName(pack.designNo, o.stick.nickname), art: a.blob, cta: 'Get your own Couple-of-Stickers: ask us at the counter!' });
+    app.toast(`${o.number} is on the customer screen`, { tone: 'good' });
+  };
   const [scope, setScope] = useState<'event' | 'open'>('event');
   const [editing, setEditing] = useState<Order | 'new' | null>(null);
   const [paying, setPaying] = useState<Paying | null>(null);
@@ -129,6 +169,13 @@ function Orders({ ev }: { ev: JWEvent }) {
   };
 
   const handOver = async (o: Order) => {
+    // Couple-of-Stickers were paid at the register: nothing more to charge.
+    if (o.stick) {
+      if (!(await app.confirm({ title: `Hand over ${o.number}?`, message: `${o.customerName}’s Couple-of-Stickers. Paid ${peso(o.stick.paid)} by ${o.stick.paidWith}: check their claim stub says ${claimNo(o.number)}.`, confirmLabel: 'Hand over' }))) return;
+      await handOverStick(o);
+      app.toast(`${o.number} handed over`, { tone: 'good' });
+      return;
+    }
     if (!registerOpen() || !session) return;
     const m = money(o);
     if (m.balance > 0) {
@@ -142,7 +189,8 @@ function Orders({ ev }: { ev: JWEvent }) {
 
   const markReady = async (o: Order) => {
     await setOrderStatus(o.id, 'ready');
-    callOrder(o.number, nameOf(o));
+    // Couple-of-Stickers customers hold a stub with just the number: call that.
+    callOrder(o.stick ? claimNo(o.number) : o.number, nameOf(o));
     const c = customerOf(o);
     const to = c?.email || (isEmail(o.contact) ? o.contact : '');
     const m = money(o);
@@ -174,6 +222,9 @@ function Orders({ ev }: { ev: JWEvent }) {
         subtitle="Pre-orders and commissions: take a deposit now, hand it over later. Deposits sit in the drawer but count as sales only at pickup."
         actions={
           <>
+            <Button onClick={() => void checkDrive()} disabled={checking}>
+              <CloudDownload size={18} /> {checking ? 'Checking Drive…' : 'Check Drive for designs'}
+            </Button>
             <Button onClick={() => setFinding(true)}>
               <Search size={18} /> Find an order
             </Button>
@@ -229,9 +280,13 @@ function Orders({ ev }: { ev: JWEvent }) {
                     onStart={() => setOrderStatus(o.id, 'in-progress')}
                     onReady={() => markReady(o)}
                     onHandOver={() => handOver(o)}
-                    onCall={() => callOrder(o.number, nameOf(o), true)}
+                    onCall={() => callOrder(o.stick ? claimNo(o.number) : o.number, nameOf(o), true)}
                     onStudio={owner ? () => toStudio(o) : undefined}
                     onDelete={owner ? () => void removeOrder(o) : undefined}
+                    art={art}
+                    onStick={o.stick ? () => void stickDetails(o) : undefined}
+                    onStubs={o.stick ? () => printStubs({ number: o.number, eventName: ev.name, at: o.createdAt, stick: o.stick! }, stickSettings.stubPaper) : undefined}
+                    onShowOff={o.stick ? () => showOff(o) : undefined}
                   />
                 ))}
               </section>
@@ -327,6 +382,7 @@ function Orders({ ev }: { ev: JWEvent }) {
           if (o) setCreated(o);
         }}
       />
+      {stickEdit ? <StickDialog sale={stickEdit.sale} ev={ev} existing={stickEdit.order} onClose={() => setStickEdit(null)} /> : null}
       <FindOrderDialog open={finding} onClose={() => setFinding(false)} />
       <CreatedDialog order={created} name={created ? nameOf(created) : ''} money={created ? money(created) : null} onClose={() => setCreated(null)} />
     </div>
@@ -334,8 +390,13 @@ function Orders({ ev }: { ev: JWEvent }) {
 }
 
 function OrderCard({
-  order: o, money: m, customer, maker, otherEvent, onEdit, onCancel, onDeposit, onStart, onReady, onHandOver, onCall, onStudio, onDelete,
+  order: o, money: m, customer, maker, otherEvent, onEdit, onCancel, onDeposit, onStart, onReady, onHandOver, onCall, onStudio, onDelete, art, onStick, onStubs, onShowOff,
 }: {
+  art?: Map<string, StickerArt>;
+  /** Couple-of-Stickers: change the details, print the stubs again, show it on the customer screen. */
+  onStick?: () => void;
+  onStubs?: () => void;
+  onShowOff?: () => void;
   order: Order;
   money: OrderMoney;
   customer: string;
@@ -364,7 +425,12 @@ function OrderCard({
           <div className="strong">{customer}</div>
         </div>
         <div className="row" style={{ gap: 2 }}>
-          <IconButton label={`Edit ${o.number}`} size="sm" plain onClick={onEdit}>
+          {onStubs ? (
+            <IconButton label={`Print the stubs for ${o.number}`} size="sm" plain onClick={onStubs}>
+              <Printer size={15} />
+            </IconButton>
+          ) : null}
+          <IconButton label={`Edit ${o.number}`} size="sm" plain onClick={onStick ?? onEdit}>
             <Pencil size={15} />
           </IconButton>
           <IconButton label={`Cancel ${o.number}`} size="sm" plain onClick={onCancel}>
@@ -382,23 +448,26 @@ function OrderCard({
           ) : null}
         </div>
       </div>
-      <ul className="order-lines">
-        {o.lines.map((l, i) => (
-          <li key={i}>
-            {l.qty} × {l.name}
-          </li>
-        ))}
-      </ul>
+      {o.stick ? (
+        <StickInfo o={o} art={art} onShowOff={onShowOff} />
+      ) : (
+        <ul className="order-lines">
+          {o.lines.map((l, i) => (
+            <li key={i}>
+              {l.qty} × {l.name}
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="row wrap" style={{ gap: 6 }}>
-        {due ? <Badge tone={late && o.status !== 'ready' ? 'warn' : undefined}>Due {due}</Badge> : null}
+        {due && !o.stick ? <Badge tone={late && o.status !== 'ready' ? 'warn' : undefined}>Due {due}</Badge> : null}
         {maker ? <Badge tone="teal">{maker}</Badge> : null}
         {otherEvent ? <Badge>Earlier event</Badge> : null}
         {o.coupon ? <Badge tone="yellow">Coupon {o.coupon.code}</Badge> : null}
       </div>
       <div className="row between small">
         <span className="muted">
-          {peso(m.total)}
-          {m.paid ? ` · ${peso(m.paid)} paid` : ' · no deposit'}
+          {o.stick ? `${peso(o.stick.paid)} by ${o.stick.paidWith}` : <>{peso(m.total)}{m.paid ? ` · ${peso(m.paid)} paid` : ' · no deposit'}</>}
         </span>
         <b className={m.balance ? '' : 'good'}>{m.balance ? `${peso(m.balance)} due` : 'Paid'}</b>
       </div>
@@ -423,7 +492,7 @@ function OrderCard({
             </Button>
           </>
         )}
-        {m.balance > 0 && o.status !== 'ready' ? (
+        {m.balance > 0 && o.status !== 'ready' && !o.stick ? (
           <Button size="sm" variant="ghost" onClick={onDeposit}>
             <Wallet size={15} /> Deposit
           </Button>
@@ -797,4 +866,53 @@ function CreatedDialog({ order, name, money, onClose }: { order: Order | null; n
       <p className="muted small center">Show this to the customer. They can take a photo of it.</p>
     </Dialog>
   );
+}
+
+/** A Couple-of-Stickers order on its card: the packs, the mini stickers, and whether the design is in Drive yet. */
+function StickInfo({ o, art, onShowOff }: { o: Order; art?: Map<string, StickerArt>; onShowOff?: () => void }) {
+  const s = o.stick!;
+  const ready = s.packs.some((p) => art?.has(p.designNo.toUpperCase()));
+  return (
+    <div className="stick-info">
+      <span className="muted">
+        Claim stub <b>{claimNo(o.number)}</b> · ready {fmtTime(s.readyFrom)}–{fmtTime(s.readyTo)}
+      </span>
+      {s.packs.map((p, i) => {
+        const a = art?.get(p.designNo.toUpperCase());
+        return (
+          <div key={i} className="stack tight">
+            <b>
+              {packLabel(p)} · {p.making === 'illustrating' ? 'Illustrating' : 'Printing'}
+            </b>
+            <div className="stick-design">
+              {a ? <ArtThumb blob={a.blob} name={a.name} /> : null}
+              <span className="small">
+                {designFileName(p.designNo, s.nickname)}.png{a ? ' · in Drive' : ' · not in Drive yet'}
+              </span>
+            </div>
+            {minisFor(p) ? (
+              <div className="stick-minis" aria-label={`Mini stickers for pack ${i + 1}`}>
+                {p.minis.length ? p.minis.map((n) => (miniPic(n) ? <img key={n} src={miniPic(n)} alt={n} title={n} /> : <span key={n}>{n}</span>)) : <span className="muted small">Mini stickers to pick</span>}
+              </div>
+            ) : null}
+            {p.note ? <span className="muted small">{p.note}</span> : null}
+          </div>
+        );
+      })}
+      {s.addOns.length ? <span className="small">With {s.addOns.join(', ')}</span> : null}
+      {s.softCopy && s.email ? <span className="small">Soft copy to {s.email}</span> : null}
+      <span className="small">{s.photo === 'booth' ? 'Photo: our photo booth' : s.photo === 'message' ? 'Photo: they’ll message it' : ''}</span>
+      {onShowOff ? (
+        <Button size="sm" variant="ghost" onClick={onShowOff} disabled={!ready} title={ready ? undefined : 'Once the design is in Drive (Check Drive for designs)'}>
+          <Monitor size={15} /> Show on customer screen
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function ArtThumb({ blob, name }: { blob: Blob; name: string }) {
+  const url = useMemo(() => URL.createObjectURL(blob), [blob]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  return <img src={url} alt={name} />;
 }

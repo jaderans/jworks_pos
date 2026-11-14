@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { SHOTS, createEvent, openRegister, payCash, setEventPrice, setupOwner, tapProduct } from './helpers';
+import { SHOTS, createEvent, openRegister, payCash, setEventPrice, setupOwner, tapProduct, skipStickDetails } from './helpers';
 
 test('set up, price, sell, and see it in the summary', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  await skipStickDetails(page);
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 
   await setupOwner(page);

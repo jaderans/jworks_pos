@@ -1,6 +1,7 @@
 import type { Cents } from '../lib/money';
 import type { WheelConfig, WheelResult } from '../domain/wheel';
 import type { MakeIntoKind, MakeIntoRate } from '../domain/makeInto';
+import type { StickOrder } from '../domain/stick';
 
 /**
  * Every record that syncs between devices carries these fields.
@@ -623,6 +624,8 @@ export interface Order extends Syncable {
   coupon?: AppliedCoupon | null;
   /** The custom sticker design's number, e.g. CS01 (its Drive file is CS01-Couple.png). */
   designNo?: string;
+  /** Couple-of-Stickers: paid at the register (pickupSaleId), made here, its stubs printed. */
+  stick?: StickOrder;
 }
 
 /** A discount code, e.g. KOMIKET50. */

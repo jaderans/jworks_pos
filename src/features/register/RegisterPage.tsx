@@ -24,6 +24,10 @@ import { playLanding, playSpin, unlockAudio } from '../../display/sound';
 import { wheelSoundChoice } from '../../display/wheelSounds';
 import { DEFAULT_DISPLAY, type DisplaySettings } from '../../display/slides';
 import { SPIN_MS } from '../../domain/wheelSpin';
+import { DEFAULT_STICK, packOf, type StickSettings } from '../../domain/stick';
+import { StickDialog } from '../stick/StickDialog';
+import { printStubs } from '../stick/Stubs';
+import type { DisplayStick } from '../../domain/display';
 import { openCustomerScreen, useSecondScreen } from '../../display/screens';
 import { wheelQualifies, wheelSlices } from '../../domain/wheel';
 import { spinWheel, type Spin } from '../../services/wheel';
@@ -40,7 +44,7 @@ import { FindOrderDialog } from '../orders/FindOrderDialog';
 import { DealsReview, PriceReview } from './PriceReview';
 import { CameraScanner } from '../../barcode/CameraScanner';
 import { useWedgeScanner } from '../../barcode/useWedgeScanner';
-import type { BusinessSettings, Customer, JWEvent, LoyaltySettings, Product, Sale, Session } from '../../db/types';
+import type { BusinessSettings, Customer, JWEvent, LoyaltySettings, Product, Sale, Session, Order } from '../../db/types';
 import './register.css';
 
 export function RegisterPage() {
@@ -98,6 +102,19 @@ function Register({ ev }: { ev: JWEvent }) {
   const settingRows = useSettingRows();
   const held = useLiveQuery(() => db.heldSales.where('eventId').equals(ev.id).toArray(), [ev.id]);
   const business = settingValue<BusinessSettings>(settingRows, 'business');
+  const stickSettings: StickSettings = { ...DEFAULT_STICK, ...settingValue<Partial<StickSettings>>(settingRows, 'stick') };
+  /** The sale whose Couple-of-Stickers details are being filled in. */
+  const [stickFor, setStickFor] = useState<Sale | null>(null);
+  /** What the customer screen shows of it: the draft, then the saved order with its number. */
+  const [stickView, setStickView] = useState<DisplayStick | null>(null);
+  const [stickOrder, setStickOrder] = useState<Order | null>(null);
+  const hasPacks = (sale: Sale) => {
+    const byId = new Map((products ?? []).map((p) => [p.id, p]));
+    return sale.lines.some((l) => {
+      const p = byId.get(l.productId);
+      return !!p && !!packOf(p, stickSettings);
+    });
+  };
   const loyaltyRules = settingValue<LoyaltySettings>(settingRows, 'loyalty');
   const cart = useCart(ev.id);
   const customers = useCustomers();
@@ -265,6 +282,8 @@ function Register({ ev }: { ev: JWEvent }) {
     setPaying(false);
     setPhoneCart(false);
     setReceipt(sale);
+    // Couple-of-Stickers: the details for the stubs, straight away.
+    if (hasPacks(sale)) setStickFor(sale);
   };
 
   const holdSale = async () => {
@@ -315,6 +334,9 @@ function Register({ ev }: { ev: JWEvent }) {
         },
       };
     }
+    if (receipt && stickView && !invite) {
+      return { ...base, mode: 'order', cart: cartView, customer: who, pay: null, thanks: null, stick: stickView };
+    }
     if (receipt && invite && ev.wheel) {
       return { ...base, mode: 'wheel', cart: cartView, customer: who, pay: null, thanks: null, wheel: { id: invite.id, slices: wheelSlices(ev.wheel), waiting: true, turn: 0, won: false, label: '', detail: '', sound: invite.sound } };
     }
@@ -345,7 +367,7 @@ function Register({ ev }: { ev: JWEvent }) {
       return { ...base, mode: 'paying', cart: cartView, customer: who, pay: { amount: priced.total, method: picked.map((m) => m.name).join(' + ') || 'Cash', qr: withQr?.qr ?? null }, thanks: null };
     }
     return { ...base, mode: 'cart', cart: cartView, customer: who, pay: null, thanks: null };
-  }, [business, ev.id, ev.name, ev.wheel, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, spin, invite, customers, customerSales, earned, paying, payWith, eventMethods]);
+  }, [business, ev.id, ev.name, ev.wheel, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, spin, invite, stickView, customers, customerSales, earned, paying, payWith, eventMethods]);
 
   /**
    * Spin for a sale: the customer tapped the wheel on their screen, or the
@@ -389,10 +411,21 @@ function Register({ ev }: { ev: JWEvent }) {
   };
   const screen = useCustomerScreen(display, (id) => tapRef.current(id));
   const [screenOpen, setScreenOpen] = useState(false);
+  const [screenSound, setScreenSound] = useState(false);
   useEffect(() => {
-    const t = window.setInterval(() => setScreenOpen(screen.status().open), 2000);
+    const t = window.setInterval(() => {
+      const st = screen.status();
+      setScreenOpen(st.open);
+      setScreenSound(st.sound);
+    }, 2000);
     return () => window.clearInterval(t);
   }, [screen]);
+  /** Where the wheel will be heard, so silence never surprises anyone. */
+  const soundNote = !displaySettings.wheelSound
+    ? 'Wheel sounds are off (Settings → Customer screen).'
+    : screenOpen && !screenSound
+      ? 'Sound plays on this laptop until someone clicks the customer screen once (Full screen and sound).'
+      : null;
   const letThemSpin = (sale: Sale) => {
     const st = screen.status();
     setInvite({ id: uid(), saleId: sale.id, sound: displaySettings.wheelSound && st.sound ? 'screen' : 'none' });
@@ -425,6 +458,7 @@ function Register({ ev }: { ev: JWEvent }) {
         <div className="wheel-cta">
           <span>
             <b>This sale spins the prize wheel.</b> {screenOpen ? 'Let them tap it on the customer screen, or spin it for them.' : 'It spins on the customer screen when one is open.'}
+            {soundNote ? <span className="muted small" style={{ display: 'block' }}>{soundNote}</span> : null}
           </span>
           <div className="row wrap">
             {screenOpen ? (
@@ -436,6 +470,31 @@ function Register({ ev }: { ev: JWEvent }) {
               <Disc3 size={18} /> {screenOpen ? 'Spin for them' : 'Spin the wheel'}
             </Button>
           </div>
+        </div>
+      )
+    ) : null;
+
+  const stickBox =
+    receipt && hasPacks(receipt) ? (
+      stickOrder ? (
+        <Callout tone="good" title={`Couple-of-Stickers ${stickOrder.number} is on Orders`}>
+          <div className="row wrap">
+            <span>
+              For {stickOrder.customerName}. Their number is on the claim stub.
+            </span>
+            <Button size="sm" onClick={() => printStubs({ number: stickOrder.number, eventName: ev.name, at: stickOrder.createdAt, stick: stickOrder.stick! }, stickSettings.stubPaper)}>
+              Print the stubs again
+            </Button>
+          </div>
+        </Callout>
+      ) : (
+        <div className="wheel-cta">
+          <span>
+            <b>Couple-of-Stickers:</b> their name, the packs and the mini stickers go on the stubs.
+          </span>
+          <Button variant="teal" onClick={() => setStickFor(receipt)}>
+            Fill in the details
+          </Button>
         </div>
       )
     ) : null;
@@ -630,14 +689,33 @@ function Register({ ev }: { ev: JWEvent }) {
         sale={receipt}
         business={business}
         eventName={ev.name}
-        extra={wheelBox}
+        extra={
+          <>
+            {stickBox}
+            {wheelBox}
+          </>
+        }
         onClose={() => {
           setReceipt(null);
           setSpin(null);
           setInvite(null);
+          setStickView(null);
+          setStickOrder(null);
           searchRef.current?.focus({ preventScroll: true });
         }}
       />
+      {stickFor ? (
+        <StickDialog
+          sale={stickFor}
+          ev={ev}
+          onClose={() => setStickFor(null)}
+          onDraft={(d) => setStickView((v) => d ?? (v?.number ? v : null))}
+          onSaved={(o) => {
+            setStickOrder(o);
+            setStickView({ number: o.number, nickname: o.stick!.nickname, packs: o.stick!.packs, addOns: o.stick!.addOns, readyFrom: o.stick!.readyFrom, readyTo: o.stick!.readyTo, photo: o.stick!.photo });
+          }}
+        />
+      ) : null}
       <CameraScanner open={scanOpen} onClose={() => setScanOpen(false)} onCode={(c) => void onCode(c)} />
       <CashMoveDialog session={session} open={cashMove} onClose={() => setCashMove(false)} />
       <FindOrderDialog open={findOpen} onClose={() => setFindOpen(false)} />

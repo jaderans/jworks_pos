@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { SHOTS, createEvent, openRegister, payCash, setEventPrice, setupOwner, tapProduct } from './helpers';
+import { SHOTS, createEvent, openRegister, payCash, setEventPrice, setupOwner, tapProduct, skipStickDetails } from './helpers';
 
 /** Screenshots of every main screen with some data in it, for a design review. */
 
@@ -12,6 +12,7 @@ test('tour of the app', async ({ page }) => {
   test.setTimeout(240_000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  await skipStickDetails(page);
   await setupOwner(page, 'Test Owner', '1111');
   await createEvent(page, 'Tour Fair');
   await setEventPrice(page, 'Cat Meme (Solo)', 20);

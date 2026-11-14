@@ -21,11 +21,10 @@ test('the customer screen on a portrait (vertical) monitor: every view fits', as
 
   await expect(screen.getByRole('heading', { name: 'Welcome!' })).toBeVisible();
   await fits('welcome');
-  // Ten items: the newest show, the rest fold into a count.
+  // (The Couple-of-Stickers view in portrait is checked in stick.spec.)
   await tapProduct(page, 'Cat Meme (Solo)', 3);
   await tapProduct(page, 'Enamel Pins', 2);
-  await tapProduct(page, 'Couple Pack (live)', 1);
-  await expect(screen.getByRole('region', { name: 'Your order' }).locator('.cd-total')).toContainText('₱415');
+  await expect(screen.getByRole('region', { name: 'Your order' }).locator('.cd-total')).toContainText('₱175');
   await fits('cart');
   await page.locator('.reg-cart').getByRole('button', { name: /^Charge/ }).click();
   await expect(screen.getByRole('region', { name: 'Payment' })).toBeVisible();

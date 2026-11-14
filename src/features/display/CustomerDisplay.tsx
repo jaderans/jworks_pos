@@ -3,7 +3,9 @@ import QRCode from 'qrcode';
 import { Maximize, Volume2 } from 'lucide-react';
 import { peso } from '../../lib/money';
 import { useLocal } from '../../hooks/data';
-import { HERE_MS, displayReceiver, type BoothShow, type DisplayCall, type DisplayReceiver } from '../../display/channel';
+import { HERE_MS, displayReceiver, type BoothShow, type DisplayCall, type DisplayReceiver, type DisplayShowcase } from '../../display/channel';
+import { OrderCheck } from './OrderCheck';
+import { Showcase } from './Showcase';
 import { audioReady, playInvite, playLanding, playSpin, playTick, unlockAudio } from '../../display/sound';
 import { wheelSoundChoice } from '../../display/wheelSounds';
 import { SPIN_MS } from '../../domain/wheelSpin';
@@ -24,8 +26,10 @@ const CALL_MS = 15_000;
 const THANKS_MS = 15_000;
 /** The booth page repeats itself every 4 seconds; with nothing for this long, it was closed. */
 const BOOTH_MS = 12_000;
+/** An order shown off from Orders stays up this long. */
+const SHOWCASE_MS = 20_000;
 
-type View = 'waiting' | 'idle' | 'welcome' | 'cart' | 'paying' | 'thanks' | 'wheel' | 'booth';
+type View = 'waiting' | 'idle' | 'welcome' | 'cart' | 'paying' | 'thanks' | 'wheel' | 'booth' | 'order';
 
 /**
  * The customer screen, full screen on the second monitor (or a window dragged
@@ -42,6 +46,7 @@ export default function CustomerDisplay() {
   const [cursor, setCursor] = useState(true);
   const [calling, setCalling] = useState<DisplayCall | null>(null);
   const [booth, setBooth] = useState<BoothShow | null>(null);
+  const [showcase, setShowcase] = useState<DisplayShowcase | null>(null);
   const [soundOn, setSoundOn] = useState(audioReady);
   const [videoSound, setVideoSound] = useState(false);
   const rx = useRef<DisplayReceiver | null>(null);
@@ -65,16 +70,17 @@ export default function CustomerDisplay() {
     const r = displayReceiver(
       (s) => {
         setState(s);
-        const busy = s.mode === 'paying' || s.mode === 'thanks' || s.mode === 'wheel' || (s.mode === 'cart' && s.cart.count > 0);
+        const busy = s.mode === 'paying' || s.mode === 'thanks' || s.mode === 'wheel' || s.mode === 'order' || (s.mode === 'cart' && s.cart.count > 0);
         if (busy) setBusyAt(Date.now());
         if (s.mode === 'thanks') setThanks({ s, until: Date.now() + THANKS_MS });
-        else if (s.mode !== 'cart' || s.cart.count > 0) setThanks((t) => (s.mode === 'wheel' ? t : null));
+        else if (s.mode !== 'cart' || s.cart.count > 0) setThanks((t) => (s.mode === 'wheel' || s.mode === 'order' ? t : null));
       },
       setCalling,
       (b) => {
         setBooth(b);
         if (b) setBusyAt(Date.now());
       },
+      setShowcase,
     );
     rx.current = r;
     // Tell the register the screen is here, and whether it can play sound.
@@ -160,6 +166,8 @@ export default function CustomerDisplay() {
       : 'waiting'
     : showingThanks
       ? 'thanks'
+      : state.mode === 'order' && state.stick
+        ? 'order'
       : state.mode === 'wheel' && state.wheel
         ? 'wheel'
         : state.mode === 'paying'
@@ -186,6 +194,8 @@ export default function CustomerDisplay() {
         </section>
       ) : view === 'booth' && booth ? (
         <BoothView b={booth} />
+      ) : view === 'order' && s?.stick ? (
+        <OrderCheck o={s.stick} now={now} />
       ) : view === 'wheel' && s?.wheel ? (
         <WheelView
           w={s.wheel}
@@ -261,6 +271,7 @@ export default function CustomerDisplay() {
           </aside>
         </>
       )}
+      {showcase && now - showcase.at < SHOWCASE_MS && view !== 'order' && view !== 'paying' ? <Showcase s={showcase} /> : null}
       {callingNow && calling ? (
         <div className="cd-call" role="status" aria-live="assertive">
           <span className="sl-eyebrow">Now calling</span>

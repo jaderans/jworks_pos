@@ -15,6 +15,7 @@ import { backupOwner } from '../../services/setup';
 import { CloudSection } from './CloudSection';
 import { EmailSection } from './EmailSection';
 import { DisplaySection } from './DisplaySection';
+import { StickSection } from './StickSection';
 import type { BusinessSettings, PaymentMethod, SecuritySettings } from '../../db/types';
 
 export default function SettingsPage() {
@@ -31,6 +32,7 @@ export default function SettingsPage() {
       {owner ? <BusinessSection /> : null}
       <DeviceSection />
       {app.can('sell') ? <DisplaySection /> : null}
+      {owner ? <StickSection /> : null}
       {owner ? <PinSection /> : null}
       {owner ? <PaymentsSection /> : null}
       {owner ? <EmailSection /> : null}

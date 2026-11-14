@@ -1,6 +1,10 @@
 import { peso, type Cents } from '../lib/money';
 import type { BundleLike, PricedCart } from './cart';
 import type { WheelSlice } from './wheel';
+import type { StickOrder } from './stick';
+
+/** A Couple-of-Stickers order on the customer screen, for the customer to check: a number once it's saved. */
+export type DisplayStick = Pick<StickOrder, 'nickname' | 'packs' | 'addOns' | 'readyFrom' | 'readyTo' | 'photo'> & { number: string | null };
 
 /**
  * The customer screen: what the customer sees on the second monitor while the
@@ -46,7 +50,7 @@ export interface DisplayWheel {
 export interface DisplayState {
   v: 1;
   /** closed: no register open. cart: ringing up (or nothing yet). paying: the payment step. thanks: the sale is done. wheel: the prize wheel spins. */
-  mode: 'closed' | 'cart' | 'paying' | 'thanks' | 'wheel';
+  mode: 'closed' | 'cart' | 'paying' | 'thanks' | 'wheel' | 'order';
   /** The event being sold at: the screen's price slides come from it. */
   eventId: string;
   business: string;
@@ -57,6 +61,8 @@ export interface DisplayState {
   thanks: { receiptNo: string; total: Cents; change: Cents; paidWith: string; receipt: string; coupon: { code: string; text: string } | null; loyalty: string | null } | null;
   /** A spin: the slices, how far the wheel turns, and what it lands on. */
   wheel?: DisplayWheel | null;
+  /** Couple-of-Stickers being filled in after they pay, for them to check. */
+  stick?: DisplayStick | null;
 }
 
 export const emptyDisplayCart = (): DisplayCart => ({ lines: [], savings: [], subtotal: 0, total: 0, count: 0, nudge: null });

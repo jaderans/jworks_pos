@@ -1,0 +1,51 @@
+/* The Couple-of-Stickers stubs, in the Stick Together colours. On screen they're a preview; printed, they're all that shows. */
+.stubs {
+  --st-blue: #2341b0;
+  --st-deep: #172a7d;
+  --st-yellow: #fdd426;
+  --st-orange: #f2672b;
+  display: flex; gap: 0; align-items: stretch; color: #1b2340; font-family: var(--f-ui);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.stub { box-sizing: border-box; width: 62mm; min-height: 92mm; padding: 4mm; display: grid; gap: 2mm; align-content: start; font-size: 9.5pt; line-height: 1.25; }
+.stub.claim { background: linear-gradient(180deg, var(--st-blue), var(--st-deep)); color: #fff; border-radius: 3mm 0 0 3mm; text-align: center; }
+.stub.claim header { display: grid; grid-template-columns: auto 1fr; gap: 2mm; align-items: center; text-align: left; }
+.stub-mark { width: 9mm; height: 9mm; object-fit: contain; background: var(--st-yellow); border-radius: 0 0 2mm 2mm; padding: 1mm; }
+.stub-title { display: block; font-family: var(--f-display); font-size: 15pt; line-height: 1; color: var(--st-yellow); }
+.stub-sub { display: block; font-size: 8pt; font-style: italic; color: #e9edff; }
+.stub-badge { grid-column: 1 / -1; justify-self: start; background: var(--st-orange); color: #fff; font-weight: 800; font-style: italic; font-size: 8pt; border-radius: 999px; padding: 0.6mm 3mm; }
+.stub-no { font-family: var(--f-display); font-style: italic; font-weight: 800; font-size: 46pt; line-height: 1; letter-spacing: -0.02em; margin: 1mm 0; }
+.stub-wait { margin: 0; font-style: italic; font-weight: 700; }
+.stub-ready { margin: 0; font-weight: 800; color: var(--st-yellow); }
+.stub-enjoy { margin: 0; font-size: 8.5pt; }
+.stub.claim footer { margin-top: auto; font-size: 7.5pt; color: #c9d2ff; }
+.stub-cut { width: 0; border-left: 0.4mm dashed #9aa5c8; }
+.stub.info { background: #fff; border: 0.6mm solid var(--st-blue); border-radius: 0 3mm 3mm 0; }
+.stub-row { display: flex; align-items: baseline; gap: 2mm; }
+.stub-label { font-style: italic; font-weight: 700; color: var(--st-blue); min-width: 9mm; }
+.stub-fill { flex: 1; border-bottom: 0.3mm solid #1b2340; padding-bottom: 0.5mm; min-width: 0; overflow-wrap: anywhere; }
+.stub-no-small { font-family: var(--f-display); font-style: italic; color: var(--st-blue); font-size: 13pt; }
+.stub-circles { display: flex; gap: 1mm; flex-wrap: wrap; }
+.stub-circle { display: inline-grid; place-items: center; min-width: 6mm; height: 6mm; border: 0.35mm solid #1b2340; border-radius: 999px; font-size: 7.5pt; font-weight: 800; padding: 0 0.8mm; }
+.stub-circle.on { background: var(--st-blue); border-color: var(--st-blue); color: #fff; }
+.stub-checks { flex-wrap: wrap; gap: 1mm 3mm; font-size: 8.5pt; }
+.stub-check::before { content: ''; display: inline-block; width: 2.6mm; height: 2.6mm; border: 0.35mm solid #1b2340; border-radius: 0.6mm; margin-right: 1mm; vertical-align: -0.3mm; }
+.stub-check.on::before { background: var(--st-blue); border-color: var(--st-blue); box-shadow: inset 0 0 0 0.5mm #fff; }
+.stub-packs { margin: 0; padding-left: 4mm; display: grid; gap: 1mm; font-size: 8.5pt; }
+.stub-packs li span { display: block; color: #3b4566; overflow-wrap: anywhere; }
+.stub-line { margin: 0; font-size: 8.5pt; overflow-wrap: anywhere; }
+
+/* Receipt printers: one stub above the other, the width of the paper. */
+.stubs.paper-r80, .stubs.paper-r58 { flex-direction: column; width: 100%; }
+.stubs.paper-r80 .stub, .stubs.paper-r58 .stub { width: 100%; min-height: 0; border-radius: 0; }
+.stubs.paper-r80 .stub-cut, .stubs.paper-r58 .stub-cut { width: 100%; height: 0; border-left: 0; border-top: 0.4mm dashed #555; margin: 2mm 0; }
+.stubs.paper-r58 .stub { font-size: 8pt; padding: 2.5mm; }
+.stubs.paper-r58 .stub-no { font-size: 36pt; }
+
+/* Printing: only the stubs. */
+.stub-print { display: none; }
+@media print {
+  body > *:not(.stub-print) { display: none !important; }
+  .stub-print { display: block !important; }
+  html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
+}

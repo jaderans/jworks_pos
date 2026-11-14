@@ -36,8 +36,21 @@ export interface BoothShow {
   at: number;
 }
 
+/** An order shown off on the customer screen (Orders → Show on customer screen). */
+export interface DisplayShowcase {
+  number: string;
+  /** First name only: the screen faces the public. */
+  name: string;
+  label: string;
+  /** The finished sticker, from Drive. */
+  art: Blob | null;
+  cta: string;
+  at: number;
+}
+
 type Message =
   | { type: 'hello' }
+  | { type: 'showcase'; show: DisplayShowcase }
   /** The screen is open, every few seconds, and whether it can play sound (someone clicked it). */
   | { type: 'here'; sound: boolean }
   /** The customer tapped the wheel. */
@@ -93,13 +106,19 @@ export interface DisplayReceiver {
   close(): void;
 }
 
-export function displayReceiver(onState: (s: DisplayState) => void, onCall?: (c: DisplayCall) => void, onBooth?: (b: BoothShow | null) => void): DisplayReceiver {
+export function displayReceiver(
+  onState: (s: DisplayState) => void,
+  onCall?: (c: DisplayCall) => void,
+  onBooth?: (b: BoothShow | null) => void,
+  onShowcase?: (s: DisplayShowcase) => void,
+): DisplayReceiver {
   if (typeof BroadcastChannel === 'undefined') return { here: () => undefined, spin: () => undefined, close: () => undefined };
   const ch = new BroadcastChannel(NAME);
   ch.onmessage = (e: MessageEvent<Message>) => {
     if (e.data?.type === 'state' && e.data.state?.v === 1) onState(e.data.state);
     if (e.data?.type === 'call' && e.data.call?.number) onCall?.(e.data.call);
     if (e.data?.type === 'booth') onBooth?.(e.data.booth ? { ...e.data.booth, at: Date.now() } : null);
+    if (e.data?.type === 'showcase' && e.data.show?.number) onShowcase?.({ ...e.data.show, at: Date.now() });
   };
   ch.postMessage({ type: 'hello' } satisfies Message);
   return {
@@ -139,4 +158,12 @@ export function boothSender(): { send(b: BoothShow | null): void; close(): void 
       ch.close();
     },
   };
+}
+
+/** Show an order off on the customer screen, from any page of the app on this computer. */
+export function announceShowcase(show: Omit<DisplayShowcase, 'at'>): void {
+  if (typeof BroadcastChannel === 'undefined') return;
+  const ch = new BroadcastChannel(NAME);
+  ch.postMessage({ type: 'showcase', show: { ...show, at: Date.now() } } satisfies Message);
+  ch.close();
 }

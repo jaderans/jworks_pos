@@ -17,7 +17,7 @@ export const designNoOf = (s: string | undefined): string => (s ?? '').replace(/
 const orderSales = async (orderId: string) => alive(await db.sales.where('orderId').equals(orderId).toArray());
 
 /** QA-01, QA-02… per event, with this device's register letter so two phones never give the same number. */
-async function nextOrderNumber(eventId: string, letter: string): Promise<string> {
+export async function nextOrderNumber(eventId: string, letter: string): Promise<string> {
   const key = `orderSeq:${eventId}`;
   const taken = new Set(alive(await db.orders.where('eventId').equals(eventId).toArray()).map((o) => o.number));
   let n = (await getLocal<number>(key, 0)) + 1;

@@ -1,0 +1,45 @@
+/* Couple-of-Stickers on the customer screen: the order to check, and an order shown off. */
+.cd.view-order { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.cd-order {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); grid-template-rows: auto auto; align-content: center; align-items: start;
+  gap: 3vmin 5vmin; padding: 5vmin 6vmin; text-align: left; justify-items: stretch; place-content: center stretch;
+}
+.cd-order-head { display: grid; gap: 0.4em; align-content: start; }
+.cd-order-head h1 { font-size: 3em; line-height: 1.05; overflow-wrap: anywhere; }
+.cd-order-no { font-family: var(--f-display); font-style: italic; font-size: 8em; line-height: 0.95; color: var(--cd-yellow); letter-spacing: -0.03em; }
+.cd-order-ready { margin: 0; font-size: 1.4em; font-weight: 800; color: #d6eef0; }
+.cd-order-packs { list-style: none; margin: 0; padding: 0; display: grid; gap: 1em; grid-row: span 2; align-content: start; }
+.cd-order-packs > li { display: grid; gap: 0.5em; padding: 0.8em 1em; border-radius: 0.8em; background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.14); }
+.cd-order-pack { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em; font-size: 1.3em; }
+.cd-order-pack .cd-chip { font-size: 0.65em; }
+.cd-order-minis { display: flex; flex-wrap: wrap; gap: 0.5em; }
+.cd-order-minis figure { margin: 0; display: grid; justify-items: center; gap: 0.2em; width: 5.6em; }
+.cd-order-minis img { width: 4.6em; height: 4.6em; object-fit: contain; background: #fff; border-radius: 0.6em; padding: 0.3em; }
+.cd-order-minis figcaption { font-size: 0.7em; color: #d6eef0; text-align: center; line-height: 1.1; }
+.cd-order-muted { margin: 0; color: var(--cd-muted); }
+.cd-order-foot { display: grid; gap: 0.5em; align-content: start; }
+.cd-order-foot p { margin: 0; font-size: 1.15em; color: #d6eef0; }
+.cd-order-enjoy { color: var(--cd-yellow) !important; font-weight: 800; }
+@media (max-aspect-ratio: 1/1) {
+  .cd-order { grid-template-columns: minmax(0, 1fr); text-align: center; justify-items: center; }
+  .cd-order-packs { grid-row: auto; width: 100%; }
+  .cd-order-minis { justify-content: center; }
+}
+
+/* An order shown off: the sticker big, its number beside it (above it on a tall screen). */
+.cd-showcase {
+  position: fixed; inset: 0; z-index: 4; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: center; gap: 5vmin; padding: 6vmin 7vmin;
+  background: radial-gradient(circle at 70% 25%, rgba(31, 163, 168, 0.5), transparent 55%), radial-gradient(circle at 15% 85%, rgba(247, 216, 32, 0.2), transparent 50%), var(--cd-bg);
+  animation: cd-fade 0.6s ease-out;
+}
+.cd-showcase-art { width: 100%; max-height: 82vh; object-fit: contain; filter: drop-shadow(0 2vmin 3vmin rgba(0, 0, 0, 0.5)); }
+.cd-showcase-art.empty { display: grid; place-items: center; aspect-ratio: 1; border: 0.5vmin dashed var(--cd-line); border-radius: 2vmin; color: var(--cd-muted); font-size: 2em; }
+.cd-showcase-text { display: grid; gap: 0.4em; }
+.cd-showcase-text b { font-family: var(--f-display); font-size: 4.2em; line-height: 1; color: var(--cd-yellow); }
+.cd-showcase-name { font-size: 1.8em; font-weight: 800; }
+.cd-showcase-cta { font-size: 1.3em; color: #d6eef0; }
+@media (max-aspect-ratio: 1/1) {
+  .cd-showcase { grid-template-columns: minmax(0, 1fr); text-align: center; justify-items: center; align-content: center; }
+  .cd-showcase-art { max-height: 56vh; }
+}
+@media (prefers-reduced-motion: reduce) { .cd-showcase { animation: none; } }

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { SHOTS, createEvent, openRegister, setEventPrice, setupOwner, tapProduct } from './helpers';
+import { SHOTS, createEvent, openRegister, setEventPrice, setupOwner, tapProduct, skipStickDetails } from './helpers';
 
 /**
  * Phase 1 "ready when": a dry-run event with 50 test sales on two phones in
@@ -62,6 +62,8 @@ test('dry run: two phones offline, 50 sales, close, merge, PDF', async ({ browse
   const b: BrowserContext = await browser.newContext({ acceptDownloads: true });
   const pa = await a.newPage();
   const pb = await b.newPage();
+  await skipStickDetails(pa);
+  await skipStickDetails(pb);
 
   // ---- Phone A: owner sets everything up while online
   await setupOwner(pa, 'Test Owner', '2468');

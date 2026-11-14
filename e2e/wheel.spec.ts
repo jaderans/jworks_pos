@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { SHOTS, createEvent, offScreen, openRegister, payCash, setEventPrice, setupOwner, tapProduct } from './helpers';
+import { SHOTS, createEvent, offScreen, openRegister, payCash, setEventPrice, setupOwner, tapProduct, skipStickDetails } from './helpers';
 
 async function sellAndOpenReceipt(page: Page) {
   await tapProduct(page, 'Couple Pack (live)', 2);
@@ -11,6 +11,7 @@ test('the prize wheel: set it up, spin on a qualifying sale, see it land on the 
   test.setTimeout(150_000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  await skipStickDetails(page);
   await setupOwner(page, 'Joshua Ranin', '1111');
   await createEvent(page, 'Hilway November 2026');
   await setEventPrice(page, 'Couple Pack (live)', 240);

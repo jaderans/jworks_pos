@@ -1,0 +1,28 @@
+/* Couple-of-Stickers: the details dialog, the mini sticker picker, and the order cards' extras. */
+.stick-packs { display: grid; gap: 12px; }
+.stick-pack { gap: 10px; }
+.stick-summary { display: grid; gap: 6px; }
+.stick-summary p { margin: 0; }
+.stick-art { display: flex; align-items: center; gap: 10px; }
+.stick-art img { width: 72px; height: 72px; object-fit: contain; background: var(--surface-2, #f3f5f5); border-radius: 10px; border: 1px solid var(--line); }
+
+.mini-picker { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: var(--r); padding: 10px; max-height: min(56vh, 520px); overflow-y: auto; }
+.mini-count { margin: 0; position: sticky; top: -10px; background: var(--surface); padding: 4px 0; z-index: 1; }
+.mini-theme { display: grid; gap: 6px; }
+.mini-theme-name { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.mini-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.mini {
+  display: grid; justify-items: center; gap: 2px; padding: 6px 4px; border: 1px solid var(--line); border-radius: 10px;
+  background: #fff; color: #1b2340; font: inherit; font-size: 0.72rem; line-height: 1.15; cursor: pointer; text-align: center;
+}
+.mini img { width: 56px; height: 56px; object-fit: contain; }
+.mini:hover:not(:disabled) { border-color: var(--teal); }
+.mini.on { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal); background: color-mix(in srgb, var(--teal) 10%, #fff); }
+.mini:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.stick-info { display: grid; gap: 4px; font-size: 0.85rem; }
+.stick-info .row { gap: 6px; }
+.stick-minis { display: flex; flex-wrap: wrap; gap: 4px; }
+.stick-minis img { width: 28px; height: 28px; object-fit: contain; background: #fff; border-radius: 6px; border: 1px solid var(--line); }
+.stick-design { display: flex; align-items: center; gap: 8px; }
+.stick-design img { width: 44px; height: 44px; object-fit: contain; background: #fff; border-radius: 8px; border: 1px solid var(--line); }
