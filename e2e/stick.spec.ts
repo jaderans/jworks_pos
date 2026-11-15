@@ -51,6 +51,16 @@ test('Couple-of-Stickers: paid by GCash with a keychain add-on, checked on the c
   // The starter catalog has Keychain conversion, turned off: it's turned on, and a Pin is added.
   await expect(st).toContainText('Keychain conversion, Pin (add-on)');
   await expect(st.getByRole('button', { name: 'Add Keychain and Pin add-ons' })).toHaveCount(0);
+  // Samples for the order check, kept on this laptop: the file name says the pack.
+  const shows = page.locator('#s-display').getByRole('group', { name: 'Sample stickers' });
+  await shows.getByLabel('Sample sticker images').setInputFiles([
+    { name: 'Couple - Eliza & Renz.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') },
+    { name: 'Solo - Wendy.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') },
+  ]);
+  await expect(shows.getByRole('status')).toHaveText('1 Solo · 1 Couple · 0 Barkada');
+  await expect(shows.getByLabel('Pack for Couple - Eliza & Renz')).toHaveValue('couple');
+  // Samples aren't ads.
+  await expect(page.locator('#s-display').getByText('No ads yet.')).toBeVisible();
   await page.goto('/#/event/prices');
   await setEventPrice(page, 'Couple Pack (live)', 240);
   await setEventPrice(page, 'Keychain conversion', 60);
@@ -77,8 +87,14 @@ test('Couple-of-Stickers: paid by GCash with a keychain add-on, checked on the c
   await expect(d.getByLabel('Design no.')).toHaveValue('CS01');
   const check = screen.getByRole('region', { name: 'Your Couple-of-Stickers order' });
   await expect(check).toContainText('Please check your order');
-  await expect(check).toContainText('Paid ₱350 · GCash (ref 5012)');
+  await expect(check.locator('.cd-fact.good')).toContainText('₱350');
+  await expect(check.locator('.cd-fact.good')).toContainText('GCash (ref 5012)');
   await expect(check).toContainText('+ Pin (add-on)');
+  await expect(check).toContainText('2 illustrated stickers + 6 mini stickers');
+  // A Couple Pack: the Couple sample only.
+  const samples = check.getByLabel('Stickers we made');
+  await expect(samples.locator('img')).toHaveCount(1);
+  await expect(samples).toContainText('Couple stickers we made at past events');
 
   await d.getByLabel('Name or nickname').fill('Leanna');
   await d.getByLabel('Email', { exact: true }).fill('leanna@jw.test');

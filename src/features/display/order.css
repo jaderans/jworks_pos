@@ -1,30 +1,79 @@
 /* Couple-of-Stickers on the customer screen: the order to check, and an order shown off. */
 .cd.view-order { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-.cd-order {
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); grid-template-rows: auto auto; align-content: center; align-items: start;
-  gap: 3vmin 5vmin; padding: 5vmin 6vmin; text-align: left; justify-items: stretch; place-content: center stretch;
+
+/*
+ * The order to check, top to bottom: who it's for (and their number once saved),
+ * three facts (ready, paid, photo), then the packs beside samples of what they get.
+ */
+.cd-full.cd-order {
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 2.6vmin; padding: 4.5vmin 5.5vmin; text-align: left; align-content: stretch; justify-items: stretch; place-content: stretch;
+  background: radial-gradient(circle at 88% 6%, rgba(31, 163, 168, 0.3), transparent 48%), radial-gradient(circle at 4% 96%, rgba(247, 216, 32, 0.1), transparent 42%), var(--cd-bg);
+  animation: cd-order-in 0.5s ease-out;
 }
-.cd-order-head { display: grid; gap: 0.4em; align-content: start; }
-.cd-order-head h1 { font-size: 3em; line-height: 1.05; overflow-wrap: anywhere; }
-.cd-order-no { font-family: var(--f-display); font-style: italic; font-size: 8em; line-height: 0.95; color: var(--cd-yellow); letter-spacing: -0.03em; }
-.cd-order-ready { margin: 0; font-size: 1.4em; font-weight: 800; color: #d6eef0; }
-.cd-order-packs { list-style: none; margin: 0; padding: 0; display: grid; gap: 1em; grid-row: span 2; align-content: start; }
-.cd-order-packs > li { display: grid; gap: 0.5em; padding: 0.8em 1em; border-radius: 0.8em; background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.14); }
-.cd-order-pack { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em; font-size: 1.3em; }
-.cd-order-pack .cd-chip { font-size: 0.65em; }
+/* Fades in where it stands: a full-screen view never slides past the screen edge. */
+@keyframes cd-order-in { from { opacity: 0; } to { opacity: 1; } }
+.cd-order-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 3vmin; min-width: 0; }
+.cd-order-who { display: grid; gap: 0.25em; min-width: 0; }
+.cd-order-who h1 { font-size: 3.6em; line-height: 1; overflow-wrap: anywhere; }
+.cd-order-ticket {
+  flex: none; display: grid; justify-items: center; padding: 0.45em 1.3em 0.55em; border-radius: 0.9em;
+  background: var(--cd-yellow); color: #0f1516; box-shadow: 0 1.2vmin 3vmin rgba(0, 0, 0, 0.35); animation: cd-fade 0.5s ease-out;
+}
+.cd-order-ticket span { font-size: 0.8em; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.cd-order-no { font-family: var(--f-display); font-style: italic; font-size: 5.2em; line-height: 0.95; letter-spacing: -0.03em; }
+
+.cd-order-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.6vmin; }
+.cd-fact { display: grid; gap: 0.15em; align-content: start; padding: 0.75em 1em; border-radius: 0.9em; background: var(--cd-panel); border: 1px solid var(--cd-line); min-width: 0; }
+.cd-fact span { font-size: 0.75em; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--cd-muted); }
+.cd-fact b { font-size: 1.65em; line-height: 1.1; overflow-wrap: anywhere; }
+.cd-fact small { font-size: 0.95em; color: #d6eef0; overflow-wrap: anywhere; }
+.cd-fact.good b { color: var(--cd-good); }
+
+.cd-order-body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 3vmin; min-height: 0; }
+.cd-order.no-side .cd-order-body { grid-template-columns: minmax(0, 1fr); }
+.cd-order-packs { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.4vmin; align-content: start; min-height: 0; overflow: hidden; }
+.cd-order-packs > li { display: grid; gap: 0.6em; padding: 0.9em 1.1em; border-radius: 0.9em; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); }
+.cd-order-pack { display: grid; gap: 0.15em; }
+.cd-order-pack b { font-size: 1.55em; line-height: 1.1; }
+.cd-order-pack small { font-size: 1em; color: #d6eef0; }
 .cd-order-minis { display: flex; flex-wrap: wrap; gap: 0.5em; }
-.cd-order-minis figure { margin: 0; display: grid; justify-items: center; gap: 0.2em; width: 5.6em; }
-.cd-order-minis img { width: 4.6em; height: 4.6em; object-fit: contain; background: #fff; border-radius: 0.6em; padding: 0.3em; }
+.cd-order-minis figure { margin: 0; display: grid; justify-items: center; gap: 0.2em; width: 5.4em; }
+.cd-order-minis img { width: 4.4em; height: 4.4em; object-fit: contain; background: #fff; border-radius: 0.6em; padding: 0.3em; }
+.cd-order-packs.many .cd-order-minis figure { width: 4.4em; }
+.cd-order-packs.many .cd-order-minis img { width: 3.5em; height: 3.5em; }
 .cd-order-minis figcaption { font-size: 0.7em; color: #d6eef0; text-align: center; line-height: 1.1; }
 .cd-order-muted { margin: 0; color: var(--cd-muted); }
-.cd-order-foot { display: grid; gap: 0.5em; align-content: start; }
-.cd-order-foot p { margin: 0; font-size: 1.15em; color: #d6eef0; }
-.cd-order-enjoy { color: var(--cd-yellow) !important; font-weight: 800; }
-@media (max-aspect-ratio: 1/1) {
-  .cd-order { grid-template-columns: minmax(0, 1fr); text-align: center; justify-items: center; }
-  .cd-order-packs { grid-row: auto; width: 100%; }
-  .cd-order-minis { justify-content: center; }
+.cd-order-addons { display: flex; flex-wrap: wrap; gap: 0.4em; }
+.cd-addon { display: inline-flex; align-items: center; padding: 0.2em 0.75em; border-radius: 999px; background: rgba(247, 216, 32, 0.14); border: 1px solid rgba(247, 216, 32, 0.4); color: var(--cd-yellow); font-weight: 800; }
+.cd-order-also { display: flex !important; align-items: center; gap: 0.8em; }
+
+/* Their photo, and stickers we made for others with the same pack. */
+/* The side fills what the packs leave: the photo at its size, the samples take the rest. */
+.cd-order-side { display: flex; flex-direction: column; gap: 2vmin; min-height: 0; }
+.cd-order-samples { flex: 1 1 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 0.6em; min-height: 0; }
+.cd-order-samples small { color: var(--cd-muted); font-size: 0.9em; }
+.cd-order-samples-grid { display: grid; gap: 1.2vmin; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr)); min-height: 0; }
+.cd-order-samples-grid.n1 { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.cd-order-samples-grid.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
+.cd-order-samples-grid.n3 > :first-child { grid-row: span 2; }
+.cd-order-samples-grid img {
+  width: 100%; height: 100%; min-height: 0; object-fit: contain; background: #fff; border-radius: 0.8em; padding: 0.4em;
+  box-shadow: 0 1vmin 2.4vmin rgba(0, 0, 0, 0.35); animation: cd-fade 0.6s ease-out;
 }
+.cd-order-photo-pic { flex: none; margin: 0; display: grid; gap: 0.3em; justify-items: start; }
+.cd-order-photo-pic img { max-width: 100%; max-height: 22vh; object-fit: contain; border-radius: 0.6em; filter: drop-shadow(0 1vmin 2vmin rgba(0, 0, 0, 0.45)); }
+.cd-order-photo-pic figcaption { color: var(--cd-muted); font-size: 0.9em; }
+
+.cd-order-enjoy { margin: 0; text-align: center; font-size: 1.2em; font-weight: 800; color: var(--cd-yellow); }
+
+/* A tall screen: everything in one column, the samples under the packs. */
+@media (max-aspect-ratio: 1/1) {
+  .cd-full.cd-order { padding: 4vmin; }
+  .cd-order-body, .cd-order.no-side .cd-order-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .cd-order-photo-pic { justify-items: center; }
+}
+@media (prefers-reduced-motion: reduce) { .cd-order, .cd-order-ticket, .cd-order-samples-grid img { animation: none; } }
 
 /* An order shown off: the sticker big, its number beside it (above it on a tall screen). */
 .cd-showcase {
@@ -43,11 +92,3 @@
   .cd-showcase-art { max-height: 56vh; }
 }
 @media (prefers-reduced-motion: reduce) { .cd-showcase { animation: none; } }
-
-.cd-order-paid { margin: 0; font-size: 1.15em; font-weight: 800; color: var(--cd-good); }
-.cd-order-addons { margin: 0; font-weight: 800; color: var(--cd-yellow); }
-
-.cd-order-photo-pic { margin: 0; display: grid; gap: 0.3em; justify-items: start; }
-.cd-order-photo-pic img { max-width: 100%; max-height: 28vh; object-fit: contain; border-radius: 0.6em; filter: drop-shadow(0 1vmin 2vmin rgba(0, 0, 0, 0.45)); }
-.cd-order-photo-pic figcaption { color: var(--cd-muted); font-size: 0.9em; }
-@media (max-aspect-ratio: 1/1) { .cd-order-photo-pic { justify-items: center; } }

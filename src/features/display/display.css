@@ -143,6 +143,9 @@
 .cd-wheel-result b { font-family: var(--f-display); font-size: 3.4em; line-height: 1.05; letter-spacing: -0.02em; }
 .cd-wheel-result span:last-child { color: #d6eef0; font-size: 1.3em; }
 .cd-wheel-result.on b { color: var(--cd-yellow); animation: cd-fade 0.5s ease-out; }
+/* More than one spin: how many are left, and what they've won so far. */
+.cd-wheel-result span.cd-wheel-more { justify-self: start; padding: 0.3em 0.8em; border-radius: 999px; background: var(--cd-yellow); color: #0f1516; font-weight: 800; font-size: 1.4em; animation: cd-fade 0.5s ease-out; }
+.cd-wheel-result span.cd-wheel-tally { color: #d6eef0; font-size: 1.1em; }
 @media (max-aspect-ratio: 1/1) { .cd-wheel { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; } }
 .sl-ready li { justify-content: flex-start; gap: 1em; }
 .sl-ready li b { font-family: var(--f-display); color: var(--cd-yellow); font-size: 1.2em; min-width: 5em; }
@@ -207,3 +210,12 @@
   .cd-wheel { gap: 3vmin; padding: 6vmin 5vmin; }
   .cd-wheel-svg, .cd-wheel-tap { width: min(88vmin, 100%); }
 }
+
+/* Close to a spin: the right side says how much more, with the wheel turning slowly. */
+.cd-spin { display: grid; justify-items: center; gap: 0.5em; text-align: center; padding: 4vmin; max-width: 26em; animation: cd-fade 0.5s ease-out; }
+.cd-spin-wheel { width: min(46vmin, 100%); height: auto; }
+.cd-spin b { font-family: var(--f-display); font-size: 2.3em; line-height: 1.1; color: var(--cd-yellow); text-wrap: balance; }
+.cd-spin span:last-child { color: #d6eef0; font-size: 1.15em; }
+.cd-spin.ready b { color: #fff; }
+.cd-spin span.cd-spin-more { padding: 0.35em 0.9em; border-radius: 999px; background: var(--cd-yellow); color: #0f1516; font-weight: 800; font-size: 1.3em; }
+@media (max-aspect-ratio: 1/1) { .cd-spin-wheel { width: min(30vh, 60vw); } }

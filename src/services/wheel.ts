@@ -4,7 +4,7 @@ import type { DeviceInfo } from '../db/local';
 import { peso } from '../lib/money';
 import { isoDate } from '../lib/time';
 import { priceCart } from '../domain/cart';
-import { TRY_AGAIN, landingTurn, pickPrize, wheelQualifies, wheelSlices, winsToday, type WheelPrize, type WheelSlice } from '../domain/wheel';
+import { TRY_AGAIN, landingTurn, pickPrize, pickText, spinsFor, spinsLeft, spinsOf, wheelSlices, winsToday, type WheelPrize, type WheelResult, type WheelSlice } from '../domain/wheel';
 import { completeSale } from './sales';
 import { effectivePrice } from './catalog';
 import { saveVoucher } from './customers';
@@ -36,21 +36,29 @@ export interface Spin {
   turn: number;
   voucher?: Voucher;
   prizeSale?: Sale;
+  /** Spins this sale still has after this one. */
+  left: number;
+  /** Which spin of the sale this was: 1 for the first. */
+  nth: number;
+  /** Prizes won on this sale's spins so far, this one included (not "Try again" or free spins). */
+  won: string[];
 }
 
 /**
- * Spin the wheel for a sale that qualifies. A product prize is handed over as
- * a ₱0 sale (it comes out of stock); a service prize becomes a ₱0 service
- * order to make, and a ₱0 Services sale so the Sales log shows it; a discount
- * is a one-time voucher code for this event. The result stays on the sale, so
- * it spins only once.
+ * Spin the wheel for a sale that has a spin left. A product prize is handed
+ * over as a ₱0 sale (it comes out of stock); a service prize becomes a ₱0
+ * service order to make, and a ₱0 Services sale so the Sales log shows it; a
+ * discount is a one-time voucher code for this event; a free spin gives the
+ * sale one more. Every result stays on the sale, so it spins only as many
+ * times as it earned.
  */
 export async function spinWheel(o: { ev: JWEvent; saleId: string; session: Session; device: DeviceInfo; by: string | null }): Promise<Spin> {
   const cfg = o.ev.wheel;
   const sale = await db.sales.get(o.saleId);
   if (!sale || !cfg?.on) throw new Error('The prize wheel is off for this event.');
-  if (sale.wheel) throw new Error(`${sale.receiptNo} already spun the wheel.`);
-  if (!wheelQualifies(sale, cfg)) throw new Error(`${sale.receiptNo} doesn’t qualify for the wheel.`);
+  const done = spinsOf(sale);
+  if (spinsLeft(sale, cfg) < 1) throw new Error(done.length ? `${sale.receiptNo} has used all its spins.` : `${sale.receiptNo} doesn’t qualify for the wheel.`);
+  const earned = sale.wheelSpins?.earned ?? (done.length ? 1 : spinsFor(cfg, sale));
   const today = isoDate();
   const sales = alive(await db.sales.where('eventId').equals(o.ev.id).toArray());
   const prize = pickPrize(cfg, winsToday(sales, today), draw());
@@ -136,8 +144,17 @@ export async function spinWheel(o: { ev: JWEvent; saleId: string; session: Sessi
     detail = `${off} their next purchase at this event${prize.voucher.minSpend ? ` of ${peso(prize.voucher.minSpend)} or more` : ''}, with code ${voucher.code}.`;
   }
 
+  if (prize?.kind === 'pick') detail = `Let them pick ${pickText(prize)} from the prize pile.`;
+  const again = prize?.kind === 'spin';
+  if (again) detail = 'Another spin! Spin the wheel again.';
+
   const label = prize?.label ?? TRY_AGAIN;
-  await patch(db.sales, sale.id, { wheel: { prizeId: prize?.id ?? null, label, at: Date.now(), ...(voucher ? { code: voucher.code } : {}) } });
-  await audit('wheel', 'sale', sale.id, `${sale.receiptNo} spun the prize wheel: ${label}${voucher ? ` (${voucher.code})` : ''}${prizeSale ? ` (${prizeSale.receiptNo})` : ''}`);
-  return { prize, label, detail, slices, turn: landingTurn(slices, prize?.id ?? null, draw()), voucher, prizeSale };
+  const result: WheelResult = { prizeId: prize?.id ?? null, label, at: Date.now(), ...(voucher ? { code: voucher.code } : {}), ...(again ? { again: true } : {}) };
+  const results = [...done, result];
+  await patch(db.sales, sale.id, { wheel: results[0], wheelSpins: { earned, results } });
+  const left = Math.max(0, earned + results.filter((r) => r.again).length - results.length);
+  const nth = results.length;
+  await audit('wheel', 'sale', sale.id, `${sale.receiptNo} spun the prize wheel${nth > 1 ? ` (spin ${nth})` : ''}: ${label}${voucher ? ` (${voucher.code})` : ''}${prizeSale ? ` (${prizeSale.receiptNo})` : ''}`);
+  const won = results.filter((r) => r.prizeId && !r.again).map((r) => r.label);
+  return { prize, label, detail, slices, turn: landingTurn(slices, prize?.id ?? null, draw()), voucher, prizeSale, left, nth, won };
 }

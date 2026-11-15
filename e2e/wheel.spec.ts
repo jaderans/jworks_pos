@@ -52,7 +52,16 @@ test('the prize wheel: set it up, spin on a qualifying sale, see it land on the 
   // the wheel waits on their screen, turning slowly, until they tap it.
   // It turns even when Windows has animations off (the browser then asks for reduced motion).
   await screen.emulateMedia({ reducedMotion: 'reduce' });
-  let receipt = await sellAndOpenReceipt(page);
+  // Close to a spin: the customer screen's right side says how much more.
+  await tapProduct(page, 'Couple Pack (live)', 1);
+  const near = screen.getByRole('status', { name: 'Prize wheel' });
+  await expect(near).toContainText('Add ₱10 more to spin the prize wheel!');
+  await screen.screenshot({ path: `${SHOTS}/wheel-near.png` });
+  await tapProduct(page, 'Couple Pack (live)', 1);
+  await expect(near).toContainText('This sale spins the prize wheel!');
+  await payCash(page);
+  await page.getByRole('dialog', { name: /^Couple-of-Stickers for/ }).getByRole('button', { name: 'Later' }).click();
+  let receipt = page.getByRole('dialog', { name: /^Sale [A-Z]-\d{4}/ });
   await receipt.getByRole('button', { name: 'Let them spin' }).click();
   await expect(receipt.getByText('Waiting for them to tap the wheel')).toBeVisible();
   const wheel = screen.getByRole('region', { name: 'Prize wheel' });
@@ -99,5 +108,105 @@ test('the prize wheel: set it up, spin on a qualifying sale, see it land on the 
   await page.getByLabel('Status').selectOption('prizes');
   await expect(page.locator('tbody tr')).toHaveCount(3);
   await page.screenshot({ path: `${SHOTS}/wheel-sales-log.png`, fullPage: true });
+  expect(errors).toEqual([]);
+});
+
+test('more than one spin: one for every ₱250, a free spin that lands, the next spins waiting for their tap; a pick from the prize pile', async ({ page }) => {
+  test.setTimeout(180_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await setupOwner(page, 'Joshua Ranin', '1111');
+  await createEvent(page, 'Hilway December 2026');
+  await setEventPrice(page, 'Couple Pack (live)', 240);
+
+  // One spin for every ₱250, up to 2; the prize is a free spin, once a day.
+  await page.goto('/#/event/wheel');
+  await page.locator('label[for="wh-on"]').click();
+  await page.getByRole('group', { name: 'Spins', exact: true }).getByRole('button', { name: 'One for every mark reached' }).click();
+  await expect(page.getByLabel('Most spins on one sale')).toHaveValue('2');
+  await expect(page.getByText(/₱500 spins twice/)).toBeVisible();
+  await page.getByRole('button', { name: 'Add a prize' }).click();
+  const prize = page.locator('.wheel-prize').first();
+  await prize.getByLabel('It is').selectOption('spin');
+  await expect(prize.getByLabel('Prize', { exact: true })).toHaveValue('Free spin');
+  await prize.getByLabel('Chance').fill('100');
+  await prize.getByLabel('Most a day').fill('1');
+  // The look saves by itself: the customer screen follows without Save.
+  await page.getByRole('group', { name: 'Slices' }).getByRole('button', { name: 'All the same size' }).click();
+  await expect(page.getByText('Same-size slices on the customer screen now.')).toBeVisible();
+  await expect(page.getByText('Not saved yet')).toBeVisible();
+  await page.getByRole('button', { name: 'Save the wheel' }).click();
+  await expect(page.getByText('Prize wheel saved. Qualifying sales can spin now.')).toBeVisible();
+  await expect(page.getByText('Not saved yet')).toHaveCount(0);
+
+  await openRegister(page);
+  const [screen] = await Promise.all([page.waitForEvent('popup'), page.getByRole('button', { name: /^Customer screen/ }).click()]);
+  screen.on('pageerror', (e) => errors.push(e.message));
+  await screen.setViewportSize({ width: 1920, height: 1080 });
+  // ₱480 spins once; ₱20 more would be a second spin, and the right side says so.
+  await tapProduct(page, 'Couple Pack (live)', 2);
+  const near = screen.getByRole('status', { name: 'Prize wheel' });
+  await expect(near).toContainText('This sale spins the prize wheel!');
+  await expect(near).toContainText('Add ₱20 more for 2 spins!');
+  await screen.waitForTimeout(700);
+  await screen.screenshot({ path: `${SHOTS}/wheel-more-spins.png` });
+  await tapProduct(page, 'Couple Pack (live)', 1);
+  await expect(near).toContainText('This sale spins the prize wheel 2 times!');
+  await payCash(page);
+  await page.getByRole('dialog', { name: /^Couple-of-Stickers for/ }).getByRole('button', { name: 'Later' }).click();
+  const receipt = page.getByRole('dialog', { name: /^Sale [A-Z]-\d{4}/ });
+  await expect(receipt.getByText('This sale spins the prize wheel 2 times.')).toBeVisible();
+  await receipt.getByRole('button', { name: 'Let them spin' }).click();
+
+  const wheel = screen.getByRole('region', { name: 'Prize wheel' });
+  const status = wheel.getByRole('status');
+  await expect(status).toContainText('2 spins to go');
+  await wheel.getByRole('button', { name: 'Spin the wheel' }).click();
+  // The free spin: one more on top of the two.
+  await expect(status).toContainText('Free spin', { timeout: 12_000 });
+  await expect(status).toContainText('2 more spins!');
+  await screen.waitForTimeout(700);
+  await screen.screenshot({ path: `${SHOTS}/wheel-free-spin.png` });
+  // The next spin waits on their screen for another tap.
+  await expect(status).toContainText('Tap the wheel to spin!', { timeout: 8_000 });
+  await expect(status).toContainText('2 spins to go');
+  await expect(receipt.getByText(/Waiting for them to tap the wheel.*2 spins left/)).toBeVisible();
+  await wheel.getByRole('button', { name: 'Spin the wheel' }).click();
+  // Today's free spin is used up: Try again, and one spin left.
+  await expect(status).toContainText('Better luck on your next spin!', { timeout: 12_000 });
+  await expect(status).toContainText('1 more spin!');
+  await expect(status).toContainText('Tap the wheel to spin!', { timeout: 8_000 });
+  // The cashier can spin the last one for them.
+  await receipt.getByRole('button', { name: 'Spin for them' }).click();
+  await expect(status).toContainText('Thank you for shopping!', { timeout: 12_000 });
+  await expect(receipt.getByText('Try again: no prize this time')).toBeVisible();
+  await expect(receipt.getByRole('button', { name: 'Let them spin' })).toHaveCount(0);
+  await expect(receipt.getByRole('button', { name: 'Spin for them' })).toHaveCount(0);
+  await receipt.getByRole('button', { name: 'New sale' }).click();
+
+  // A pick from the prize pile: no product, they choose any 2 stickers.
+  await page.goto('/#/event/wheel');
+  const pile = page.locator('.wheel-prize').first();
+  await pile.getByLabel('It is').selectOption('pick');
+  await pile.getByLabel('Prize', { exact: true }).fill('Free sticker');
+  await pile.getByLabel('They pick').fill('2');
+  await pile.getByLabel('Most a day').fill('');
+  await expect(pile.getByText(/They choose 2 stickers from a pile you set aside/)).toBeVisible();
+  await page.getByRole('button', { name: 'Save the wheel' }).click();
+  // The register is still open from the first sale.
+  await page.goto('/#/sell');
+  await tapProduct(page, 'Couple Pack (live)', 2);
+  await payCash(page);
+  await page.getByRole('dialog', { name: /^Couple-of-Stickers for/ }).getByRole('button', { name: 'Later' }).click();
+  await receipt.getByRole('button', { name: /^Spin (for them|the wheel)$/ }).click();
+  await expect(receipt.getByText('They won: Free sticker')).toBeVisible({ timeout: 12_000 });
+  await expect(receipt.getByText('Let them pick 2 stickers from the prize pile.')).toBeVisible();
+  await expect(status).toContainText('Pick 2 stickers from our prize pile at the counter!');
+  await receipt.getByRole('button', { name: 'New sale' }).click();
+
+  // The Sales log lists every spin.
+  await page.goto('/#/sales');
+  await expect(page.getByRole('row', { name: /[A-Z]-0001/ }).filter({ hasText: 'Wheel: free spin, Try again, Try again' })).toBeVisible();
+  await expect(page.getByRole('row', { name: /[A-Z]-0002/ }).filter({ hasText: 'Wheel: won Free sticker' })).toBeVisible();
   expect(errors).toEqual([]);
 });

@@ -7,7 +7,7 @@ import { toCents } from '../src/lib/money';
 import { priceCart } from '../src/domain/cart';
 import { onHandByProduct } from '../src/domain/stock';
 import { eventMetrics } from '../src/domain/summary';
-import { landingTurn, pickPrize, tryAgainChance, wheelProblem, wheelQualifies, wheelRuleText, wheelSlices, winsToday, type WheelConfig, type WheelPrize } from '../src/domain/wheel';
+import { landingTurn, pickPrize, pickText, spinsFor, spinsLeft, spinsText, tryAgainChance, wheelProblem, wheelQualifies, wheelRuleText, wheelSlices, winsToday, type WheelConfig, type WheelPrize } from '../src/domain/wheel';
 import { createProduct } from '../src/services/catalog';
 import { createEvent, updateEvent } from '../src/services/events';
 import { completeSale, openSession } from '../src/services/sales';
@@ -68,6 +68,50 @@ describe('the prize wheel', () => {
     expect(wheelProblem(cfg({ minSpend: null, minItems: null }))).toMatch(/when the wheel spins/);
     expect(wheelProblem(cfg({ prizes: [{ ...couple, chance: 80 }, off20] }))).toMatch(/add up to 110%/);
     expect(wheelProblem(cfg({ prizes: [{ ...couple, productId: null }] }))).toMatch(/Pick the product/);
+    expect(wheelProblem(cfg({ spins: { per: 'sale', count: 0 } }))).toMatch(/Spins: from 1/);
+    expect(wheelProblem(cfg({ prizes: [{ ...pile, pick: { count: 0, what: 'sticker' } }] }))).toMatch(/how many Free sticker lets them pick/);
+  });
+});
+
+const spinAgain: WheelPrize = { id: 'again', label: 'Free spin', kind: 'spin', productId: null, voucher: null, chance: 20, perDay: null };
+const pile: WheelPrize = { id: 'pile', label: 'Free sticker', kind: 'pick', productId: null, voucher: null, pick: { count: 1, what: 'sticker' }, chance: 30, perDay: null };
+
+describe('how many spins', () => {
+  it('a set number a sale, or one for every mark reached up to the most', () => {
+    expect(spinsFor(cfg(), sale({ total: P(800) }))).toBe(1);
+    expect(spinsFor(cfg({ spins: { per: 'sale', count: 2 } }), sale({ total: P(260) }))).toBe(2);
+    expect(spinsFor(cfg({ spins: { per: 'sale', count: 2 } }), sale({ total: P(200) }))).toBe(0);
+    const marks = cfg({ spins: { per: 'mark', count: 3 } });
+    expect(spinsFor(marks, sale({ total: P(249) }))).toBe(0);
+    expect(spinsFor(marks, sale({ total: P(250) }))).toBe(1);
+    expect(spinsFor(marks, sale({ total: P(510) }))).toBe(2);
+    expect(spinsFor(marks, sale({ total: P(2000) }))).toBe(3);
+    // By items too: whichever mark gives more.
+    expect(spinsFor(marks, sale({ total: P(300), lines: [line(30, 'sticker')] }))).toBe(2);
+    expect(spinsText(marks)).toBe('One spin for every ₱250 or 15 items, up to 3');
+    expect(spinsText(cfg())).toBe('');
+    expect(spinsText(cfg({ spins: { per: 'sale', count: 2 } }))).toBe('2 spins a sale');
+  });
+
+  it('counts down as they spin; a free spin adds one; what it earned stays fixed', () => {
+    const marks = cfg({ spins: { per: 'mark', count: 3 } });
+    const r = (prizeId: string | null, again = false) => ({ prizeId, label: '', at: 1, ...(again ? { again } : {}) });
+    expect(spinsLeft(sale({ total: P(510) }), marks)).toBe(2);
+    expect(spinsLeft(sale({ total: P(510), wheelSpins: { earned: 2, results: [r(null)] } }), marks)).toBe(1);
+    expect(spinsLeft(sale({ total: P(510), wheelSpins: { earned: 2, results: [r('again', true), r(null)] } }), marks)).toBe(1);
+    expect(spinsLeft(sale({ total: P(510), wheelSpins: { earned: 2, results: [r(null), r(null)] } }), marks)).toBe(0);
+    // The wheel changed after the first spin: the sale keeps what it earned.
+    expect(spinsLeft(sale({ total: P(510), wheelSpins: { earned: 2, results: [r(null)] } }), cfg())).toBe(1);
+    // Every spin's wins count toward the daily limits.
+    const today = new Date('2026-11-14T15:00:00').getTime();
+    const two = sale({ wheelSpins: { earned: 2, results: [{ prizeId: 'pile', label: '', at: today }, { prizeId: 'pile', label: '', at: today }] } });
+    expect(winsToday([two], '2026-11-14').get('pile')).toBe(2);
+  });
+
+  it('a pick from the pile says how many', () => {
+    expect(pickText(pile)).toBe('1 sticker');
+    expect(pickText({ pick: { count: 3, what: 'stickers' } })).toBe('3 stickers');
+    expect(pickText({ pick: { count: 2, what: '' } })).toBe('2 stickers');
   });
 });
 
@@ -78,13 +122,13 @@ describe('spinning at the register', () => {
     setWriterDevice((await ensureDevice()).deviceId);
   });
 
-  async function setup(prizes: WheelPrize[]) {
+  async function setup(prizes: WheelPrize[], more: Partial<WheelConfig> = {}) {
     const device = await ensureDevice();
     const ev = await createEvent({ name: 'Hilway' });
     const pack = await createProduct({ name: 'Couple Pack (live)', price: P(240), trackStock: 1 });
     await adjustStock(pack.id, 10, 'Counted');
     const session = await openSession(ev.id, device, P(2000), null);
-    await updateEvent(ev.id, { wheel: { on: true, minSpend: P(250), minItems: null, prizes: prizes.map((p) => (p.kind === 'item' ? { ...p, productId: pack.id } : p)) } });
+    await updateEvent(ev.id, { wheel: { on: true, minSpend: P(250), minItems: null, prizes: prizes.map((p) => (p.kind === 'item' ? { ...p, productId: pack.id } : p)), ...more } });
     const sell = (total: number) =>
       completeSale({
         eventId: ev.id, session, device, cashierId: null, note: '',
@@ -102,7 +146,7 @@ describe('spinning at the register', () => {
     expect(spin.prizeSale).toMatchObject({ total: 0, prizeFor: first.id, lines: [expect.objectContaining({ productId: pack.id, free: 1, gross: 0 })] });
     expect((await db.sales.get(first.id))?.wheel).toMatchObject({ prizeId: 'couple', label: 'Free Couple Pack' });
     expect(onHandByProduct(alive(await db.stockMoves.toArray())).get(pack.id)).toBe(8);
-    await expect(spinWheel({ ev: await ev(), saleId: first.id, session, device, by: null })).rejects.toThrow(/already spun/);
+    await expect(spinWheel({ ev: await ev(), saleId: first.id, session, device, by: null })).rejects.toThrow(/used all its spins/);
 
     const second = await sell(300);
     const again = await spinWheel({ ev: await ev(), saleId: second.id, session, device, by: null });
@@ -133,5 +177,32 @@ describe('spinning at the register', () => {
     expect(spin.voucher?.code).toMatch(/^WIN-[A-Z2-9]{5}$/);
     expect(spin.detail).toContain(spin.voucher!.code);
     await expect(spinWheel({ ev: await ev(), saleId: (await sell(100)).id, session, device, by: null })).rejects.toThrow(/doesn’t qualify/);
+  });
+
+  it('spins as many times as the sale earned, plus a free spin it lands on; then no more', async () => {
+    const { device, session, sell, ev } = await setup([{ ...spinAgain, chance: 100, perDay: 1 }], { spins: { per: 'mark', count: 3 } });
+    const s = await sell(520);
+    const one = await spinWheel({ ev: await ev(), saleId: s.id, session, device, by: null });
+    expect([one.label, one.nth, one.left]).toEqual(['Free spin', 1, 2]);
+    expect(one.detail).toMatch(/Another spin/);
+    // The one free spin today is gone: these land on Try again.
+    const two = await spinWheel({ ev: await ev(), saleId: s.id, session, device, by: null });
+    const three = await spinWheel({ ev: await ev(), saleId: s.id, session, device, by: null });
+    expect([two.label, two.left, three.nth, three.left]).toEqual(['Try again', 1, 3, 0]);
+    await expect(spinWheel({ ev: await ev(), saleId: s.id, session, device, by: null })).rejects.toThrow(/used all its spins/);
+    const saved = await db.sales.get(s.id);
+    expect(saved?.wheelSpins?.earned).toBe(2);
+    expect(saved?.wheelSpins?.results.map((x) => x.label)).toEqual(['Free spin', 'Try again', 'Try again']);
+    expect(saved?.wheel?.label).toBe('Free spin');
+  });
+
+  it('a pick from the pile tells the cashier how many; nothing comes out of stock', async () => {
+    const { device, session, pack, sell, ev } = await setup([{ ...pile, chance: 100, pick: { count: 2, what: 'sticker' } }]);
+    const s = await sell(300);
+    const spin = await spinWheel({ ev: await ev(), saleId: s.id, session, device, by: null });
+    expect(spin.detail).toBe('Let them pick 2 stickers from the prize pile.');
+    expect(spin.prizeSale).toBeUndefined();
+    expect(spin.won).toEqual(['Free sticker']);
+    expect(onHandByProduct(alive(await db.stockMoves.toArray())).get(pack.id)).toBe(9);
   });
 });

@@ -19,6 +19,28 @@ export const PACK_CODES: readonly PackCode[] = ['S', 'C', 'B3', 'B4', 'B5'];
 export const PACK_NAME: Record<PackCode, string> = { S: 'Solo Pack', C: 'Couple Pack', B3: 'Barkada Pack (3)', B4: 'Barkada Pack (4)', B5: 'Barkada Pack (5)' };
 /** The bonus mini stickers a pack comes with (singles have none). */
 export const PACK_MINIS: Record<PackCode, number> = { S: 3, C: 6, B3: 6, B4: 8, B5: 8 };
+/** The illustrated stickers in a pack. */
+export const PACK_STICKERS: Record<PackCode, number> = { S: 2, C: 2, B3: 3, B4: 4, B5: 5 };
+
+/** "2 illustrated stickers + 6 mini stickers": what a pack is, in the customer's words. */
+export function packWhat(p: { pack: PackCode; singles: boolean }): string {
+  const art = `${PACK_STICKERS[p.pack]} illustrated stickers`;
+  return p.singles ? art : `${art} + ${PACK_MINIS[p.pack]} mini stickers`;
+}
+
+/** Past work shown while a customer checks their order: one person, two, or a group of 3 to 5. */
+export type SampleKind = 'solo' | 'couple' | 'barkada';
+export const SAMPLE_KINDS: readonly SampleKind[] = ['solo', 'couple', 'barkada'];
+export const SAMPLE_KIND_NAME: Record<SampleKind, string> = { solo: 'Solo', couple: 'Couple', barkada: 'Barkada' };
+export const sampleKindOf = (pack: PackCode): SampleKind => (pack === 'S' ? 'solo' : pack === 'C' ? 'couple' : 'barkada');
+/** From a file name like "Couple - Eliza & Renz.png"; null when it doesn't say. */
+export function sampleKindFromName(name: string): SampleKind | null {
+  const n = name.toLowerCase();
+  if (/\bsolo\b/.test(n)) return 'solo';
+  if (/\bcouple\b/.test(n)) return 'couple';
+  if (/\b(barkada|group)\b/.test(n)) return 'barkada';
+  return null;
+}
 
 export type Making = 'printing' | 'illustrating';
 

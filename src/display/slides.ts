@@ -76,7 +76,7 @@ export type Slide =
   | { kind: 'coupon'; key: string; head: string; detail: string }
   | { kind: 'best'; key: string; rows: { name: string; qty: number }[] }
   | { kind: 'ready'; key: string; rows: { number: string; name: string }[] }
-  | { kind: 'wheel'; key: string; rule: string; prizes: string[] }
+  | { kind: 'wheel'; key: string; rule: string; prizes: string[]; spins?: string }
   | { kind: 'sticker'; key: string; id: string; code: string; label: string; status: string | null }
   | { kind: 'media'; key: string; id: string; media: 'image' | 'video'; seconds: number };
 
@@ -95,7 +95,7 @@ export interface SlideInput {
   /** Orders waiting at the counter: commission and print orders marked Ready. */
   ready?: { number: string; name: string }[];
   /** The event's prize wheel, when it's on: "Spend ₱250 or buy 15 Sticker items". */
-  wheel?: { rule: string; prizes: string[] } | null;
+  wheel?: { rule: string; prizes: string[]; spins?: string } | null;
   /** Custom sticker designs from Drive, each with the status of the order its number matches, if any. */
   stickers?: { id: string; code: string; label: string; status: string | null }[];
 }
@@ -163,7 +163,7 @@ export function buildSlides(i: SlideInput): Slide[] {
       });
   }
   if (i.ready?.length) chunk(i.ready, 8).forEach((part, k) => out.push({ kind: 'ready', key: `ready:${k}`, rows: part }));
-  if (i.wheel?.rule) out.push({ kind: 'wheel', key: 'wheel', rule: i.wheel.rule, prizes: i.wheel.prizes });
+  if (i.wheel?.rule) out.push({ kind: 'wheel', key: 'wheel', rule: i.wheel.rule, prizes: i.wheel.prizes, spins: i.wheel.spins });
   for (const s of i.stickers ?? []) out.push({ kind: 'sticker', key: `sticker:${s.id}`, ...s });
   if (i.settings.bestSellers) {
     const sold = new Map<string, { name: string; qty: number }>();
@@ -190,9 +190,9 @@ export interface AdMedia {
 }
 
 /** The owner's ads between the made slides: one ad after each made slide, round and round. */
-export function mixSlides(made: readonly Slide[], ads: readonly (Omit<AdMedia, 'kind'> & { kind: string })[]): Slide[] {
-  // Music and sound files aren't slides.
-  const media: Slide[] = ads.filter((a): a is AdMedia => a.on === 1 && (a.kind === 'image' || a.kind === 'video')).map((a) => ({ kind: 'media', key: `media:${a.id}`, id: a.id, media: a.kind, seconds: a.seconds }));
+export function mixSlides(made: readonly Slide[], ads: readonly (Omit<AdMedia, 'kind'> & { kind: string; role?: string })[]): Slide[] {
+  // Music and sound files aren't slides, nor are sample stickers (they show with an order).
+  const media: Slide[] = ads.filter((a): a is AdMedia => a.on === 1 && (a.kind === 'image' || a.kind === 'video') && a.role !== 'sample').map((a) => ({ kind: 'media', key: `media:${a.id}`, id: a.id, media: a.kind, seconds: a.seconds }));
   if (!media.length) return [...made];
   if (!made.length) return media;
   const out: Slide[] = [];

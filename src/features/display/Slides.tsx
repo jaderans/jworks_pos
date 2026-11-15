@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, alive } from '../../db/db';
 import { settingValue } from '../../db/settings';
 import { useBundleRules, useCategories, useEventProducts, useOrders, usePrintOrders, useProducts, useSales, useSettingRows } from '../../hooks/data';
-import { wheelRuleText } from '../../domain/wheel';
+import { spinsText, wheelRuleText } from '../../domain/wheel';
 import { peso } from '../../lib/money';
 import { buildSlides, mixSlides, type DisplaySettings, type Slide } from '../../display/slides';
 import type { BusinessSettings, PrintRates } from '../../db/types';
@@ -43,7 +43,7 @@ export function useSlides(eventId: string | null, settings: DisplaySettings): { 
             ...(orders ?? []).filter((o) => o.status === 'ready').map((o) => ({ number: o.number, name: o.customerName.split(' ')[0] })),
             ...(prints ?? []).filter((o) => o.status === 'ready').map((o) => ({ number: o.number, name: o.customerName.split(' ')[0] })),
           ],
-          wheel: ev?.wheel?.on ? { rule: wheelRuleText(ev.wheel, categories ?? []), prizes: ev.wheel.prizes.map((p) => p.label) } : null,
+          wheel: ev?.wheel?.on ? { rule: wheelRuleText(ev.wheel, categories ?? []), prizes: ev.wheel.prizes.map((p) => p.label), spins: spinsText(ev.wheel) } : null,
           stickers: (art ?? []).map((a) => {
             // A design whose number matches an order shows where that order is.
             const o = [...(orders ?? []), ...(prints ?? [])].find((x) => a.code && (x.designNo === a.code || x.number.replace(/-/g, '').toUpperCase() === a.code));
@@ -242,6 +242,7 @@ function SlideView({ s, url, onEnded, videoSound = false, onVideoSound }: { s: S
         <div className="sl sl-coupon">
           <span className="sl-eyebrow">Prize wheel</span>
           <h2>{s.rule}: spin the prize wheel!</h2>
+          {s.spins ? <p className="sl-sub"><b>{s.spins}!</b></p> : null}
           {s.prizes.length ? <p className="sl-sub">Win {s.prizes.join(', ')} and more.</p> : null}
         </div>
       );

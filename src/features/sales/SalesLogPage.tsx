@@ -12,6 +12,7 @@ import { peso } from '../../lib/money';
 import { fmtDateTime, fmtTime } from '../../lib/time';
 import { changeSalePayments, voidSale } from '../../services/sales';
 import { moneyIn, moveMethod } from '../../domain/summary';
+import { spinsOf, type WheelResult } from '../../domain/wheel';
 import { ReceiptDialog } from '../register/ReceiptDialog';
 import { CashMoveDialog } from '../register/SessionDialogs';
 import type { BusinessSettings, CashMove, Sale, SalePayment, Session } from '../../db/types';
@@ -46,7 +47,13 @@ export default function SalesLogPage() {
   // The prize wheel: which sale won what, and what a prize took out of stock.
   const tracked = useMemo(() => new Set((products ?? []).filter((p) => p.trackStock === 1).map((p) => p.id)), [products]);
   const byId = useMemo(() => new Map((sales ?? []).map((s) => [s.id, s])), [sales]);
-  const prizeOf = useMemo(() => new Map((sales ?? []).filter((s) => s.prizeFor && s.status === 'completed').map((s) => [s.prizeFor!, s])), [sales]);
+  /** The prize sales each sale's spins handed over (a sale can spin more than once). */
+  const prizesOf = useMemo(() => {
+    const m = new Map<string, Sale[]>();
+    for (const s of sales ?? []) if (s.prizeFor && s.status === 'completed') m.set(s.prizeFor, [...(m.get(s.prizeFor) ?? []), s]);
+    return m;
+  }, [sales]);
+  const spinText = (r: WheelResult) => (r.again ? 'another spin' : r.code ? `${r.label} (code ${r.code})` : r.prizeId ? `won ${r.label}` : r.label);
   /** "1 × Chonky Cat Keychains came out of stock", for a prize sale. */
   const fromStock = (s: Sale) => {
     const out = s.lines.filter((l) => tracked.has(l.productId));
@@ -61,11 +68,20 @@ export default function SalesLogPage() {
         </Callout>
       );
     }
-    if (s.wheel) {
-      const prize = prizeOf.get(s.id);
+    const spins = spinsOf(s);
+    if (spins.length) {
+      const prizes = prizesOf.get(s.id) ?? [];
+      const handed = prizes.length ? `Handed over as ${prizes.map((p) => p.receiptNo).join(', ')}.` : '';
+      if (spins.length > 1)
+        return (
+          <Callout tone="info" title={`Spun the prize wheel ${spins.length} times`}>
+            {spins.map(spinText).join(' · ')}. {handed}
+          </Callout>
+        );
+      const r = spins[0];
       return (
-        <Callout tone="info" title={`Spun the prize wheel: ${s.wheel.label}`}>
-          {prize ? `Handed over as ${prize.receiptNo}.` : s.wheel.code ? `Their code: ${s.wheel.code}.` : 'No prize this time.'}
+        <Callout tone="info" title={`Spun the prize wheel: ${r.label}`}>
+          {handed || (r.code ? `Their code: ${r.code}.` : r.again ? 'Another spin.' : r.prizeId ? 'Given at the counter.' : 'No prize this time.')}
         </Callout>
       );
     }
@@ -282,8 +298,8 @@ export default function SalesLogPage() {
                     ) : null}
                     {s.wheel ? (
                       <div className="muted tiny">
-                        <Disc3 size={12} aria-hidden="true" /> Wheel: {s.wheel.prizeId ? `won ${s.wheel.label}` : s.wheel.label}
-                        {prizeOf.get(s.id) ? ` → ${prizeOf.get(s.id)!.receiptNo}` : ''}
+                        <Disc3 size={12} aria-hidden="true" /> Wheel: {spinsOf(s).map((r) => (r.again ? 'free spin' : r.prizeId ? `won ${r.label}` : r.label)).join(', ')}
+                        {prizesOf.get(s.id)?.length ? ` → ${prizesOf.get(s.id)!.map((p) => p.receiptNo).join(', ')}` : ''}
                       </div>
                     ) : null}
                     {s.status === 'voided' ? (

@@ -1,6 +1,6 @@
 import type { Cents } from '../lib/money';
 import type { WheelConfig, WheelResult } from '../domain/wheel';
-import type { StickOrder } from '../domain/stick';
+import type { SampleKind, StickOrder } from '../domain/stick';
 
 /**
  * Every record that syncs between devices carries these fields.
@@ -300,8 +300,10 @@ export interface Sale extends Syncable {
   orderId?: string;
   /** The print order a service payment is for. */
   printOrderId?: string;
-  /** What this sale won on the prize wheel (it spins once). */
+  /** What this sale won on its first spin of the prize wheel (all its spins are in wheelSpins). */
   wheel?: WheelResult;
+  /** Every spin this sale had, and how many it earned (fixed at its first spin). */
+  wheelSpins?: { earned: number; results: WheelResult[] };
   /** A ₱0 sale of a wheel prize: the sale that won it. */
   prizeFor?: string;
 }
@@ -516,8 +518,10 @@ export interface DisplayMedia {
   name: string;
   /** Images and videos are ads; audio is music or a sound for the wheel. */
   kind: 'image' | 'video' | 'audio';
-  /** Audio: background music, or a sound effect (the wheel's tune or prize sound). */
-  role?: 'music' | 'sound';
+  /** Audio: background music, or a sound effect (the wheel's tune or prize sound). An image: an ad, or a sample sticker (not an ad). */
+  role?: 'music' | 'sound' | 'sample';
+  /** A sample sticker: which packs it's shown with. */
+  sample?: SampleKind;
   mime: string;
   blob: Blob;
   /** How long an image shows; a video plays to its end. */

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db/db';
 import { Maximize, Volume2 } from 'lucide-react';
 import { peso } from '../../lib/money';
 import { useLocal } from '../../hooks/data';
@@ -48,6 +50,8 @@ export default function CustomerDisplay() {
   const [booth, setBooth] = useState<BoothShow | null>(null);
   const [showcase, setShowcase] = useState<DisplayShowcase | null>(null);
   const [stickShow, setStickShow] = useState<StickShow | null>(null);
+  // Stickers made for past customers, shown with an order of the same pack (Settings → Customer screen; this laptop only).
+  const samples = useLiveQuery(() => db.displayMedia.filter((m) => m.role === 'sample' && m.on === 1).sortBy('sort'), []);
   const [soundOn, setSoundOn] = useState(audioReady);
   const [videoSound, setVideoSound] = useState(false);
   const rx = useRef<DisplayReceiver | null>(null);
@@ -204,9 +208,9 @@ export default function CustomerDisplay() {
       ) : view === 'booth' && booth ? (
         <BoothView b={booth} />
       ) : view === 'order' && stickOn && stickShow ? (
-        <OrderCheck o={stickShow} photo={stickShow.photoPic} now={now} />
+        <OrderCheck o={stickShow} photo={stickShow.photoPic} now={now} samples={samples} />
       ) : view === 'order' && s?.stick ? (
-        <OrderCheck o={s.stick} now={now} />
+        <OrderCheck o={s.stick} now={now} samples={samples} />
       ) : view === 'wheel' && s?.wheel ? (
         <WheelView
           w={s.wheel}
@@ -270,6 +274,13 @@ export default function CustomerDisplay() {
               <div className="cd-qr">
                 <img src={qr} alt="Receipt QR code" />
                 <span>Scan for your receipt {s?.thanks?.receiptNo}</span>
+              </div>
+            ) : view === 'cart' && s?.spin ? (
+              <div className={`cd-spin${s.spin.ready ? ' ready' : ''}`} role="status" aria-label="Prize wheel">
+                <WheelSvg slices={s.spin.slices} idle className="cd-spin-wheel" />
+                <span className="sl-eyebrow">Prize wheel</span>
+                <b>{s.spin.text}</b>
+                {s.spin.more ? <span className="cd-spin-more">{s.spin.more}</span> : s.spin.ready ? <span>Spin it after you pay.</span> : null}
               </div>
             ) : settings.sideAds ? (
               <Slides slides={slides} urls={urls} seconds={settings.slideSeconds} variant="side" />
@@ -363,15 +374,18 @@ function WheelView({ w, settings, onTap }: { w: DisplayWheel; settings: DisplayS
       <div className={`cd-wheel-result${landed ? ' on' : ''}`} role="status" aria-live="polite">
         {w.waiting ? (
           <>
-            <span className="sl-eyebrow">Prize wheel</span>
+            <span className="sl-eyebrow">{w.more ? `Prize wheel · ${w.more + 1} spins to go` : 'Prize wheel'}</span>
             <b>{tapped === w.id ? 'Here it goes…' : 'Tap the wheel to spin!'}</b>
             <span>Good luck!</span>
+            {w.tally?.length ? <span className="cd-wheel-tally">So far you won: {w.tally.join(', ')}</span> : null}
           </>
         ) : landed ? (
           <>
             <span className="sl-eyebrow">{w.won ? 'You won' : 'So close'}</span>
             <b>{w.label}</b>
             <span>{w.detail}</span>
+            {w.more ? <span className="cd-wheel-more">{w.more === 1 ? '1 more spin!' : `${w.more} more spins!`}</span> : null}
+            {w.tally && w.tally.length > 1 ? <span className="cd-wheel-tally">All you won: {w.tally.join(', ')}</span> : null}
           </>
         ) : (
           <>

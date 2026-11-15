@@ -29,7 +29,7 @@ import { StickDialog } from '../stick/StickDialog';
 import { StubsDialog, type StubOrder } from '../stick/Stubs';
 import type { DisplayStick } from '../../domain/display';
 import { openCustomerScreen, useSecondScreen } from '../../display/screens';
-import { wheelQualifies, wheelSlices } from '../../domain/wheel';
+import { pickText, spinNudge, spinsLeft, wheelQualifies, wheelSlices } from '../../domain/wheel';
 import { spinWheel, type Spin } from '../../services/wheel';
 import { effectivePrice, findByCode, isOnSale, setEventProduct, updateProduct } from '../../services/catalog';
 import { completeSale, openSession } from '../../services/sales';
@@ -142,7 +142,9 @@ function Register({ ev }: { ev: JWEvent }) {
   const [spin, setSpin] = useState<(Spin & { id: string; sound: DisplayWheel['sound']; landsAt: number }) | null>(null);
   const [spinning, setSpinning] = useState(false);
   /** The wheel is up on the customer screen, waiting for the customer to tap it. */
-  const [invite, setInvite] = useState<{ id: string; saleId: string; sound: DisplayWheel['sound'] } | null>(null);
+  const [invite, setInvite] = useState<{ id: string; saleId: string; sound: DisplayWheel['sound']; left: number } | null>(null);
+  /** Couple-of-Stickers packs won on the wheel, waiting for their details until the sale's last spin lands. */
+  const wonPacks = useRef<Sale[]>([]);
   const [landedTick, setLandedTick] = useState(0);
   const displaySaved = useLocal<Partial<DisplaySettings>>('display', DEFAULT_DISPLAY);
   const displaySettings: DisplaySettings = { ...DEFAULT_DISPLAY, ...(displaySaved ?? {}) };
@@ -315,7 +317,19 @@ function Register({ ev }: { ev: JWEvent }) {
     const who = customer
       ? { name: customer.name, loyalty: loyalty && loyaltyRules.enabled ? (loyalty.rewards ? `${rewardText(loyaltyRules)} ready to use` : `${loyalty.balance} stamp${loyalty.balance === 1 ? '' : 's'} · ${loyalty.toNext} more for ${rewardText(loyaltyRules)}`) : null }
       : null;
-    if (receipt && stickView && spin && Date.now() > spin.landsAt) {
+    // Another spin waiting for their tap (the first, or the next one).
+    if (receipt && invite && ev.wheel) {
+      return {
+        ...base,
+        mode: 'wheel',
+        cart: cartView,
+        customer: who,
+        pay: null,
+        thanks: null,
+        wheel: { id: invite.id, slices: wheelSlices(ev.wheel), waiting: true, turn: 0, won: false, label: '', detail: '', sound: invite.sound, more: invite.left - 1, tally: spin?.won.length ? spin.won : undefined },
+      };
+    }
+    if (receipt && stickView && spin && spin.left === 0 && Date.now() > spin.landsAt) {
       return { ...base, mode: 'order', cart: cartView, customer: who, pay: null, thanks: null, stick: stickView };
     }
     if (receipt && spin) {
@@ -333,16 +347,28 @@ function Register({ ev }: { ev: JWEvent }) {
           turn: spin.turn,
           won: !!spin.prize,
           label: spin.label,
-          detail: spin.prize?.kind === 'voucher' && spin.voucher ? `Your code: ${spin.voucher.code}` : spin.prize?.kind === 'service' ? 'We’ll make it for you: ask us at the counter.' : spin.prize ? 'Collect it at the counter.' : 'Thank you for shopping!',
+          detail:
+            spin.prize?.kind === 'spin'
+              ? 'Get ready to spin again!'
+              : spin.prize?.kind === 'pick'
+                ? `Pick ${pickText(spin.prize)} from our prize pile at the counter!`
+              : spin.prize?.kind === 'voucher' && spin.voucher
+                ? `Your code: ${spin.voucher.code}`
+                : spin.prize?.kind === 'service'
+                  ? 'We’ll make it for you: ask us at the counter.'
+                  : spin.prize
+                    ? 'Collect it at the counter.'
+                    : spin.left > 0
+                      ? 'Better luck on your next spin!'
+                      : 'Thank you for shopping!',
           sound: spin.sound,
+          more: spin.left,
+          tally: spin.nth > 1 || spin.left > 0 ? spin.won : undefined,
         },
       };
     }
-    if (receipt && stickView && !invite) {
+    if (receipt && stickView) {
       return { ...base, mode: 'order', cart: cartView, customer: who, pay: null, thanks: null, stick: stickView };
-    }
-    if (receipt && invite && ev.wheel) {
-      return { ...base, mode: 'wheel', cart: cartView, customer: who, pay: null, thanks: null, wheel: { id: invite.id, slices: wheelSlices(ev.wheel), waiting: true, turn: 0, won: false, label: '', detail: '', sound: invite.sound } };
     }
     if (receipt) {
       const buyer = receipt.customerId ? (customers ?? []).find((c) => c.id === receipt.customerId) : undefined;
@@ -370,8 +396,10 @@ function Register({ ev }: { ev: JWEvent }) {
       const withQr = picked.find((m) => m.kind !== 'cash' && m.qr);
       return { ...base, mode: 'paying', cart: cartView, customer: who, pay: { amount: priced.total, method: picked.map((m) => m.name).join(' + ') || 'Cash', qr: withQr?.qr ?? null }, thanks: null };
     }
-    return { ...base, mode: 'cart', cart: cartView, customer: who, pay: null, thanks: null };
-  }, [business, ev.id, ev.name, ev.wheel, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, spin, invite, stickView, landedTick, customers, customerSales, earned, paying, payWith, eventMethods]);
+    // Close to a spin: the customer screen says how much more.
+    const near = spinNudge(ev.wheel, { total: priced.total, lines: priced.lines }, (categories ?? []).find((c) => c.id === ev.wheel?.minItems?.categoryId)?.name);
+    return { ...base, mode: 'cart', cart: cartView, customer: who, pay: null, thanks: null, spin: near && ev.wheel ? { ...near, slices: wheelSlices(ev.wheel) } : null };
+  }, [categories, business, ev.id, ev.name, ev.wheel, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, spin, invite, stickView, landedTick, customers, customerSales, earned, paying, payWith, eventMethods]);
 
   /**
    * Spin for a sale: the customer tapped the wheel on their screen, or the
@@ -391,9 +419,15 @@ function Register({ ev }: { ev: JWEvent }) {
       setSpin({ ...s, id: inviteRef.current?.id ?? uid(), sound, landsAt: Date.now() + SPIN_MS });
       setInvite(null);
       window.setTimeout(() => setLandedTick((n) => n + 1), SPIN_MS + 200);
-      // A Couple-of-Stickers pack won on the wheel is made like a bought one: its details open once it has landed.
+      // A Couple-of-Stickers pack won on the wheel is made like a bought one: its details open once the last spin has landed.
       const won = s.prizeSale;
-      if (won && hasPacks(won)) window.setTimeout(() => setStickFor(won), SPIN_MS + 1200);
+      if (won && hasPacks(won)) wonPacks.current.push(won);
+      if (s.left === 0 && wonPacks.current.length) window.setTimeout(() => setStickFor(wonPacks.current.shift() ?? null), SPIN_MS + 1200);
+      // They tapped for this one: once it has landed, the next spin waits on their screen for another tap.
+      if (s.left > 0 && from === 'customer')
+        window.setTimeout(() => {
+          if (receiptRef.current?.id === sale.id) letThemSpinRef.current(sale, s.left);
+        }, SPIN_MS + 2600);
       if (sound === 'register') {
         const c = await wheelSoundChoice(displaySettings);
         if (c) {
@@ -414,8 +448,10 @@ function Register({ ev }: { ev: JWEvent }) {
   inviteRef.current = invite;
   const tapRef = useRef<(id: string) => void>(() => undefined);
   tapRef.current = (id: string) => {
-    if (receipt && invite?.id === id && !spin) void spinFor(receipt, 'customer');
+    if (receipt && invite?.id === id && !spinningRef.current) void spinFor(receipt, 'customer');
   };
+  const receiptRef = useRef(receipt);
+  receiptRef.current = receipt;
   const screen = useCustomerScreen(display, (id) => tapRef.current(id));
   const [screenOpen, setScreenOpen] = useState(false);
   const [screenSound, setScreenSound] = useState(false);
@@ -433,24 +469,54 @@ function Register({ ev }: { ev: JWEvent }) {
     : screenOpen && !screenSound
       ? 'Sound plays on this laptop until someone clicks the customer screen once (Full screen and sound).'
       : null;
-  const letThemSpin = (sale: Sale) => {
+  /** The wheel waits on the customer screen for their tap; `left` counts this spin too. */
+  const letThemSpin = (sale: Sale, left: number) => {
     const st = screen.status();
-    setInvite({ id: uid(), saleId: sale.id, sound: displaySettings.wheelSound && st.sound ? 'screen' : 'none' });
+    setInvite({ id: uid(), saleId: sale.id, sound: displaySettings.wheelSound && st.sound ? 'screen' : 'none', left });
   };
+  const letThemSpinRef = useRef(letThemSpin);
+  letThemSpinRef.current = letThemSpin;
+  /** Spins this sale still has: from the last spin, or what it earned. */
+  const spinsToGo = spin ? spin.left : receipt ? spinsLeft(receipt, ev.wheel) : 0;
+  const spinsWord = (n: number) => `${n} spin${n === 1 ? '' : 's'}`;
+  const spinButtons = (sale: Sale) => (
+    <div className="row wrap">
+      {screenOpen ? (
+        <Button variant="teal" onClick={() => letThemSpin(sale, spinsToGo)}>
+          <Disc3 size={18} /> Let them spin
+        </Button>
+      ) : null}
+      <Button variant={screenOpen ? undefined : 'teal'} onClick={() => void spinFor(sale, 'cashier')} disabled={spinning}>
+        <Disc3 size={18} /> {screenOpen ? 'Spin for them' : 'Spin the wheel'}
+      </Button>
+    </div>
+  );
   const wheelBox =
     receipt && (spin || wheelQualifies(receipt, ev.wheel)) ? (
       spin && Date.now() < spin.landsAt ? (
-        <Callout tone="info" title="The wheel is spinning…">
+        <Callout tone="info" title={spin.nth > 1 ? `The wheel is spinning (spin ${spin.nth})…` : 'The wheel is spinning…'}>
           It lands in a few seconds{screenOpen ? ' on the customer screen' : ''}.
         </Callout>
-      ) : spin ? (
-        <Callout tone={spin.prize ? 'good' : 'info'} title={spin.prize ? `They won: ${spin.label}` : 'Try again: no prize this time'}>
-          {spin.detail}
-        </Callout>
+      ) : spin && !invite ? (
+        <>
+          <Callout tone={spin.prize ? 'good' : 'info'} title={spin.prize ? `They won: ${spin.label}` : 'Try again: no prize this time'}>
+            {spin.detail}
+            {spin.won.length > 1 ? <span className="muted small" style={{ display: 'block' }}>Won on this sale: {spin.won.join(', ')}</span> : null}
+          </Callout>
+          {spin.left > 0 ? (
+            <div className="wheel-cta">
+              <span>
+                <b>{spinsWord(spin.left)} left for this sale.</b> {screenOpen ? 'Let them tap it again, or spin it for them.' : 'Spin it again.'}
+              </span>
+              {spinButtons(receipt)}
+            </div>
+          ) : null}
+        </>
       ) : invite ? (
         <div className="wheel-cta">
           <span>
-            <b>Waiting for them to tap the wheel</b> on the customer screen.
+            <b>Waiting for them to tap the wheel</b> on the customer screen{invite.left > 1 ? ` (${spinsWord(invite.left)} left)` : ''}.
+            {spin ? <span className="muted small" style={{ display: 'block' }}>Last spin: {spin.prize ? `won ${spin.label}` : 'Try again'}{spin.won.length ? `. Won on this sale: ${spin.won.join(', ')}` : ''}</span> : null}
           </span>
           <div className="row wrap">
             <Button variant="teal" onClick={() => void spinFor(receipt, 'cashier')} disabled={spinning}>
@@ -464,19 +530,10 @@ function Register({ ev }: { ev: JWEvent }) {
       ) : (
         <div className="wheel-cta">
           <span>
-            <b>This sale spins the prize wheel.</b> {screenOpen ? 'Let them tap it on the customer screen, or spin it for them.' : 'It spins on the customer screen when one is open.'}
+            <b>This sale spins the prize wheel{spinsToGo > 1 ? ` ${spinsToGo} times` : ''}.</b> {screenOpen ? 'Let them tap it on the customer screen, or spin it for them.' : 'It spins on the customer screen when one is open.'}
             {soundNote ? <span className="muted small" style={{ display: 'block' }}>{soundNote}</span> : null}
           </span>
-          <div className="row wrap">
-            {screenOpen ? (
-              <Button variant="teal" onClick={() => letThemSpin(receipt)}>
-                <Disc3 size={18} /> Let them spin
-              </Button>
-            ) : null}
-            <Button variant={screenOpen ? undefined : 'teal'} onClick={() => void spinFor(receipt, 'cashier')} disabled={spinning}>
-              <Disc3 size={18} /> {screenOpen ? 'Spin for them' : 'Spin the wheel'}
-            </Button>
-          </div>
+          {spinButtons(receipt)}
         </div>
       )
     ) : null;
@@ -706,6 +763,8 @@ function Register({ ev }: { ev: JWEvent }) {
           setReceipt(null);
           setSpin(null);
           setInvite(null);
+          // Packs won on spins left unfinished still get their details.
+          if (wonPacks.current.length) setStickFor(wonPacks.current.shift() ?? null);
           setStickView(null);
           setStickOrder(null);
           searchRef.current?.focus({ preventScroll: true });
@@ -715,7 +774,7 @@ function Register({ ev }: { ev: JWEvent }) {
         <StickDialog
           sale={stickFor}
           ev={ev}
-          onClose={() => setStickFor(null)}
+          onClose={() => setStickFor(!spin || spin.left === 0 ? (wonPacks.current.shift() ?? null) : null)}
           onDraft={(d) => setStickView((v) => d ?? (v?.number ? v : null))}
           onSaved={(o) => {
             setStickOrder(o);

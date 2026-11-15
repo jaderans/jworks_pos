@@ -17,6 +17,7 @@ import { wheelSoundChoice } from '../../display/wheelSounds';
 import { landingTurn, type WheelSlice } from '../../domain/wheel';
 import { relativeTime } from '../../lib/time';
 import type { DisplayMedia } from '../../db/types';
+import { SAMPLE_KINDS, SAMPLE_KIND_NAME, sampleKindFromName, type SampleKind } from '../../domain/stick';
 
 /** Big videos make the device slow to open: anything over this is refused. */
 const MAX_MB = 150;
@@ -37,7 +38,9 @@ export function DisplaySection() {
   const media = useLiveQuery(() => db.displayMedia.orderBy('sort').toArray(), []);
   const fileRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
-  const ads = media?.filter((m) => m.kind !== 'audio');
+  const ads = media?.filter((m) => m.kind !== 'audio' && m.role !== 'sample');
+  const samples = media?.filter((m) => m.role === 'sample') ?? [];
+  const sampleRef = useRef<HTMLInputElement>(null);
   const audioFiles = media?.filter((m) => m.kind === 'audio');
   const soundFiles = audioFiles?.filter((m) => m.role === 'sound') ?? [];
   const [testing, setTesting] = useState(false);
@@ -115,6 +118,26 @@ export function DisplaySection() {
     }
     if (fileRef.current) fileRef.current.value = '';
     if (added) app.toast(`${added} ad${added === 1 ? '' : 's'} added to the customer screen`, { tone: 'good' });
+  };
+  /** Stickers made for past customers: the file name says the pack ("Couple - Eliza & Renz.png"), or it's set here. */
+  const addSamples = async (files: FileList | null) => {
+    let added = 0;
+    for (const [i, file] of [...(files ?? [])].entries()) {
+      if (!file.type.startsWith('image/')) {
+        app.toast(`${file.name} isn’t an image.`, { tone: 'bad' });
+        continue;
+      }
+      if (file.size > MAX_MB * 1024 * 1024) {
+        app.toast(`${file.name} is over ${MAX_MB} MB.`, { tone: 'bad' });
+        continue;
+      }
+      const last = media?.length ? media[media.length - 1].sort : 0;
+      const name = file.name.replace(/\.[^.]+$/, '');
+      await db.displayMedia.put({ id: uid(), name, kind: 'image', role: 'sample', sample: sampleKindFromName(name) ?? 'couple', mime: file.type, blob: file, seconds: 0, on: 1, sort: last + i + 1, addedAt: Date.now() });
+      added++;
+    }
+    if (sampleRef.current) sampleRef.current.value = '';
+    if (added) app.toast(`${added} sample${added === 1 ? '' : 's'} added`, { tone: 'good' });
   };
   const patch = (m: DisplayMedia, ch: Partial<DisplayMedia>) => void db.displayMedia.update(m.id, ch);
   const move = async (list: DisplayMedia[] | undefined, k: number, by: -1 | 1) => {
@@ -337,6 +360,50 @@ export function DisplaySection() {
           </div>
         ) : (
           <p className="muted small">No ads yet. The price slides play on their own.</p>
+        )}
+      </div>
+      <div className="stack tight" role="group" aria-label="Sample stickers">
+        <div className="row between wrap">
+          <b>Couple-of-Stickers samples</b>
+          <Button size="sm" onClick={() => sampleRef.current?.click()}>
+            <ImagePlus size={16} /> Add samples
+          </Button>
+          <input ref={sampleRef} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden aria-label="Sample sticker images" onChange={(e) => void addSamples(e.target.files)} />
+        </div>
+        <p className="muted small">
+          Stickers you made before, shown while a customer checks their order: Solo samples with a Solo Pack, Couple with a Couple Pack, Barkada with a Barkada Pack. Files named “Solo - …”, “Couple - …” or “Barkada - …” sort themselves. They stay on this laptop and never go online: add only ones those customers are happy to have shown.
+        </p>
+        {samples.length ? (
+          <>
+            <p className="small" role="status">
+              {SAMPLE_KINDS.map((k) => `${samples.filter((m) => m.on === 1 && (m.sample ?? 'couple') === k).length} ${SAMPLE_KIND_NAME[k]}`).join(' · ')}
+            </p>
+            <div className="card flush">
+              <div className="list">
+                {samples.map((m) => (
+                  <div key={m.id} className="list-item ad-row">
+                    <AdThumb m={m} />
+                    <span className="main-text">
+                      <b>{m.name}</b>
+                    </span>
+                    <Select aria-label={`Pack for ${m.name}`} value={m.sample ?? 'couple'} onChange={(e) => patch(m, { sample: e.target.value as SampleKind })} style={{ width: 'auto' }}>
+                      {SAMPLE_KINDS.map((k) => (
+                        <option key={k} value={k}>
+                          {SAMPLE_KIND_NAME[k]}
+                        </option>
+                      ))}
+                    </Select>
+                    <Toggle id={`sm-on-${m.id}`} checked={m.on === 1} onChange={(v) => patch(m, { on: v ? 1 : 0 })} label={<span className="sr-only">Show {m.name}</span>} />
+                    <IconButton label={`Remove ${m.name}`} size="sm" plain onClick={() => void remove(m)}>
+                      <Trash2 size={15} />
+                    </IconButton>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="muted small">No samples yet. The order shows without them.</p>
         )}
       </div>
     </section>

@@ -8,7 +8,7 @@ import { Badge, Button, Callout, IconButton, Segmented, Toggle } from '../../com
 import { Field, MoneyInput, NumberInput, Select, TextInput } from '../../components/form';
 import { uid } from '../../lib/ids';
 import { updateEvent } from '../../services/events';
-import { BLANK_WHEEL, tryAgainChance, wheelProblem, wheelRuleText, wheelSlices, winsToday, type SavedWheel, type WheelConfig, type WheelPrize } from '../../domain/wheel';
+import { BLANK_WHEEL, MAX_SPINS, ONE_SPIN, pickText, tryAgainChance, wheelProblem, wheelRuleText, wheelSlices, winsToday, type SavedWheel, type WheelConfig, type WheelPrize } from '../../domain/wheel';
 import { setSetting } from '../../db/settings';
 import { WheelSvg } from '../display/WheelSvg';
 import type { JWEvent, PrintRates } from '../../db/types';
@@ -55,6 +55,7 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
   const wins = useMemo(() => winsToday(sales ?? []), [sales]);
   const dirty = JSON.stringify(w) !== JSON.stringify(ev.wheel ?? BLANK_WHEEL);
   const problem = wheelProblem(w);
+  const spins = w.spins ?? ONE_SPIN;
   const slices = wheelSlices(w);
   const setPrize = (id: string, ch: Partial<WheelPrize>) => setW({ ...w, prizes: w.prizes.map((p) => (p.id === id ? { ...p, ...ch } : p)) });
 
@@ -64,6 +65,12 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
     await updateEvent(ev.id, { wheel: { ...w, prizes: w.prizes.map((p) => ({ ...p, label: p.label.trim() })) } });
     setBusy(false);
     app.toast(w.on ? 'Prize wheel saved. Qualifying sales can spin now.' : 'Prize wheel saved (off).', { tone: 'good' });
+  };
+  /** The look only changes how it's drawn, never the odds, so it saves at once: the customer screen follows. */
+  const setLook = async (look: 'chance' | 'equal') => {
+    setW({ ...w, look });
+    await updateEvent(ev.id, { wheel: { ...(ev.wheel ?? BLANK_WHEEL), look } });
+    app.toast(look === 'equal' ? 'Same-size slices on the customer screen now.' : 'Slices as wide as their chance on the customer screen now.', { tone: 'good' });
   };
 
   return (
@@ -77,7 +84,7 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
             <h2>Prize wheel</h2>
             <Toggle id="wh-on" checked={w.on} onChange={(on) => setW({ ...w, on })} label="On at this event" />
           </div>
-          <p className="sub">After a sale that qualifies, the cashier taps Spin on the receipt and the wheel spins on the customer screen. Each sale spins once.</p>
+          <p className="sub">After a sale that qualifies, the cashier taps Spin on the receipt and the wheel spins on the customer screen, as many times as the sale earned.</p>
 
           <h3>When it spins</h3>
           <div className="form-grid">
@@ -102,6 +109,32 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
           </div>
           {wheelRuleText(w, categories ?? []) ? <p className="small">A sale spins when they <b>{wheelRuleText(w, categories ?? []).toLowerCase()}</b>.</p> : null}
 
+          <h3>How many spins</h3>
+          <Segmented<'sale' | 'mark'>
+            label="Spins"
+            value={spins.per}
+            onChange={(per) => setW({ ...w, spins: { per, count: per === 'mark' ? Math.max(2, spins.count) : 1 } })}
+            options={[
+              { value: 'sale', label: 'A set number a sale' },
+              { value: 'mark', label: 'One for every mark reached' },
+            ]}
+            full
+          />
+          <div className="form-grid">
+            <Field
+              label={spins.per === 'mark' ? 'Most spins on one sale' : 'Spins a sale'}
+              htmlFor="wh-spins"
+              hint={
+                spins.per === 'mark'
+                  ? `${[w.minSpend ? `${peso(w.minSpend * 2)} spins twice` : '', w.minItems ? `${w.minItems.count * 2} items spin twice` : ''].filter(Boolean).join(', ')}, and so on, up to this many.`
+                  : 'Every sale that qualifies gets this many spins.'
+              }
+            >
+              <NumberInput id="wh-spins" decimals={false} min={1} value={spins.count} onChange={(n) => setW({ ...w, spins: { per: spins.per, count: Math.min(MAX_SPINS, Math.max(1, Math.round(n ?? 1))) } })} suffix={spins.count === 1 ? 'spin' : 'spins'} />
+            </Field>
+          </div>
+          <p className="muted small">Landing on a free spin (a prize that is “Another spin”) adds one more on top.</p>
+
           <h3>Prizes</h3>
           {w.prizes.length === 0 ? <p className="muted small">No prizes yet: every spin is “Try again”. Add the first one.</p> : null}
           <div className="stack">
@@ -112,18 +145,34 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
                     <TextInput id={`wp-${p.id}-label`} value={p.label} onChange={(e) => setPrize(p.id, { label: e.target.value })} placeholder="e.g. Free Couple Pack" />
                   </Field>
                   <Field label="It is" htmlFor={`wp-${p.id}-kind`}>
-                    <Segmented<WheelPrize['kind']>
-                      label="Prize kind"
+                    <Select
+                      id={`wp-${p.id}-kind`}
                       value={p.kind}
-                      onChange={(kind) => setPrize(p.id, { kind })}
-                      options={[
-                        { value: 'item', label: 'A free product' },
-                        { value: 'service', label: 'A free service' },
-                        { value: 'voucher', label: 'A discount code' },
-                      ]}
-                    />
+                      onChange={(e) => {
+                        const kind = e.target.value as WheelPrize['kind'];
+                        const named = p.label.trim() ? {} : kind === 'pick' ? { label: 'Free sticker' } : kind === 'spin' ? { label: 'Free spin' } : {};
+                        setPrize(p.id, { kind, ...named, ...(kind === 'pick' && !p.pick ? { pick: { count: 1, what: 'sticker' } } : {}) });
+                      }}
+                    >
+                      <option value="item">A free product (out of stock)</option>
+                      <option value="pick">A free pick from a prize pile</option>
+                      <option value="service">A free service</option>
+                      <option value="voucher">A discount code</option>
+                      <option value="spin">Another spin</option>
+                    </Select>
                   </Field>
-                  {p.kind === 'item' ? (
+                  {p.kind === 'pick' ? (
+                    <>
+                      <Field label="They pick" htmlFor={`wp-${p.id}-count`} hint={`They choose ${pickText(p)} from a pile you set aside for prizes, any design. Nothing comes off a product’s stock; the Sales log shows the win.`}>
+                        <NumberInput id={`wp-${p.id}-count`} decimals={false} min={1} value={p.pick?.count ?? 1} onChange={(n) => setPrize(p.id, { pick: { count: n && n > 0 ? Math.round(n) : 1, what: p.pick?.what ?? 'sticker' } })} />
+                      </Field>
+                      <Field label="Of" htmlFor={`wp-${p.id}-what`}>
+                        <TextInput id={`wp-${p.id}-what`} value={p.pick?.what ?? 'sticker'} onChange={(e) => setPrize(p.id, { pick: { count: p.pick?.count ?? 1, what: e.target.value } })} placeholder="sticker" />
+                      </Field>
+                    </>
+                  ) : p.kind === 'spin' ? (
+                    <p className="muted small">Landing on it gives them one more spin, on top of the spins their sale earned.</p>
+                  ) : p.kind === 'item' ? (
                     <Field
                       label="Product"
                       htmlFor={`wp-${p.id}-product`}
@@ -223,6 +272,7 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
             <Button variant="primary" onClick={() => void save()} disabled={busy || !dirty}>
               Save the wheel
             </Button>
+            {dirty ? <span className="muted small">Not saved yet: the register and customer screen use the saved wheel.</span> : null}
           </div>
         </div>
         <div className="card stack wheel-preview">
@@ -230,7 +280,7 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
           <Segmented<'chance' | 'equal'>
             label="Slices"
             value={w.look ?? 'chance'}
-            onChange={(look) => setW({ ...w, look })}
+            onChange={(look) => void setLook(look)}
             options={[
               { value: 'chance', label: 'As wide as their chance' },
               { value: 'equal', label: 'All the same size' },

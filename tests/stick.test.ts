@@ -144,3 +144,17 @@ describe('stub numbers', () => {
     expect(isAddOnCategory('Stickers')).toBe(false);
   });
 });
+
+describe('samples on the customer screen', () => {
+  it('a pack is shown with samples of its kind; a file name says which kind', async () => {
+    const { packWhat, sampleKindFromName, sampleKindOf } = await import('../src/domain/stick');
+    expect(['S', 'C', 'B3', 'B5'].map((p) => sampleKindOf(p as 'S'))).toEqual(['solo', 'couple', 'barkada', 'barkada']);
+    expect(sampleKindFromName('Couple - Eliza & Renz')).toBe('couple');
+    expect(sampleKindFromName('Solo - Wendy (2)')).toBe('solo');
+    expect(sampleKindFromName('Barkada - Thea, Gretch, Dana & Pixie')).toBe('barkada');
+    expect(sampleKindFromName('group photo')).toBe('barkada');
+    expect(sampleKindFromName('heaven done (3)')).toBeNull();
+    expect(packWhat({ pack: 'C', singles: false })).toBe('2 illustrated stickers + 6 mini stickers');
+    expect(packWhat({ pack: 'B4', singles: true })).toBe('4 illustrated stickers');
+  });
+});

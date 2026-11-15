@@ -45,6 +45,10 @@ export interface DisplayWheel {
   label: string;
   detail: string;
   sound: 'screen' | 'register' | 'none';
+  /** Spins they still have after this one. */
+  more?: number;
+  /** With more than one spin: the prizes won on this sale so far. */
+  tally?: string[];
 }
 
 export interface DisplayState {
@@ -63,6 +67,8 @@ export interface DisplayState {
   wheel?: DisplayWheel | null;
   /** Couple-of-Stickers being filled in after they pay, for them to check. */
   stick?: DisplayStick | null;
+  /** Close to a spin on the prize wheel: how much more, or that this sale spins. */
+  spin?: { ready: boolean; text: string; more?: string; slices: WheelSlice[] } | null;
 }
 
 export const emptyDisplayCart = (): DisplayCart => ({ lines: [], savings: [], subtotal: 0, total: 0, count: 0, nudge: null });
