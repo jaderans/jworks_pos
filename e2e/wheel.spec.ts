@@ -150,6 +150,12 @@ test('more than one spin: one for every ₱250, a free spin that lands, the next
   await expect(near).toContainText('Add ₱20 more for 2 spins!');
   await screen.waitForTimeout(700);
   await screen.screenshot({ path: `${SHOTS}/wheel-more-spins.png` });
+  // On a tall monitor it fits too: the wheel beside the words.
+  await screen.setViewportSize({ width: 1080, height: 1920 });
+  await screen.waitForTimeout(400);
+  expect(await offScreen(screen)).toEqual([]);
+  await screen.screenshot({ path: `${SHOTS}/wheel-more-spins-portrait.png` });
+  await screen.setViewportSize({ width: 1920, height: 1080 });
   await tapProduct(page, 'Couple Pack (live)', 1);
   await expect(near).toContainText('This sale spins the prize wheel 2 times!');
   await payCash(page);
@@ -203,6 +209,20 @@ test('more than one spin: one for every ₱250, a free spin that lands, the next
   await expect(receipt.getByText('Let them pick 2 stickers from the prize pile.')).toBeVisible();
   await expect(status).toContainText('Pick 2 stickers from our prize pile at the counter!');
   await receipt.getByRole('button', { name: 'New sale' }).click();
+
+  // A receipt closed before spinning: the spin waits in the Sales log, and goes back to Sell to spin.
+  await tapProduct(page, 'Couple Pack (live)', 2);
+  await payCash(page);
+  await page.getByRole('dialog', { name: /^Couple-of-Stickers for/ }).getByRole('button', { name: 'Later' }).click();
+  await receipt.getByRole('button', { name: 'New sale' }).click();
+  await page.goto('/#/sales');
+  await page.getByRole('row', { name: /[A-Z]-0003/ }).click();
+  await page.getByRole('dialog', { name: /^Sale [A-Z]-0003/ }).getByRole('button', { name: 'Spin the wheel' }).click();
+  const later = page.getByRole('dialog', { name: /^Sale [A-Z]-0003/ });
+  await expect(later).toContainText('This sale spins the prize wheel.');
+  await later.getByRole('button', { name: /^Spin (for them|the wheel)$/ }).click();
+  await expect(later.getByText('They won: Free sticker')).toBeVisible({ timeout: 12_000 });
+  await later.getByRole('button', { name: 'New sale' }).click();
 
   // The Sales log lists every spin.
   await page.goto('/#/sales');

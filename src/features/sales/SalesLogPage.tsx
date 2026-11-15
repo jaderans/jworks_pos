@@ -12,7 +12,8 @@ import { peso } from '../../lib/money';
 import { fmtDateTime, fmtTime } from '../../lib/time';
 import { changeSalePayments, voidSale } from '../../services/sales';
 import { moneyIn, moveMethod } from '../../domain/summary';
-import { spinsOf, type WheelResult } from '../../domain/wheel';
+import { spinsLeft, spinsOf, type WheelResult } from '../../domain/wheel';
+import { useNavigate } from 'react-router';
 import { ReceiptDialog } from '../register/ReceiptDialog';
 import { CashMoveDialog } from '../register/SessionDialogs';
 import type { BusinessSettings, CashMove, Sale, SalePayment, Session } from '../../db/types';
@@ -22,6 +23,7 @@ type Row = { type: 'sale'; at: number; sale: Sale } | { type: 'move'; at: number
 
 export default function SalesLogPage() {
   const app = useApp();
+  const navigate = useNavigate();
   const ev = app.activeEvent;
   const sales = useSales(ev?.id);
   const sessions = useSessions(ev?.id);
@@ -327,6 +329,12 @@ export default function SalesLogPage() {
         }}
         cashierName={open?.cashierId ? memberName.get(open.cashierId) : undefined}
         note={open ? wheelNote(sales.find((s) => s.id === open.id) ?? open) : null}
+        onSpin={(() => {
+          // A sale whose spins weren't used (the receipt was closed first): spin them at the register.
+          const s = open ? (sales.find((x) => x.id === open.id) ?? open) : null;
+          const left = s && app.can('sell') && s.eventId === ev.id ? spinsLeft(s, ev.wheel) : 0;
+          return s && left ? { left, go: () => navigate(`/sell?sale=${s.id}`) } : undefined;
+        })()}
       />
       <ReceiptDialog sale={receipt} business={business} eventName={ev.name} onClose={() => setReceipt(null)} primaryLabel="Close" />
       {fixing ? (
@@ -341,7 +349,22 @@ export default function SalesLogPage() {
   );
 }
 
-function SaleDialog({ sale, onClose, onReceipt, cashierName, note }: { sale: Sale | null; onClose: () => void; onReceipt: (s: Sale) => void; cashierName?: string; note?: ReactNode }) {
+function SaleDialog({
+  sale,
+  onClose,
+  onReceipt,
+  cashierName,
+  note,
+  onSpin,
+}: {
+  sale: Sale | null;
+  onClose: () => void;
+  onReceipt: (s: Sale) => void;
+  cashierName?: string;
+  note?: ReactNode;
+  /** It still has spins on the prize wheel: how many, and where to spin them. */
+  onSpin?: { left: number; go: () => void };
+}) {
   const app = useApp();
   const methods = usePaymentMethods();
   const [mode, setMode] = useState<'view' | 'void' | 'payment'>('view');
@@ -389,6 +412,11 @@ function SaleDialog({ sale, onClose, onReceipt, cashierName, note }: { sale: Sal
       footer={
         mode === 'view' ? (
           <>
+            {onSpin ? (
+              <Button variant="teal" onClick={onSpin.go}>
+                <Disc3 size={16} /> Spin the wheel{onSpin.left > 1 ? ` (${onSpin.left})` : ''}
+              </Button>
+            ) : null}
             <Button onClick={() => onReceipt(sale)}>Show receipt</Button>
             {sale.status === 'completed' ? <Button onClick={() => setMode('payment')}>Change payment</Button> : null}
             {sale.status === 'completed' ? (

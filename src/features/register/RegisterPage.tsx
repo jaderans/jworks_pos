@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { ArrowDownUp, CalendarPlus, Camera, Disc3, Gift, Lock, Minus, Monitor, Search, PackageOpen, PauseCircle, Percent, Plus, ScanLine, ShoppingCart, Ticket, Trash2, UserPlus, UserRound, X } from 'lucide-react';
 import { useApp } from '../../app/AppContext';
 import {
@@ -108,6 +108,8 @@ function Register({ ev }: { ev: JWEvent }) {
   /** What the customer screen shows of it: the draft, then the saved order with its number. */
   const [stickView, setStickView] = useState<DisplayStick | null>(null);
   const [stickOrder, setStickOrder] = useState<Order | null>(null);
+  /** A saved order whose details are open again (back from the photo booth): the dialog edits it, never makes another. */
+  const [stickEdit, setStickEdit] = useState<Order | null>(null);
   const [stubsFor, setStubsFor] = useState<StubOrder | null>(null);
   const hasPacks = (sale: Sale) => {
     const byId = new Map((products ?? []).map((p) => [p.id, p]));
@@ -154,6 +156,34 @@ function Register({ ev }: { ev: JWEvent }) {
   const earned = useSaleCoupon(receipt?.id);
 
   const session = sessions?.find((s) => s.deviceId === app.device.deviceId && s.closedAt === null);
+
+  // Back from the photo booth (or sent from the Sales log): that sale's receipt again, with its wheel
+  // still to spin and its Couple-of-Stickers order; `stick` opens the order's details too.
+  const [params, setParams] = useSearchParams();
+  const backTo = params.get('sale');
+  const backStick = params.get('stick');
+  useEffect(() => {
+    if (!backTo || !session) return;
+    setParams({}, { replace: true });
+    void (async () => {
+      const paid = await db.sales.get(backTo);
+      if (!paid || paid.deleted === 1 || paid.eventId !== ev.id) return;
+      // A pack won on the wheel was paid by a ₱0 prize sale: the receipt is the sale that spun.
+      const sale = paid.prizeFor ? ((await db.sales.get(paid.prizeFor)) ?? paid) : paid;
+      setReceipt(sale);
+      const orders = alive(await db.orders.where('eventId').equals(ev.id).toArray());
+      const own = orders.find((o) => o.stick?.saleId === sale.id);
+      if (own?.stick) {
+        setStickOrder(own);
+        setStickView({ number: own.number, nickname: own.stick.nickname, packs: own.stick.packs, addOns: own.stick.addOns, readyFrom: own.stick.readyFrom, readyTo: own.stick.readyTo, photo: own.stick.photo, paid: own.stick.paid, paidWith: own.stick.paidWith });
+      }
+      const open = backStick ? orders.find((o) => o.id === backStick) : undefined;
+      if (open?.stick) {
+        setStickEdit(open);
+        setStickFor(open.id === own?.id ? sale : paid);
+      }
+    })();
+  }, [backTo, session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const epMap = useMemo(() => new Map((eps ?? []).map((e) => [e.productId, e])), [eps]);
   const sold = useMemo(() => soldByProduct(sales ?? []), [sales]);
   const onHand = useMemo(() => onHandByProduct(moves ?? []), [moves]);
@@ -546,6 +576,9 @@ function Register({ ev }: { ev: JWEvent }) {
             <span>
               For {stickOrder.customerName}. Their number is on the claim stub.
             </span>
+            <Button size="sm" onClick={() => setStickFor(receipt)}>
+              Details
+            </Button>
             <Button size="sm" onClick={() => setStubsFor({ number: stickOrder.number, eventName: ev.name, at: stickOrder.createdAt, stick: stickOrder.stick! })}>
               See the stubs
             </Button>
@@ -767,6 +800,7 @@ function Register({ ev }: { ev: JWEvent }) {
           if (wonPacks.current.length) setStickFor(wonPacks.current.shift() ?? null);
           setStickView(null);
           setStickOrder(null);
+          setStickEdit(null);
           searchRef.current?.focus({ preventScroll: true });
         }}
       />
@@ -774,7 +808,11 @@ function Register({ ev }: { ev: JWEvent }) {
         <StickDialog
           sale={stickFor}
           ev={ev}
-          onClose={() => setStickFor(!spin || spin.left === 0 ? (wonPacks.current.shift() ?? null) : null)}
+          existing={[stickEdit, stickOrder].find((o) => o?.stick?.saleId === stickFor.id) ?? undefined}
+          onClose={() => {
+            setStickEdit(null);
+            setStickFor(!spin || spin.left === 0 ? (wonPacks.current.shift() ?? null) : null);
+          }}
           onDraft={(d) => setStickView((v) => d ?? (v?.number ? v : null))}
           onSaved={(o) => {
             setStickOrder(o);

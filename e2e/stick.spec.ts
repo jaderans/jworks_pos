@@ -140,9 +140,14 @@ test('Couple-of-Stickers: paid by GCash with a keychain add-on, checked on the c
   await expect(back.locator('.cd-order-minis img')).toHaveCount(6);
   await screen.screenshot({ path: `${SHOTS}/stick-check-photo.png` });
   await again.getByRole('button', { name: 'Close' }).last().click();
+  // Taken from Sell, it came back to Sell: the sale's receipt is still open, with its order.
+  const receipt = page.getByRole('dialog', { name: /^Sale [A-Z]-0001/ });
+  await expect(receipt).toContainText('Couple-of-Stickers 01 is on Orders');
+  await receipt.getByRole('button', { name: 'New sale' }).click();
   await expect(back).toBeHidden();
 
   // On Orders: the details, the photo, the add-on; the design not in Drive yet, then in Drive.
+  await page.goto('/#/orders');
   const card = page.getByRole('article', { name: /Order 01/ });
   await expect(card).toContainText('Claim stub 01');
   await expect(card).toContainText('C · Illustrating');
@@ -213,6 +218,15 @@ test('Couple-of-Stickers with three packs for different people: who’s on each,
   await setEventPrice(page, 'Solo Pack (live)', 150);
   await setEventPrice(page, 'Couple Pack (live)', 240);
   await setEventPrice(page, 'Barkada Pack (3)', 300);
+  // A prize wheel: this sale spins once, after its photo is taken.
+  await page.goto('/#/event/wheel');
+  await page.locator('label[for="wh-on"]').click();
+  await page.getByRole('button', { name: 'Add a prize' }).click();
+  const prize = page.locator('.wheel-prize').first();
+  await prize.getByLabel('It is').selectOption('pick');
+  await prize.getByLabel('Chance').fill('100');
+  await page.getByRole('button', { name: 'Save the wheel' }).click();
+  await expect(page.getByText('Prize wheel saved. Qualifying sales can spin now.')).toBeVisible();
   await openRegister(page);
   const [screen] = await Promise.all([page.waitForEvent('popup'), page.getByRole('button', { name: /^Customer screen/ }).click()]);
   screen.on('pageerror', (e) => errors.push(e.message));
@@ -287,8 +301,15 @@ test('Couple-of-Stickers with three packs for different people: who’s on each,
   expect(await offScreen(screen)).toEqual([]);
   await screen.screenshot({ path: `${SHOTS}/stick-check-pack-photo.png` });
   await again.getByRole('button', { name: 'Close' }).last().click();
+  // Back at Sell, the sale's spin is still waiting: the photo booth trip didn't lose it.
+  const receipt = page.getByRole('dialog', { name: /^Sale [A-Z]-0001/ });
+  await expect(receipt).toContainText('This sale spins the prize wheel.');
+  await receipt.getByRole('button', { name: 'Spin for them' }).click();
+  await expect(receipt.getByText('They won: Free sticker')).toBeVisible({ timeout: 12_000 });
+  await receipt.getByRole('button', { name: 'New sale' }).click();
 
   // On Orders and the information stub: each pack's people, and pack 3's photo.
+  await page.goto('/#/orders');
   const card = page.getByRole('article', { name: /Order 01/ });
   await expect(card).toContainText('S · Printing · John');
   await expect(card).toContainText('C · Printing · Kaye & Mark');

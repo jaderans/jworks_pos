@@ -217,5 +217,10 @@
 .cd-spin b { font-family: var(--f-display); font-size: 2.3em; line-height: 1.1; color: var(--cd-yellow); text-wrap: balance; }
 .cd-spin span:last-child { color: #d6eef0; font-size: 1.15em; }
 .cd-spin.ready b { color: #fff; }
-.cd-spin span.cd-spin-more { padding: 0.35em 0.9em; border-radius: 999px; background: var(--cd-yellow); color: #0f1516; font-weight: 800; font-size: 1.3em; }
-@media (max-aspect-ratio: 1/1) { .cd-spin-wheel { width: min(30vh, 60vw); } }
+.cd-spin span.cd-spin-more { padding: 0.35em 0.9em; border-radius: 0.7em; background: var(--cd-yellow); color: #0f1516; font-weight: 800; font-size: 1.3em; }
+/* A tall screen: the panel is short and wide, so the wheel sits beside the words. */
+@media (max-aspect-ratio: 1/1) {
+  .cd-spin { grid-template-columns: auto minmax(0, 1fr); justify-items: start; align-items: center; align-content: center; text-align: left; column-gap: 4vmin; max-width: none; width: 100%; padding: 2vmin; }
+  .cd-spin-wheel { grid-row: 1 / span 3; width: min(24vh, 42vw); }
+  .cd-spin b { font-size: 1.8em; }
+}

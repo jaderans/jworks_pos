@@ -255,7 +255,12 @@ export default function BoothPage() {
             <span>
               {photoFor.done ? `Done: it’s on the order as ${photoFor.file}.` : `They see themselves on the customer screen. When they say yes, it goes on the order as ${photoFor.file}.`}
             </span>
-            <Button size="sm" variant={photoFor.done ? 'primary' : undefined} onClick={() => navigate(`/orders?stick=${forOrder.id}`)}>
+            <Button
+              size="sm"
+              variant={photoFor.done ? 'primary' : undefined}
+              // Opened from the register: back to the sale there (its receipt and wheel), else to Orders.
+              onClick={() => navigate(params.get('from') === 'sell' && forOrder.stick ? `/sell?sale=${forOrder.stick.saleId}&stick=${forOrder.id}` : `/orders?stick=${forOrder.id}`)}
+            >
               Back to the order
             </Button>
           </div>

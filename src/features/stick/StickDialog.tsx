@@ -113,15 +113,16 @@ export function StickDialog({
   // Each pack's own photo, when its people aren't in the order's photo.
   const packPhotoIds = (existing?.stick?.packs ?? []).map((p) => p.photoId ?? '');
   const packPhotos = useLiveQuery(async () => Promise.all(packPhotoIds.map(async (id) => (id ? ((await db.boothPhotos.get(id)) ?? null) : null))), [packPhotoIds.join()]) ?? [];
-  // Outside the register (Orders), the dialog shows the order on the customer screen itself.
-  const screen = useMemo(() => (onDraft ? null : stickSender()), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Outside the register (Orders), the dialog shows the order on the customer screen itself; a saved order
+  // reopened at the register does too, so its photos show (the register's own updates can't carry them).
+  const screen = useMemo(() => (onDraft && !existing ? null : stickSender()), []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => screen?.close(), [screen]);
   const draftKey = JSON.stringify([nickname, packs, addOns, est.from, est.to, photo, boothPhoto?.id ?? '', packPhotos.map((x) => x?.id ?? '')]);
   useEffect(() => {
     if (!packs) return;
     const d = { number: existing?.number ?? null, nickname, packs, addOns, readyFrom: est.from, readyTo: est.to, photo, paid: sale.total, paidWith };
-    if (onDraft) onDraft(d);
-    else screen?.send({ ...d, photoPic: boothPhoto?.blob ?? null, packPics: packPhotos.map((x) => x?.blob ?? null) });
+    onDraft?.(d);
+    screen?.send({ ...d, photoPic: boothPhoto?.blob ?? null, packPics: packPhotos.map((x) => x?.blob ?? null) });
   }, [draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onDraft?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -145,7 +146,8 @@ export function StickDialog({
       onSaved?.(order);
       onClose();
       // Their photo, now: the photo booth opens for this order, on this screen and the customer screen.
-      if (then === 'photo') navigate(`/booth?order=${order.id}${pack !== undefined ? `&pack=${pack}` : ''}`);
+      // From the register, the booth comes back to it: the sale's receipt (its wheel still to spin) and these details.
+      if (then === 'photo') navigate(`/booth?order=${order.id}${pack !== undefined ? `&pack=${pack}` : ''}${onDraft ? '&from=sell' : ''}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Couldn’t save it');
     } finally {
