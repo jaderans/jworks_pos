@@ -1,5 +1,12 @@
 rules_version = '2';
 
+// JoshWorks POS and JoshWorks Studio — one Firebase project, one rules file.
+// Paste this same file in Firebase whichever app you copy it from. Each app's data
+// stays in its own place (POS under ws/, Studio under camp/), each with its own
+// people and roles. owners/{uid} tells Studio where the owner's POS data is, so
+// Studio can show booth events and orders live; only that owner's login reads it.
+//
+// ---- JoshWorks POS ----
 // JoshWorks POS — Firestore security rules.
 // Every record lives under ws/{ws}/t_{table}/{id}. Access is by verified email:
 // the owner writes ws/{ws}/access/{email} = { role, memberId, active } for each person.
@@ -10,61 +17,88 @@ rules_version = '2';
 // Costs, materials, batches, booth spend and quotes are owner-only.
 // A write can never replace a newer copy of a record (last change wins, even offline).
 //
-// RULES VERSION 2026-11-04c. The app checks it (rulesCheck below) and asks the owner to
+// RULES VERSION 2026-11-15. The app checks it (rulesCheck below) and asks the owner to
 // paste these rules again when Firebase still has older ones. Change the date with every
 // edit here and in src/sync/rulesVersion.ts.
+//
+// ---- JoshWorks Studio ----
+// JoshWorks Studio — Firestore security rules.
+// Every record lives under camp/{ws}/t_{table}/{id}. The owner creates each person's
+// login in the app (email + temporary password) and writes
+// camp/{ws}/access/{email} = { role, memberId, active, uid }. Access needs that exact
+// login (uid), so nobody can get in by registering the same email elsewhere; no email
+// verification is needed. Older entries without a uid still need a verified email.
+// A renewed login (new temporary password) is a fresh account on a tagged copy of the
+// email (kaye+jw4k7p@example.com): camp/{ws}/signin/{email} = { login } tells the sign-in
+// screen which one to use, and the access entry is keyed by that login.
+//   owner    — everything
+//   manager  — jobs, clients, money (quotes, contracts, invoices, payments, payouts, expenses), content;
+//              not the team or settings
+//   designer — content (posts, comments, ideas, caption blocks, trends, hooks, reports, results) and job
+//              progress; reads the team, clients, campaigns, funnels and jobs; reads only their own
+//              earnings and payouts, and reads and edits only their own payout details
+// Prices, quotes, contracts, invoices, client payments and expenses are owner/manager only;
+// designers never receive them.
+// Nothing is hard-deleted (the app writes tombstones), and a write can never replace a
+// newer copy of a record (last change wins, even after working offline).
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null && request.auth.token.email_verified == true;
-    }
-    function myEmail() {
-      return request.auth.token.email.lower();
-    }
-    function wsDoc(ws) {
-      return /databases/$(database)/documents/ws/$(ws);
-    }
-    function accessPath(ws) {
-      return /databases/$(database)/documents/ws/$(ws)/access/$(myEmail());
-    }
-    function isCreator(ws) {
-      return signedIn() && exists(wsDoc(ws)) && get(wsDoc(ws)).data.ownerUid == request.auth.uid;
-    }
-    function hasAccess(ws) {
-      return signedIn() && exists(accessPath(ws)) && get(accessPath(ws)).data.active == true;
-    }
-    function role(ws) {
-      return get(accessPath(ws)).data.role;
-    }
-    function myMember(ws) {
-      return get(accessPath(ws)).data.memberId;
-    }
-    function isOwner(ws) {
-      return isCreator(ws) || (hasAccess(ws) && role(ws) == 'owner');
-    }
-    function isStaff(ws) {
-      return isOwner(ws) || (hasAccess(ws) && role(ws) == 'cashier');
-    }
-    function isTeam(ws) {
-      return isStaff(ws) || (hasAccess(ws) && role(ws) == 'designer');
-    }
-    function isAnyone(ws) {
-      return isTeam(ws) || (hasAccess(ws) && role(ws) == 'partner');
-    }
-    // Last change wins: an update must not be older than what is stored.
-    function notOlder() {
-      return !('updatedAt' in resource.data) || request.resource.data.updatedAt >= resource.data.updatedAt;
+    // Where each owner's POS and Studio data live: written and read only by that login.
+    match /owners/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
+    // ---- JoshWorks POS ----
     match /ws/{ws} {
+      function signedIn() {
+        return request.auth != null && request.auth.token.email_verified == true;
+      }
+      function myEmail() {
+        return request.auth.token.email.lower();
+      }
+      function wsDoc(ws) {
+        return /databases/$(database)/documents/ws/$(ws);
+      }
+      function accessPath(ws) {
+        return /databases/$(database)/documents/ws/$(ws)/access/$(myEmail());
+      }
+      function isCreator(ws) {
+        return signedIn() && exists(wsDoc(ws)) && get(wsDoc(ws)).data.ownerUid == request.auth.uid;
+      }
+      function hasAccess(ws) {
+        return signedIn() && exists(accessPath(ws)) && get(accessPath(ws)).data.active == true;
+      }
+      function role(ws) {
+        return get(accessPath(ws)).data.role;
+      }
+      function myMember(ws) {
+        return get(accessPath(ws)).data.memberId;
+      }
+      function isOwner(ws) {
+        return isCreator(ws) || (hasAccess(ws) && role(ws) == 'owner');
+      }
+      function isStaff(ws) {
+        return isOwner(ws) || (hasAccess(ws) && role(ws) == 'cashier');
+      }
+      function isTeam(ws) {
+        return isStaff(ws) || (hasAccess(ws) && role(ws) == 'designer');
+      }
+      function isAnyone(ws) {
+        return isTeam(ws) || (hasAccess(ws) && role(ws) == 'partner');
+      }
+      // Last change wins: an update must not be older than what is stored.
+      function notOlder() {
+        return !('updatedAt' in resource.data) || request.resource.data.updatedAt >= resource.data.updatedAt;
+      }
+
       allow read: if signedIn() && (resource == null || resource.data.ownerUid == request.auth.uid || hasAccess(ws));
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update: if isOwner(ws) && request.resource.data.ownerUid == resource.data.ownerUid;
 
       // The app reads rulesCheck/<its version>: allowed only when these rules are the current ones.
-      match /rulesCheck/{v} { allow read: if signedIn() && v == '2026-11-04c'; }
+      match /rulesCheck/{v} { allow read: if signedIn() && v == '2026-11-15'; }
 
       match /access/{email} {
         allow read: if signedIn() && (email == myEmail() || isOwner(ws));
@@ -128,6 +162,285 @@ service cloud.firestore {
       match /t_payouts/{id} {
         allow read: if isOwner(ws) || (isAnyone(ws) && resource.data.memberId == myMember(ws));
         allow write: if isOwner(ws) && (resource == null || notOlder());
+      }
+    }
+
+    // ---- JoshWorks Studio ----
+    match /camp/{ws} {
+      function signedIn() {
+        return request.auth != null && request.auth.token.email != null;
+      }
+      function myEmail() {
+        return request.auth.token.email.lower();
+      }
+      function wsDoc(ws) {
+        return /databases/$(database)/documents/camp/$(ws);
+      }
+      function accessPath(ws) {
+        return /databases/$(database)/documents/camp/$(ws)/access/$(myEmail());
+      }
+      function isCreator(ws) {
+        return signedIn() && exists(wsDoc(ws)) && get(wsDoc(ws)).data.ownerUid == request.auth.uid;
+      }
+      // The owner's access entry for this sign-in: active, and made for this very login
+      // (or, for entries from before logins were made in the app, a verified email).
+      function hasAccess(ws) {
+        return signedIn() && exists(accessPath(ws)) && get(accessPath(ws)).data.active == true
+          && (get(accessPath(ws)).data.get('uid', '') == request.auth.uid
+            || (get(accessPath(ws)).data.get('uid', '') == '' && request.auth.token.email_verified == true));
+      }
+      function role(ws) {
+        return get(accessPath(ws)).data.role;
+      }
+      function isOwner(ws) {
+        return isCreator(ws) || (hasAccess(ws) && role(ws) == 'owner');
+      }
+      function isManager(ws) {
+        return isOwner(ws) || (hasAccess(ws) && role(ws) == 'manager');
+      }
+      function isTeam(ws) {
+        return isManager(ws) || (hasAccess(ws) && role(ws) == 'designer');
+      }
+      // The team member this sign-in belongs to (set by the owner in the access list).
+      function myMemberId(ws) {
+        return get(accessPath(ws)).data.memberId;
+      }
+      function isMe(ws, memberId) {
+        return hasAccess(ws) && memberId == myMemberId(ws);
+      }
+      // Last change wins: an update must not be older than what is stored.
+      function notOlder() {
+        return !('updatedAt' in resource.data) || request.resource.data.updatedAt >= resource.data.updatedAt;
+      }
+
+      allow read: if signedIn() && (resource == null || resource.data.ownerUid == request.auth.uid || hasAccess(ws));
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isOwner(ws) && request.resource.data.ownerUid == resource.data.ownerUid;
+
+      match /access/{email} {
+        allow read: if signedIn() && (email == myEmail() || isOwner(ws));
+        allow create, delete: if isOwner(ws);
+        // People change only their own "still on the temporary password" flag, after choosing a password.
+        allow update: if isOwner(ws)
+          || (signedIn() && email == myEmail() && resource.data.get('uid', '') == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChangePassword', 'passwordSetAt'])
+            && request.resource.data.mustChangePassword == false);
+      }
+
+      // Which login an email signs in with, read before signing in (one email at a time,
+      // never the list). The password still decides who gets in. Only the owner writes.
+      match /signin/{email} {
+        allow get: if true;
+        allow list: if isOwner(ws);
+        allow create, update: if isOwner(ws) && request.resource.data.keys().hasOnly(['login', 'updatedAt'])
+          && request.resource.data.login is string && request.resource.data.login.size() < 200;
+        allow delete: if isOwner(ws);
+      }
+
+      // Settings: the owner writes. Managers read everything but the PIN (money, BIR, payment methods,
+      // email keys included); designers read the brand, voice, rhythm, checklist and AI model choice.
+      match /t_settings/{key} {
+        allow read: if isOwner(ws)
+          || (isManager(ws) && key != 'security')
+          || (isTeam(ws) && key in ['business', 'voice', 'cadence', 'checklist', 'ai']);
+        allow create: if isOwner(ws);
+        allow update: if isOwner(ws) && notOlder();
+        allow delete: if false;
+      }
+
+      // The team list: everyone reads, the owner writes.
+      match /t_members/{id} {
+        allow read: if isTeam(ws);
+        allow create: if isOwner(ws);
+        allow update: if isOwner(ws) && notOlder();
+        allow delete: if false;
+      }
+
+      // Clients, campaigns and funnels: the team reads; owner and managers write.
+      match /t_clients/{id} {
+        allow read: if isTeam(ws);
+        allow create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_campaigns/{id} {
+        allow read: if isTeam(ws);
+        allow create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_funnels/{id} {
+        allow read: if isTeam(ws);
+        allow create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+
+      // Money and legal documents: owner and managers only.
+      match /t_packages/{id} {
+        allow read, create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_proposals/{id} {
+        allow read, create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_contracts/{id} {
+        allow read, create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_contractTemplates/{id} {
+        allow read, create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_jobMoney/{id} {
+        allow read, create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_payments/{id} {
+        allow read, create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_invoices/{id} {
+        allow read, create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_expenses/{id} {
+        allow read, create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+
+      // Jobs: the team reads; owner and managers plan them (client, dates, team, brief).
+      match /t_jobs/{id} {
+        allow read: if isTeam(ws);
+        allow create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      // Job progress (status, revisions, delivery checklist, links): the whole team updates it.
+      match /t_jobProgress/{id} {
+        allow read, create: if isTeam(ws);
+        allow update: if isTeam(ws) && notOlder();
+        allow delete: if false;
+      }
+
+      // Designer pay: owner and managers write; each designer reads only their own rows
+      // (the app asks with where memberId == their id, which these rules can check).
+      match /t_earnings/{id} {
+        allow read: if isManager(ws) || isMe(ws, resource.data.memberId);
+        allow create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_payouts/{id} {
+        allow read: if isManager(ws) || isMe(ws, resource.data.memberId);
+        allow create: if isManager(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+      // Where each person gets paid (id = their member id): owner and managers see everyone's;
+      // each person reads and edits only their own.
+      match /t_payoutAccounts/{id} {
+        allow read: if isManager(ws) || isMe(ws, id);
+        allow create: if isManager(ws) || isMe(ws, id);
+        allow update: if (isManager(ws) || isMe(ws, id)) && notOlder();
+        allow delete: if false;
+      }
+
+      // Content: the whole team reads and writes.
+      match /t_posts/{id} {
+        allow read, create: if isTeam(ws);
+        allow update: if isTeam(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_comments/{id} {
+        allow read, create: if isTeam(ws);
+        allow update: if isTeam(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_ideas/{id} {
+        allow read, create: if isTeam(ws);
+        allow update: if isTeam(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_snippets/{id} {
+        allow read, create: if isTeam(ws);
+        allow update: if isTeam(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_trends/{id} {
+        allow read, create: if isTeam(ws);
+        allow update: if isTeam(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_hooks/{id} {
+        allow read, create: if isTeam(ws);
+        allow update: if isTeam(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_reports/{id} {
+        allow read, create: if isTeam(ws);
+        allow update: if isTeam(ws) && notOlder();
+        allow delete: if false;
+      }
+      match /t_metrics/{id} {
+        allow read, create: if isTeam(ws);
+        allow update: if isTeam(ws) && notOlder();
+        allow delete: if false;
+      }
+
+      // Activity: everyone adds entries; owner and managers read the log.
+      match /t_audit/{id} {
+        allow read: if isManager(ws);
+        allow create: if isTeam(ws);
+        allow update: if isManager(ws) && notOlder();
+        allow delete: if false;
+      }
+
+      // Client links: a questionnaire or contract a client answers or signs online.
+      // The id is a long random token, so only someone holding the link can open
+      // it; nobody without an account can list them. The client may only send
+      // their answers (and, for a contract, their name, agreement and signature),
+      // once, while the link is open and not expired. Owner and managers make,
+      // refresh and close links.
+      match /share/{token} {
+        function response() {
+          return request.resource.data.response;
+        }
+        function clientAnswers() {
+          return resource.data.status == 'open'
+            && request.time < resource.data.expiresAt
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['response', 'status', 'respondedAt'])
+            && request.resource.data.status == 'responded'
+            && request.resource.data.respondedAt == request.time
+            && response() is map
+            && response().keys().hasOnly(['answers', 'name', 'signature', 'agreed', 'device'])
+            && response().get('answers', []) is list
+            && response().get('answers', []).size() <= 150
+            && response().get('device', '') is string
+            && response().get('device', '').size() <= 300
+            && (resource.data.kind != 'sign' || (
+              response().get('agreed', false) == true
+              && response().get('name', '') is string
+              && response().get('name', '').size() >= 2
+              && response().get('name', '').size() <= 120
+              && response().get('signature', '') is string
+              && response().get('signature', '').size() > 100
+              && response().get('signature', '').size() < 300000
+            ));
+        }
+        allow get: if true;
+        allow list: if isManager(ws);
+        allow create, delete: if isManager(ws);
+        allow update: if isManager(ws) || clientAnswers();
       }
     }
   }

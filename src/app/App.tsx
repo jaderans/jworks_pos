@@ -12,6 +12,7 @@ import { startSync } from '../sync/engine';
 import { startOutbox } from '../email/outbox';
 import { startDailySummary } from '../email/automation';
 import { startPrintFeed } from '../services/printFeed';
+import { startLiveFeed } from '../services/liveFeed';
 import { startBoothPhotos } from '../booth/photos';
 import { readStudioClaims } from '../services/coupons';
 import { JoinPage } from '../features/join/JoinPage';
@@ -59,6 +60,8 @@ function Gate() {
     startOutbox();
     startDailySummary();
     startPrintFeed();
+    // Orders, Couple-of-Stickers and running events for JoshWorks Studio, kept up to date on the owner's device.
+    startLiveFeed();
     // Booth photos past 30 days with no order are deleted; order photos wait for Drive.
     startBoothPhotos();
     // Studio jobs on this device that took a service coupon count as uses.

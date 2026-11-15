@@ -296,7 +296,7 @@ function Orders({ ev }: { ev: JWEvent }) {
                     onReady={() => markReady(o)}
                     onHandOver={() => handOver(o)}
                     onCall={() => callOrder(o.stick ? claimNo(o.number) : o.number, nameOf(o), true)}
-                    onStudio={owner ? () => toStudio(o) : undefined}
+                    onStudio={owner && !o.stick ? () => toStudio(o) : undefined}
                     onDelete={owner ? () => void removeOrder(o) : undefined}
                     art={art}
                     onStick={o.stick ? () => void stickDetails(o) : undefined}

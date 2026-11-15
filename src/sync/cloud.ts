@@ -237,6 +237,18 @@ async function resolveAccess(user: User): Promise<CloudAccess | null> {
   return null;
 }
 
+/**
+ * Tells JoshWorks Studio, signed in with the same login in the same Firebase
+ * project, where this owner's POS data is (owners/{uid}.pos), so it can show
+ * booth events and orders live. Older rules without owners/ refuse it: that only
+ * means Studio can't find the POS yet, so it never stops syncing.
+ */
+async function pointStudioHere(user: User): Promise<void> {
+  const { fs, cfg } = need();
+  const business = (await db.settings.get('business'))?.value as { name?: string } | undefined;
+  await setDoc(doc(fs, 'owners', user.uid), { pos: { ws: cfg.ws, name: business?.name ?? 'JoshWorks', email: (user.email ?? '').toLowerCase(), at: Date.now() } }, { merge: true }).catch(() => undefined);
+}
+
 async function onUser(user: User | null) {
   stopListeners();
   access = null;
@@ -271,7 +283,7 @@ async function onUser(user: User | null) {
   if (a.role !== 'owner') {
     if (a.memberId) await setLocal('currentMemberId', a.memberId);
     await setLocal('setupDone', true);
-  }
+  } else void pointStudioHere(user);
   setSyncStatus({ access: a, message: 'Syncing…', rulesOutdated: !(await rulesCurrent()) });
   await resendOwnEdits(a.role);
   startListeners(a);

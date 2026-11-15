@@ -3,7 +3,8 @@ import { isoDate } from '../lib/time';
 import { isRevenueSale, orderDiscount, orderTotal } from './orders';
 import type { ReportInput } from '../reports/eventReport';
 import { lineTotal, printTotals } from './print';
-import type { Customer, Member, Order, Payout, PrintOrder, Sale, StudioEventFeed, StudioFeed, StudioFeedMethod, StudioFeedPerson, StudioFeedSpend, StudioOrderFeed, StudioOrderPayment, StudioPrintFeed } from '../db/types';
+import type { Customer, Member, Order, Payout, PrintOrder, Sale, StudioEventFeed, StudioFeed, StudioFeedMethod, StudioFeedPerson, StudioFeedSpend, StudioOrderFeed, StudioOrderPayment, StudioPrintFeed, StudioStickFeed } from '../db/types';
+import { packFileName, packPeople } from './stick';
 
 /**
  * The summaries JoshWorks Studio imports: an event's money as the event report
@@ -15,7 +16,52 @@ export const STUDIO_FEED_ID = {
   event: (eventId: string) => `event:${eventId}`,
   order: (orderId: string) => `order:${orderId}`,
   print: (printId: string) => `print:${printId}`,
+  stick: (orderId: string) => `stick:${orderId}`,
 };
+
+/** A Couple-of-Stickers order for Studio: the work, not the money (that's in the booth event). */
+export function buildStickFeed(o: { order: Order; eventName: string; customer: Customer | undefined; maker: Member | undefined }): StudioStickFeed {
+  const { order } = o;
+  const s = order.stick!;
+  const c = o.customer;
+  return {
+    type: 'stick',
+    v: 1,
+    orderId: order.id,
+    number: order.number,
+    eventId: order.eventId,
+    eventName: o.eventName,
+    nickname: s.nickname,
+    customer: { name: c?.name || s.nickname || order.customerName, email: c?.email || s.email, phone: c?.phone || order.contact, handle: c?.handle ?? '' },
+    maker: o.maker ? { memberId: o.maker.id, name: o.maker.name, email: o.maker.email } : null,
+    packs: s.packs.map((p) => ({
+      name: p.name,
+      pack: p.pack,
+      singles: p.singles,
+      making: p.making,
+      designNo: p.designNo,
+      file: packFileName(p, s.nickname),
+      people: packPeople(p).filter((x) => x.name.trim() || x.who.trim()),
+      minis: p.minis,
+      addOns: p.addOns ?? [],
+      note: p.note,
+      photoUrl: p.photoUrl ?? '',
+    })),
+    addOns: s.addOns,
+    status: order.status,
+    paid: s.paid,
+    paidWith: s.paidWith,
+    receiptNo: s.receiptNo ?? '',
+    readyFrom: s.readyFrom,
+    readyTo: s.readyTo,
+    photoUrl: s.photoUrl ?? '',
+    email: s.email,
+    softCopy: s.softCopy,
+    createdAt: order.createdAt,
+    doneAt: order.status === 'ready' || order.status === 'picked-up' ? order.statusAt : null,
+    notes: order.notes,
+  };
+}
 
 const kindOf = (k: string): StudioFeedMethod['kind'] => (k === 'cash' || k === 'ewallet' || k === 'bank' || k === 'card' ? k : 'other');
 

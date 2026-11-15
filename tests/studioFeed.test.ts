@@ -124,3 +124,25 @@ describe('Studio link', () => {
     ]);
   });
 });
+
+describe('Couple-of-Stickers for Studio', () => {
+  it('is the work only: who is on each pack, the design files, who makes it, when it was done; the money is shown, not booked', async () => {
+    const { buildStickFeed } = await import('../src/domain/studioFeed');
+    const order = {
+      id: 'o1', number: 'BA-03', eventId: 'e1', customerId: null, customerName: 'Kaye', contact: '', lines: [], designerId: 'm1', dueAt: '', status: 'ready', statusAt: 5000, notes: '', pickupSaleId: 's1', createdAt: 1000, updatedAt: 5000, deleted: 0, _sync: 0, deviceId: 'd',
+      stick: {
+        nickname: 'Kaye', email: 'kaye@x.test', softCopy: true, addOns: [], saleId: 's1', receiptNo: 'A-0003', paid: 69000, paidWith: 'GCash (ref 77)', readyFrom: 2000, readyTo: 2600, photo: 'booth', photoUrl: 'https://drive/x',
+        packs: [
+          { name: 'Couple Pack (live)', pack: 'C', singles: false, making: 'illustrating', minis: ['01'], designNo: 'CS02', note: '', addOns: ['Pin'], people: [{ name: 'Kaye', who: 'left' }, { name: 'Mark', who: 'right' }] },
+          { name: 'Solo Pack (live)', pack: 'S', singles: false, making: 'printing', minis: [], designNo: 'CS03', note: 'hat', people: [] },
+        ],
+      },
+    } as never;
+    const f = buildStickFeed({ order, eventName: 'Hilway', customer: undefined, maker: { id: 'm1', name: 'Dana', email: 'dana@x.test' } as never });
+    expect(f).toMatchObject({ type: 'stick', number: 'BA-03', eventName: 'Hilway', nickname: 'Kaye', paid: 69000, paidWith: 'GCash (ref 77)', receiptNo: 'A-0003', doneAt: 5000, maker: { memberId: 'm1', name: 'Dana' } });
+    expect(f.packs.map((p) => p.file)).toEqual(['CS02-Kaye-Mark', 'CS03-Kaye']);
+    expect(f.packs[0].people).toEqual([{ name: 'Kaye', who: 'left' }, { name: 'Mark', who: 'right' }]);
+    expect(f.packs[1].people).toEqual([]);
+    expect(f.customer).toMatchObject({ name: 'Kaye', email: 'kaye@x.test' });
+  });
+});

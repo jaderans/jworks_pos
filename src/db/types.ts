@@ -894,9 +894,60 @@ export interface StudioPrintFeed {
   notes: string;
 }
 
-export type StudioFeed = StudioEventFeed | StudioOrderFeed | StudioPrintFeed;
+/**
+ * A Couple-of-Stickers order for Studio: the work only (who's on each pack,
+ * the design files, who makes it, when it's done). It was paid at the booth,
+ * so its money is in the booth event's summary and is never counted again.
+ */
+export interface StudioStickFeed {
+  type: 'stick';
+  v: 1;
+  orderId: string;
+  number: string;
+  eventId: string;
+  eventName: string;
+  /** Who it's for (the claim stub's name). */
+  nickname: string;
+  customer: { name: string; email: string; phone: string; handle: string };
+  maker: { memberId: string; name: string; email: string } | null;
+  packs: {
+    name: string;
+    pack: string;
+    singles: boolean;
+    making: 'printing' | 'illustrating';
+    designNo: string;
+    /** The design file in Drive → Custom stickers, without .png. */
+    file: string;
+    people: { name: string; who: string }[];
+    minis: string[];
+    addOns: string[];
+    note: string;
+    photoUrl: string;
+  }[];
+  addOns: string[];
+  status: OrderStatus;
+  /** What was paid at the booth, and how: shown in Studio, never booked there. */
+  paid: Cents;
+  paidWith: string;
+  receiptNo: string;
+  readyFrom: number;
+  readyTo: number;
+  /** The whole order's reference photo in Drive, or ''. */
+  photoUrl: string;
+  email: string;
+  softCopy: boolean;
+  createdAt: number;
+  /** When it was made (marked ready), or null. */
+  doneAt: number | null;
+  notes: string;
+}
 
-/** Id: `event:<eventId>`, `order:<orderId>` or `print:<printOrderId>`. Events and orders: "Send to Studio"; print orders: kept up to date by themselves. */
+export type StudioFeed = StudioEventFeed | StudioOrderFeed | StudioPrintFeed | StudioStickFeed;
+
+/**
+ * Id: `event:<eventId>`, `order:<orderId>`, `print:<printOrderId>` or `stick:<orderId>`.
+ * All of them kept up to date by themselves on the owner's device (events while they run).
+ */
 export interface StudioFeedRow extends Syncable {
   feed: StudioFeed;
   sentBy: string;
