@@ -1,7 +1,8 @@
 import type { DisplayState, DisplayStick } from '../domain/display';
 
 /** An order being checked on the customer screen from outside the register (Orders), with their booth photo. Repeated every few seconds; dropped when that stops. */
-export type StickShow = DisplayStick & { photoPic: Blob | null; at: number };
+/** An order on the customer screen from Orders: with the photo for the whole order, and each pack's own (by pack, null where it has none). */
+export type StickShow = DisplayStick & { photoPic: Blob | null; packPics?: (Blob | null)[]; at: number };
 
 /**
  * The register and the customer screen talk over a BroadcastChannel: both are

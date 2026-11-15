@@ -208,7 +208,7 @@ export default function CustomerDisplay() {
       ) : view === 'booth' && booth ? (
         <BoothView b={booth} />
       ) : view === 'order' && stickOn && stickShow ? (
-        <OrderCheck o={stickShow} photo={stickShow.photoPic} now={now} samples={samples} />
+        <OrderCheck o={stickShow} photo={stickShow.photoPic} packPics={stickShow.packPics} now={now} samples={samples} />
       ) : view === 'order' && s?.stick ? (
         <OrderCheck o={s.stick} now={now} samples={samples} />
       ) : view === 'wheel' && s?.wheel ? (

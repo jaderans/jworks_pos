@@ -488,8 +488,8 @@ export interface BoothPhoto {
   /** The customer said yes to keeping it: when, and who asked. */
   consentAt: number;
   consentBy: string | null;
-  /** The service order, or the Couple-of-Stickers order, it's used for. */
-  usedFor?: { kind: 'print' | 'order'; id: string; number: string } | null;
+  /** The service order, or the Couple-of-Stickers order (and which of its packs, with that pack's file name), it's used for. */
+  usedFor?: { kind: 'print' | 'order'; id: string; number: string; pack?: number; file?: string } | null;
   /** The copy in Drive → JoshWorks POS → Booth photos, for orders. */
   drive?: { state: 'waiting' | 'saved'; url?: string; error?: string } | null;
   emailedTo?: string;

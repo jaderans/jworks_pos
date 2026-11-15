@@ -158,3 +158,18 @@ describe('samples on the customer screen', () => {
     expect(packWhat({ pack: 'B4', singles: true })).toBe('4 illustrated stickers');
   });
 });
+
+describe('who is on each pack', () => {
+  it('one row per person the pack holds; the names make the pack’s name and its design file', async () => {
+    const { packFileName, packNames, packPeople } = await import('../src/domain/stick');
+    expect(packPeople({ pack: 'S' })).toEqual([{ name: '', who: '' }]);
+    expect(packPeople({ pack: 'B4', people: [{ name: 'Thea', who: 'far left' }] })).toHaveLength(4);
+    const couple = { pack: 'C' as const, designNo: 'CS03', people: [{ name: 'Kaye', who: 'left' }, { name: 'mark anthony', who: 'right' }] };
+    expect(packNames(couple)).toBe('Kaye & mark anthony');
+    expect(packNames({ pack: 'B3', people: [{ name: 'Thea', who: '' }, { name: 'Gretch', who: '' }, { name: 'Dana', who: '' }] })).toBe('Thea, Gretch & Dana');
+    expect(packNames({ pack: 'S' }, 'Kaye')).toBe('Kaye');
+    expect(packFileName(couple, 'Kaye')).toBe('CS03-Kaye-MarkAnthony');
+    // No names on the pack: the order's name, as before.
+    expect(packFileName({ pack: 'S', designNo: 'CS02' }, 'Kaye')).toBe('CS02-Kaye');
+  });
+});

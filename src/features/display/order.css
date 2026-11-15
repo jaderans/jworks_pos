@@ -29,6 +29,10 @@
 .cd-fact b { font-size: 1.65em; line-height: 1.1; overflow-wrap: anywhere; }
 .cd-fact small { font-size: 0.95em; color: #d6eef0; overflow-wrap: anywhere; }
 .cd-fact.good b { color: var(--cd-good); }
+.cd-fact > div { display: grid; gap: 0.15em; align-content: start; min-width: 0; }
+/* The whole order's photo, small, when the packs take the screen. */
+.cd-fact.with-pic { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.8em; }
+.cd-fact.with-pic img { width: 4.4em; height: 4.4em; object-fit: cover; border-radius: 0.6em; }
 
 .cd-order-body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 3vmin; min-height: 0; }
 .cd-order.no-side .cd-order-body { grid-template-columns: minmax(0, 1fr); }
@@ -40,13 +44,39 @@
 .cd-order-minis { display: flex; flex-wrap: wrap; gap: 0.5em; }
 .cd-order-minis figure { margin: 0; display: grid; justify-items: center; gap: 0.2em; width: 5.4em; }
 .cd-order-minis img { width: 4.4em; height: 4.4em; object-fit: contain; background: #fff; border-radius: 0.6em; padding: 0.3em; }
-.cd-order-packs.many .cd-order-minis figure { width: 4.4em; }
-.cd-order-packs.many .cd-order-minis img { width: 3.5em; height: 3.5em; }
 .cd-order-minis figcaption { font-size: 0.7em; color: #d6eef0; text-align: center; line-height: 1.1; }
 .cd-order-muted { margin: 0; color: var(--cd-muted); }
 .cd-order-addons { display: flex; flex-wrap: wrap; gap: 0.4em; }
 .cd-addon { display: inline-flex; align-items: center; padding: 0.2em 0.75em; border-radius: 999px; background: rgba(247, 216, 32, 0.14); border: 1px solid rgba(247, 216, 32, 0.4); color: var(--cd-yellow); font-weight: 800; }
 .cd-order-also { display: flex !important; align-items: center; gap: 0.8em; }
+
+/* One pack: who's on it (the name on the sticker, where they are in the photo). */
+.cd-pack { display: flex !important; align-items: flex-start; gap: 1em; min-height: 0; }
+.cd-pack-main { flex: 1; min-width: 0; display: grid; gap: 0.55em; }
+.cd-people { display: flex; flex-wrap: wrap; gap: 0.4em; }
+.cd-person { display: inline-flex; align-items: baseline; gap: 0.45em; padding: 0.25em 0.75em; border-radius: 0.6em; background: rgba(31, 163, 168, 0.18); border: 1px solid rgba(31, 163, 168, 0.5); }
+.cd-person b { font-size: 1.05em; }
+.cd-person small { color: #d6eef0; font-size: 0.85em; }
+.cd-pack-pic { flex: none; width: 6.6em; margin: 0; display: grid; gap: 0.25em; justify-items: center; }
+.cd-pack-pic img { width: 6.6em; height: 6.6em; object-fit: contain; background: #fff; border-radius: 0.7em; padding: 0.25em; }
+.cd-pack-pic figcaption { color: var(--cd-muted); font-size: 0.75em; }
+.cd-pack-note { font-size: 0.9em; }
+
+/* Two or more packs: side by side, each with its own picture; smaller mini stickers. */
+.cd-order.multi .cd-order-body { grid-template-columns: minmax(0, 1fr); }
+.cd-order.multi .cd-order-packs { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; }
+.cd-order.multi.n3 .cd-order-packs, .cd-order.multi.n5 .cd-order-packs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cd-order.multi .cd-order-also { grid-column: 1 / -1; }
+.cd-order.multi .cd-order-pack b { font-size: 1.3em; }
+.cd-order.multi .cd-order-pack small { font-size: 0.9em; }
+.cd-order.multi .cd-order-minis { gap: 0.35em; }
+.cd-order.multi .cd-order-minis figure { width: 3em; }
+.cd-order.multi .cd-order-minis img { width: 2.7em; height: 2.7em; padding: 0.2em; }
+.cd-order.multi .cd-order-minis figcaption { font-size: 0.65em; }
+.cd-order.multi.n4 .cd-pack-pic, .cd-order.multi.n5 .cd-pack-pic { width: 4.6em; }
+.cd-order.multi.n4 .cd-pack-pic img, .cd-order.multi.n5 .cd-pack-pic img { width: 4.6em; height: 4.6em; }
+.cd-order.multi.n4 .cd-order-minis img, .cd-order.multi.n5 .cd-order-minis img { width: 2.2em; height: 2.2em; }
+.cd-order.multi.n4 .cd-order-minis figure, .cd-order.multi.n5 .cd-order-minis figure { width: 2.5em; }
 
 /* Their photo, and stickers we made for others with the same pack. */
 /* The side fills what the packs leave: the photo at its size, the samples take the rest. */
@@ -72,6 +102,10 @@
   .cd-full.cd-order { padding: 4vmin; }
   .cd-order-body, .cd-order.no-side .cd-order-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .cd-order-photo-pic { justify-items: center; }
+  .cd-order.multi .cd-order-packs, .cd-order.multi.n3 .cd-order-packs, .cd-order.multi.n5 .cd-order-packs { grid-template-columns: minmax(0, 1fr); }
+  .cd-order.multi.n4 .cd-order-packs, .cd-order.multi.n5 .cd-order-packs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cd-order-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cd-order-facts > :last-child { grid-column: 1 / -1; }
 }
 @media (prefers-reduced-motion: reduce) { .cd-order, .cd-order-ticket, .cd-order-samples-grid img { animation: none; } }
 

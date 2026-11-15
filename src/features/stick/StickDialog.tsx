@@ -13,8 +13,8 @@ import { peso } from '../../lib/money';
 import { fmtTime } from '../../lib/time';
 import { isOpenOrder } from '../../domain/orders';
 import {
-  DEFAULT_STICK, ENJOY, PACK_CODES, PACK_NAME, designFileName, estimateReady, isAddOnCategory, minisFor, nextDesignNos, packOf, readyText,
-  type Making, type PackCode, type StickOrder, type StickPack, type StickSettings,
+  DEFAULT_STICK, ENJOY, PACK_CODES, PACK_NAME, estimateReady, isAddOnCategory, minisFor, nextDesignNos, packFileName, packOf, packPeople, readyText,
+  type Making, type PackCode, type StickOrder, type StickPack, type StickPerson, type StickSettings,
 } from '../../domain/stick';
 import { saveStickOrder } from '../../services/stick';
 import { stickSender } from '../../display/channel';
@@ -28,6 +28,15 @@ import './stick.css';
 
 /** What the customer screen shows while the cashier fills it in, so the customer can check it. */
 export type StickDraft = DisplayStick;
+
+/** Hints for where each person stands in the photo, by how many there are. */
+const WHERE: Record<number, string[]> = {
+  1: ['white shirt, glasses'],
+  2: ['left', 'right'],
+  3: ['left', 'middle', 'right'],
+  4: ['far left', 'left', 'right', 'far right'],
+  5: ['far left', 'left', 'middle', 'right', 'far right'],
+};
 
 /**
  * Couple-of-Stickers details, after the customer pays: their nickname, each
@@ -101,21 +110,27 @@ export function StickDialog({
   // Keep the customer screen showing what's being filled in.
   // Their photo from our booth, when this laptop has it.
   const boothPhoto = useLiveQuery(async () => (existing?.stick?.photoId ? ((await db.boothPhotos.get(existing.stick.photoId)) ?? null) : null), [existing?.stick?.photoId]);
+  // Each pack's own photo, when its people aren't in the order's photo.
+  const packPhotoIds = (existing?.stick?.packs ?? []).map((p) => p.photoId ?? '');
+  const packPhotos = useLiveQuery(async () => Promise.all(packPhotoIds.map(async (id) => (id ? ((await db.boothPhotos.get(id)) ?? null) : null))), [packPhotoIds.join()]) ?? [];
   // Outside the register (Orders), the dialog shows the order on the customer screen itself.
   const screen = useMemo(() => (onDraft ? null : stickSender()), []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => screen?.close(), [screen]);
-  const draftKey = JSON.stringify([nickname, packs, addOns, est.from, est.to, photo, boothPhoto?.id ?? '']);
+  const draftKey = JSON.stringify([nickname, packs, addOns, est.from, est.to, photo, boothPhoto?.id ?? '', packPhotos.map((x) => x?.id ?? '')]);
   useEffect(() => {
     if (!packs) return;
     const d = { number: existing?.number ?? null, nickname, packs, addOns, readyFrom: est.from, readyTo: est.to, photo, paid: sale.total, paidWith };
     if (onDraft) onDraft(d);
-    else screen?.send({ ...d, photoPic: boothPhoto?.blob ?? null });
+    else screen?.send({ ...d, photoPic: boothPhoto?.blob ?? null, packPics: packPhotos.map((x) => x?.blob ?? null) });
   }, [draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onDraft?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setPack = (i: number, ch: Partial<StickPack>) => setPacks((ps) => (ps ?? []).map((p, k) => (k === i ? { ...p, ...ch } : p)));
+  const setPerson = (i: number, k: number, ch: Partial<StickPerson>) =>
+    setPacks((ps) => (ps ?? []).map((p, n) => (n === i ? { ...p, people: packPeople(p).map((x, j) => (j === k ? { ...x, ...ch } : x)) } : p)));
 
-  const save = async (then: 'close' | 'print' | 'photo') => {
+  /** `pack`: the photo is for that pack only (its people aren't in the others' photo). */
+  const save = async (then: 'close' | 'print' | 'photo', pack?: number) => {
     if (!packs) return;
     setBusy(true);
     setError('');
@@ -130,7 +145,7 @@ export function StickDialog({
       onSaved?.(order);
       onClose();
       // Their photo, now: the photo booth opens for this order, on this screen and the customer screen.
-      if (then === 'photo') navigate(`/booth?order=${order.id}`);
+      if (then === 'photo') navigate(`/booth?order=${order.id}${pack !== undefined ? `&pack=${pack}` : ''}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Couldn’t save it');
     } finally {
@@ -154,7 +169,7 @@ export function StickDialog({
           </Button>
           {photo === 'booth' && !existing?.stick?.photoId ? (
             <Button variant="teal" onClick={() => void save('photo')} disabled={busy || !packs?.length}>
-              <Camera size={16} /> Save and take their photo
+              <Camera size={16} /> {(packs?.length ?? 0) > 1 ? 'Save and take one photo of everyone' : 'Save and take their photo'}
             </Button>
           ) : null}
           <Button variant="primary" onClick={() => void save('print')} disabled={busy || !packs?.length}>
@@ -177,7 +192,7 @@ export function StickDialog({
         {existing ? ` · stub ${existing.number}` : ' · the stub number comes when you save'}
       </Callout>
       <div className="form-grid">
-        <Field label="Name or nickname" htmlFor="st-nick" hint="On the stubs, the customer screen and the design file.">
+        <Field label="Name or nickname" htmlFor="st-nick" hint="Who it’s for: on the claim stub and the customer screen. Each pack says who’s drawn on it.">
           <TextInput id="st-nick" value={nickname} onChange={(e) => setNickname(e.target.value)} autoFocus />
         </Field>
         <Field label="Email" htmlFor="st-email" hint="Optional: for a soft copy of their stickers.">
@@ -201,7 +216,9 @@ export function StickDialog({
 
       <div className="stick-packs">
         {(packs ?? []).map((p, i) => {
-          const file = designFileName(p.designNo, nickname);
+          const file = packFileName(p, nickname);
+          const people = packPeople(p);
+          const own = packPhotos[i];
           const inDrive = (art ?? []).find((a) => a.code.toUpperCase() === p.designNo.toUpperCase());
           const max = minisFor(p);
           return (
@@ -230,6 +247,33 @@ export function StickDialog({
                   { value: 'illustrating', label: 'Illustrating' },
                 ]}
               />
+              <div className="stick-people" role="group" aria-label={`Who’s on pack ${i + 1}`}>
+                <span className="small">
+                  <b>Who’s on it:</b> {people.length > 1 ? 'the names drawn on the stickers, and where each one is in the photo.' : 'the name drawn on the sticker, and how to find them in the photo.'}
+                  {nickname.trim() ? ` Empty: ${nickname.trim()}.` : ''}
+                </span>
+                {people.map((x, k) => (
+                  <div key={k} className="stick-person">
+                    <span className="stick-person-no" aria-hidden="true">
+                      {k + 1}
+                    </span>
+                    <TextInput aria-label={`Pack ${i + 1}, person ${k + 1}: name`} value={x.name} onChange={(e) => setPerson(i, k, { name: e.target.value })} placeholder={people.length > 1 ? `Name ${k + 1}` : 'Name on the sticker'} />
+                    <TextInput aria-label={`Pack ${i + 1}, person ${k + 1}: in the photo`} value={x.who} onChange={(e) => setPerson(i, k, { who: e.target.value })} placeholder={`In the photo: ${WHERE[people.length]?.[k] ?? 'what they wear'}`} />
+                  </div>
+                ))}
+              </div>
+              {own ? (
+                <div className="stick-art">
+                  <PhotoImg photo={own} />
+                  <span className="small">
+                    <b>Pack {i + 1}’s photo:</b> {file}. It prints on the information stub.
+                  </span>
+                </div>
+              ) : photo === 'booth' && (packs ?? []).length > 1 ? (
+                <Button size="sm" variant="teal" onClick={() => void save('photo', i)} disabled={busy}>
+                  <Camera size={15} /> Save and take pack {i + 1}’s photo
+                </Button>
+              ) : null}
               <div className="form-grid">
                 <Field label="Design no." htmlFor={`st-no-${i}`} hint={`Save the finished design in Drive → JoshWorks POS → Custom stickers as ${file}.png.`}>
                   <TextInput id={`st-no-${i}`} value={p.designNo} onChange={(e) => setPack(i, { designNo: e.target.value.toUpperCase().replace(/\s+/g, '') })} />

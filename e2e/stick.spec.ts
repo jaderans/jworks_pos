@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { SHOTS, createEvent, offScreen, openRegister, setEventPrice, setupOwner, tapProduct } from './helpers';
+import { SHOTS, createEvent, offScreen, openRegister, payCash, setEventPrice, setupOwner, tapProduct } from './helpers';
 
 // Chrome's stand-in camera, for their photo at our booth.
 test.use({ launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] }, permissions: ['camera'] });
@@ -200,5 +200,106 @@ test('Couple-of-Stickers: paid by GCash with a keychain add-on, checked on the c
   await expect(page.getByRole('article', { name: /Order 01/ })).toHaveCount(0);
   await page.goto('/#/settings?section=stick');
   await expect(page.locator('#s-stick').getByRole('group', { name: 'Stub numbers' })).toContainText('the next stub is 01');
+  expect(errors).toEqual([]);
+});
+
+test('Couple-of-Stickers with three packs for different people: who’s on each, where they are in the photo, one pack’s own photo, all on one screen', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await setupOwner(page, 'Joshua Ranin', '1111');
+  await createEvent(page, 'Hilway November 2026');
+  await page.goto('/#/event/prices');
+  await setEventPrice(page, 'Solo Pack (live)', 150);
+  await setEventPrice(page, 'Couple Pack (live)', 240);
+  await setEventPrice(page, 'Barkada Pack (3)', 300);
+  await openRegister(page);
+  const [screen] = await Promise.all([page.waitForEvent('popup'), page.getByRole('button', { name: /^Customer screen/ }).click()]);
+  screen.on('pageerror', (e) => errors.push(e.message));
+  await screen.setViewportSize({ width: 1920, height: 1080 });
+
+  await tapProduct(page, 'Solo Pack (live)', 1);
+  await tapProduct(page, 'Couple Pack (live)', 1);
+  await tapProduct(page, 'Barkada Pack (3)', 1);
+  await payCash(page);
+  const d = page.getByRole('dialog', { name: /^Couple-of-Stickers for [A-Z]-0001/ });
+  await d.getByLabel('Name or nickname').fill('Kaye');
+  // Each pack: the names drawn on it, and where each one is in the photo.
+  const person = (pack: number, k: number) => [d.getByLabel(`Pack ${pack}, person ${k}: name`), d.getByLabel(`Pack ${pack}, person ${k}: in the photo`)] as const;
+  await expect(d.getByRole('group', { name: 'Who’s on pack 1' }).getByRole('textbox')).toHaveCount(2);
+  await expect(d.getByRole('group', { name: 'Who’s on pack 3' }).getByRole('textbox')).toHaveCount(6);
+  await person(1, 1)[0].fill('John');
+  await person(1, 1)[1].fill('white shirt');
+  for (const [k, name, who] of [[1, 'Kaye', 'left'], [2, 'Mark', 'right']] as const) {
+    await person(2, k)[0].fill(name);
+    await person(2, k)[1].fill(who);
+  }
+  for (const [k, name, who] of [[1, 'Thea', 'left, cap'], [2, 'Gretch', 'middle'], [3, 'Dana', 'right']] as const) {
+    await person(3, k)[0].fill(name);
+    await person(3, k)[1].fill(who);
+  }
+  await expect(d.getByText('Save the finished design in Drive → JoshWorks POS → Custom stickers as CS03-Thea-Gretch-Dana.png.')).toBeVisible();
+  // Their mini stickers, pack by pack.
+  const minis: [number, string[]][] = [
+    [1, ['04 Gaming Headset', '05 Game Controller', '06 Ballpen']],
+    [2, ['17 Rocket', '16 Chalkboard', '03 Headphones', '06 Ballpen', '08 Clipboard Checklist', '39 Safety Pin']],
+    [3, ['01 Digital Pencil', '02 Laptop', '11 Newspaper', '28 Basketball', '33 Sleeping Cat', '43 Money Stack']],
+  ];
+  for (const [pack, picks] of minis) {
+    await d.getByRole('region', { name: new RegExp(`^Pack ${pack}:`) }).getByRole('button', { name: /^Pick \d mini stickers$/ }).click();
+    const picker = d.getByRole('group', { name: `Mini stickers for pack ${pack}` });
+    for (const m of picks) await picker.getByRole('button', { name: m }).click();
+    await d.getByRole('button', { name: 'Done picking' }).click();
+  }
+
+  // The customer screen: the three packs side by side, each with who's on it; everything fits.
+  const check = screen.getByRole('region', { name: 'Your Couple-of-Stickers order' });
+  await expect(check.getByRole('listitem', { name: /^Pack 1: Solo Pack/ })).toContainText('Johnwhite shirt');
+  await expect(check.getByRole('listitem', { name: /^Pack 2: Couple Pack/ })).toContainText('Kayeleft');
+  await expect(check.getByRole('listitem', { name: /^Pack 3: Barkada Pack/ })).toContainText('Gretchmiddle');
+  await screen.waitForTimeout(600);
+  expect(await offScreen(screen)).toEqual([]);
+  await screen.screenshot({ path: `${SHOTS}/stick-check-three-packs.png` });
+  await screen.setViewportSize({ width: 1080, height: 1920 });
+  await screen.waitForTimeout(400);
+  expect(await offScreen(screen)).toEqual([]);
+  await screen.setViewportSize({ width: 1920, height: 1080 });
+
+  // The barkada's own photo: the booth takes it for pack 3 only.
+  await d.getByRole('group', { name: 'Their photo' }).getByRole('button', { name: 'Our photo booth' }).click();
+  await expect(d.getByRole('button', { name: 'Save and take one photo of everyone' })).toBeVisible();
+  await d.getByRole('button', { name: 'Save and take pack 3’s photo' }).click();
+  await expect(page.getByText('Photo for Couple-of-Stickers 01 · pack 3: Thea, Gretch & Dana')).toBeVisible();
+  await page.getByLabel('Countdown').selectOption('0');
+  await page.getByRole('button', { name: 'Take the photo' }).click();
+  await expect(page.getByLabel('Their name')).toHaveValue('Thea, Gretch & Dana');
+  await page.getByRole('button', { name: 'They said yes: keep it' }).click();
+  await expect(page.getByText(/Their photo is on Couple-of-Stickers 01 as CS03-Thea-Gretch-Dana/)).toBeVisible();
+  await page.getByRole('button', { name: 'Back to the order' }).click();
+  const again = page.getByRole('dialog', { name: 'Couple-of-Stickers 01' });
+  await expect(again).toContainText('Pack 3’s photo: CS03-Thea-Gretch-Dana');
+  await expect(again.getByRole('button', { name: 'Save and take pack 1’s photo' })).toBeVisible();
+  // On the customer screen, pack 3 shows their photo; the others a sample or nothing.
+  const back = screen.getByRole('region', { name: 'Your Couple-of-Stickers order' });
+  await expect(back.getByRole('listitem', { name: /^Pack 3/ })).toContainText('Your photo');
+  await expect(back).toContainText('1 of 3 packs have their photo');
+  await screen.waitForTimeout(600);
+  expect(await offScreen(screen)).toEqual([]);
+  await screen.screenshot({ path: `${SHOTS}/stick-check-pack-photo.png` });
+  await again.getByRole('button', { name: 'Close' }).last().click();
+
+  // On Orders and the information stub: each pack's people, and pack 3's photo.
+  const card = page.getByRole('article', { name: /Order 01/ });
+  await expect(card).toContainText('S · Printing · John');
+  await expect(card).toContainText('C · Printing · Kaye & Mark');
+  await expect(card).toContainText('Thea (left, cap), Gretch (middle), Dana (right)');
+  await expect(card).toContainText('CS03-Thea-Gretch-Dana.png · not in Drive yet');
+  await expect(card).toContainText('Their photo: CS03-Thea-Gretch-Dana');
+  await card.getByRole('button', { name: 'Stubs for 01' }).click();
+  const info = page.getByRole('dialog', { name: 'Stubs for 01' }).getByRole('region', { name: 'Information stub' });
+  await expect(info).toContainText('1. Kaye (left)  2. Mark (right)');
+  await expect(info).toContainText('CS01-John.png');
+  await expect(info.getByRole('img', { name: 'Pack 3 photo' })).toBeVisible();
+  await expect(info).toContainText('Reference: CS03-Thea-Gretch-Dana');
   expect(errors).toEqual([]);
 });

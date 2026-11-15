@@ -18,7 +18,7 @@ import { captureBoothPhoto } from '../../booth/frames';
 import { FramePreview } from '../../booth/FramePreview';
 import { PhotoImg } from '../../booth/PhotoImg';
 import { attachPhotoToOrder, deleteBoothPhoto, emailBoothPhoto, keepBoothPhoto, photoFileName, sendBoothPhotoToDrive } from '../../booth/photos';
-import { claimNo, orderPhotoName } from '../../domain/stick';
+import { claimNo, orderPhotoName, packFileName, packNames } from '../../domain/stick';
 import { boothSender, type BoothShow } from '../../display/channel';
 import { openCustomerScreen, useSecondScreen } from '../../display/screens';
 import type { BoothPhoto, BusinessSettings, PrintRates } from '../../db/types';
@@ -70,9 +70,18 @@ export default function BoothPage() {
   const [params] = useSearchParams();
   const orderId = params.get('order');
   const forOrder = useLiveQuery(async () => (orderId ? ((await db.orders.get(orderId)) ?? null) : null), [orderId]);
+  // One pack's photo (its people aren't in the rest of the order's photo), or the whole order's.
+  const packParam = params.get('pack');
+  const packAt = packParam === null ? undefined : Number(packParam);
+  const forPack = packAt !== undefined && Number.isInteger(packAt) ? forOrder?.stick?.packs[packAt] : undefined;
+  const photoFor = forOrder?.stick
+    ? forPack && packAt !== undefined
+      ? { title: `pack ${packAt + 1}: ${packNames(forPack, forOrder.stick.nickname)}`, name: packNames(forPack, forOrder.stick.nickname), file: packFileName(forPack, forOrder.stick.nickname), done: !!forPack.photoId, pack: packAt }
+      : { title: forOrder.stick.nickname, name: forOrder.stick.nickname, file: orderPhotoName(forOrder.number, forOrder.stick.nickname), done: !!forOrder.stick.photoId, pack: undefined }
+    : null;
   useEffect(() => {
-    if (forOrder?.stick) {
-      setName((n) => n || forOrder.stick!.nickname);
+    if (forOrder?.stick && photoFor) {
+      setName((n) => n || photoFor.name);
       setContact((c) => c || forOrder.stick!.email);
     }
   }, [forOrder?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -171,9 +180,9 @@ export default function BoothPage() {
       setEmailTo(looksLikeEmail(contact) ? contact.trim() : '');
       setName('');
       setContact('');
-      if (forOrder?.stick && !forOrder.stick.photoId) {
-        await attachPhotoToOrder(p.id, forOrder);
-        app.toast(`Their photo is on Couple-of-Stickers ${forOrder.number} as ${orderPhotoName(forOrder.number, forOrder.stick.nickname)}`, { tone: 'good' });
+      if (forOrder?.stick && photoFor && !photoFor.done) {
+        await attachPhotoToOrder(p.id, forOrder, photoFor.pack);
+        app.toast(`Their photo is on Couple-of-Stickers ${forOrder.number} as ${photoFor.file}`, { tone: 'good' });
       } else app.toast(`Photo ${p.number} kept`, { tone: 'good' });
     } catch (e) {
       app.toast(e instanceof Error ? e.message : 'Couldn’t keep it', { tone: 'bad' });
@@ -240,15 +249,13 @@ export default function BoothPage() {
         }
       />
 
-      {forOrder?.stick ? (
-        <Callout tone={forOrder.stick.photoId ? 'good' : 'info'} title={`Photo for Couple-of-Stickers ${forOrder.number} · ${forOrder.stick.nickname}`}>
+      {forOrder?.stick && photoFor ? (
+        <Callout tone={photoFor.done ? 'good' : 'info'} title={`Photo for Couple-of-Stickers ${forOrder.number} · ${photoFor.title}`}>
           <div className="row between wrap">
             <span>
-              {forOrder.stick.photoId
-                ? `Done: it’s on the order as ${orderPhotoName(forOrder.number, forOrder.stick.nickname)}.`
-                : `They see themselves on the customer screen. When they say yes, it goes on the order as ${orderPhotoName(forOrder.number, forOrder.stick.nickname)}.`}
+              {photoFor.done ? `Done: it’s on the order as ${photoFor.file}.` : `They see themselves on the customer screen. When they say yes, it goes on the order as ${photoFor.file}.`}
             </span>
-            <Button size="sm" variant={forOrder.stick.photoId ? 'primary' : undefined} onClick={() => navigate(`/orders?stick=${forOrder.id}`)}>
+            <Button size="sm" variant={photoFor.done ? 'primary' : undefined} onClick={() => navigate(`/orders?stick=${forOrder.id}`)}>
               Back to the order
             </Button>
           </div>

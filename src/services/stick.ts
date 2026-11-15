@@ -2,7 +2,7 @@ import { alive, db } from '../db/db';
 import { audit, create, patch } from '../db/write';
 import type { DeviceInfo } from '../db/local';
 import { getSetting, setSetting } from '../db/settings';
-import { DEFAULT_STICK, PACK_NAME, designFileName, nextStubNumber, type StickOrder, type StickSettings } from '../domain/stick';
+import { DEFAULT_STICK, PACK_NAME, nextStubNumber, packFileName, type StickOrder, type StickSettings } from '../domain/stick';
 import type { Order, OrderLine, Sale } from '../db/types';
 
 /**
@@ -14,7 +14,7 @@ import type { Order, OrderLine, Sale } from '../db/types';
 const linesOf = (s: StickOrder): OrderLine[] =>
   s.packs.map((p) => ({
     productId: null,
-    name: `${PACK_NAME[p.pack]}${p.singles ? ' singles' : ''} · ${p.making === 'illustrating' ? 'illustrating' : 'printing'} · ${designFileName(p.designNo, s.nickname)}`,
+    name: `${PACK_NAME[p.pack]}${p.singles ? ' singles' : ''} · ${p.making === 'illustrating' ? 'illustrating' : 'printing'} · ${packFileName(p, s.nickname)}`,
     categoryId: null,
     designerId: null,
     qty: 1,

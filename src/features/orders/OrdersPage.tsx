@@ -8,7 +8,7 @@ import { StubsDialog, type StubOrder } from '../stick/Stubs';
 import { PhotoImg } from '../../booth/PhotoImg';
 import { miniPic } from '../stick/MiniPicker';
 import { handOverStick } from '../../services/stick';
-import { DEFAULT_STICK, claimNo, designFileName, minisFor, packLabel, type StickSettings } from '../../domain/stick';
+import { DEFAULT_STICK, claimNo, minisFor, packFileName, packLabel, packNames, packPeople, type StickSettings } from '../../domain/stick';
 import { announceShowcase } from '../../display/channel';
 import { refreshStickers } from '../../display/stickers';
 import '../stick/stick.css';
@@ -89,7 +89,8 @@ function Orders({ ev }: { ev: JWEvent }) {
   /** The stubs, with their booth photo when this laptop has it. */
   const openStubs = async (o: Order) => {
     const photo = o.stick?.photoId ? ((await db.boothPhotos.get(o.stick.photoId))?.blob ?? null) : null;
-    setStubs({ number: o.number, eventName: ev.name, at: o.createdAt, stick: o.stick!, photo });
+    const packPhotos = await Promise.all((o.stick?.packs ?? []).map(async (p) => (p.photoId ? ((await db.boothPhotos.get(p.photoId))?.blob ?? null) : null)));
+    setStubs({ number: o.number, eventName: ev.name, at: o.createdAt, stick: o.stick!, photo, packPhotos });
   };
   const [checking, setChecking] = useState(false);
   const checkDrive = async () => {
@@ -113,7 +114,7 @@ function Orders({ ev }: { ev: JWEvent }) {
     const pack = o.stick?.packs.find((p) => art.has(p.designNo.toUpperCase()));
     const a = pack ? art.get(pack.designNo.toUpperCase()) : undefined;
     if (!o.stick || !pack || !a) return;
-    announceShowcase({ number: o.number, name: o.stick.nickname.split(/\s+/)[0], label: designFileName(pack.designNo, o.stick.nickname), art: a.blob, cta: 'Get your own Couple-of-Stickers: ask us at the counter!' });
+    announceShowcase({ number: o.number, name: (packNames(pack) || o.stick.nickname).split(/\s+/)[0], label: packFileName(pack, o.stick.nickname), art: a.blob, cta: 'Get your own Couple-of-Stickers: ask us at the counter!' });
     app.toast(`${o.number} is on the customer screen`, { tone: 'good' });
   };
   const [scope, setScope] = useState<'event' | 'open'>('event');
@@ -300,7 +301,7 @@ function Orders({ ev }: { ev: JWEvent }) {
                     art={art}
                     onStick={o.stick ? () => void stickDetails(o) : undefined}
                     onStubs={o.stick ? () => void openStubs(o) : undefined}
-                    onPhoto={o.stick ? () => navigate(`/booth?order=${o.id}`) : undefined}
+                    onPhoto={o.stick ? (pack) => navigate(`/booth?order=${o.id}${pack !== undefined ? `&pack=${pack}` : ''}`) : undefined}
                     onShowOff={o.stick ? () => showOff(o) : undefined}
                   />
                 ))}
@@ -410,7 +411,8 @@ function OrderCard({
 }: {
   art?: Map<string, StickerArt>;
   /** Couple-of-Stickers: take their photo at the booth, for this order. */
-  onPhoto?: () => void;
+  /** Take their photo at our booth: for the whole order, or one pack. */
+  onPhoto?: (pack?: number) => void;
   /** Couple-of-Stickers: change the details, print the stubs again, show it on the customer screen. */
   onStick?: () => void;
   onStubs?: () => void;
@@ -868,7 +870,7 @@ function CreatedDialog({ order, name, money, onClose }: { order: Order | null; n
 }
 
 /** A Couple-of-Stickers order on its card: the packs, the mini stickers, and whether the design is in Drive yet. */
-function StickInfo({ o, art, onShowOff, onPhoto }: { o: Order; art?: Map<string, StickerArt>; onShowOff?: () => void; onPhoto?: () => void }) {
+function StickInfo({ o, art, onShowOff, onPhoto }: { o: Order; art?: Map<string, StickerArt>; onShowOff?: () => void; onPhoto?: (pack?: number) => void }) {
   const s = o.stick!;
   const ready = s.packs.some((p) => art?.has(p.designNo.toUpperCase()));
   return (
@@ -882,13 +884,29 @@ function StickInfo({ o, art, onShowOff, onPhoto }: { o: Order; art?: Map<string,
           <div key={i} className="stack tight">
             <b>
               {packLabel(p)} · {p.making === 'illustrating' ? 'Illustrating' : 'Printing'}
+              {packNames(p) ? ` · ${packNames(p)}` : ''}
             </b>
+            {packPeople(p).some((x) => x.who.trim()) ? (
+              <span className="small">
+                {packPeople(p)
+                  .filter((x) => x.name.trim() || x.who.trim())
+                  .map((x) => `${x.name.trim() || '?'}${x.who.trim() ? ` (${x.who.trim()})` : ''}`)
+                  .join(', ')}
+              </span>
+            ) : null}
             <div className="stick-design">
               {a ? <ArtThumb blob={a.blob} name={a.name} /> : null}
               <span className="small">
-                {designFileName(p.designNo, s.nickname)}.png{a ? ' · in Drive' : ' · not in Drive yet'}
+                {packFileName(p, s.nickname)}.png{a ? ' · in Drive' : ' · not in Drive yet'}
               </span>
             </div>
+            {p.photoId ? (
+              <BoothPhotoLine id={p.photoId} name={packFileName(p, s.nickname)} url={p.photoUrl} />
+            ) : s.photo === 'booth' && s.packs.length > 1 && onPhoto ? (
+              <Button size="sm" variant="ghost" onClick={() => onPhoto(i)}>
+                <Camera size={15} /> Take pack {i + 1}’s photo
+              </Button>
+            ) : null}
             {minisFor(p) ? (
               <div className="stick-minis" aria-label={`Mini stickers for pack ${i + 1}`}>
                 {p.minis.length ? p.minis.map((n) => (miniPic(n) ? <img key={n} src={miniPic(n)} alt={n} title={n} /> : <span key={n}>{n}</span>)) : <span className="muted small">Mini stickers to pick</span>}
@@ -903,10 +921,10 @@ function StickInfo({ o, art, onShowOff, onPhoto }: { o: Order; art?: Map<string,
       {s.softCopy && s.email ? <span className="small">Soft copy to {s.email}</span> : null}
       {s.photoId ? (
         <BoothPhotoLine id={s.photoId} name={`${claimNo(o.number)}-${s.nickname}`} url={s.photoUrl} />
-      ) : s.photo === 'booth' ? (
+      ) : s.photo === 'booth' && !s.packs.every((p) => p.photoId) ? (
         onPhoto ? (
-          <Button size="sm" variant="teal" onClick={onPhoto}>
-            <Camera size={15} /> Take their photo
+          <Button size="sm" variant="teal" onClick={() => onPhoto()}>
+            <Camera size={15} /> {s.packs.length > 1 ? 'Take one photo of everyone' : 'Take their photo'}
           </Button>
         ) : (
           <span className="small">Photo: our photo booth</span>

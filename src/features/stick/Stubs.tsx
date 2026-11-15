@@ -6,7 +6,7 @@ import { Button } from '../../components/ui';
 import { createRoot } from 'react-dom/client';
 import { fmtTime } from '../../lib/time';
 import { peso } from '../../lib/money';
-import { ENJOY, PACK_CODES, claimNo, designFileName, minisFor, orderPhotoName, packLabel, readyText, type StickOrder, type StickSettings } from '../../domain/stick';
+import { ENJOY, PACK_CODES, claimNo, minisFor, orderPhotoName, packFileName, packLabel, packPeople, readyText, type StickOrder, type StickSettings } from '../../domain/stick';
 import mark from '../../assets/brand/mark.png';
 import './stubs.css';
 
@@ -17,6 +17,8 @@ export interface StubOrder {
   stick: StickOrder;
   /** Their photo from our booth: the illustrator's reference. */
   photo?: Blob | null;
+  /** Each pack's own photo, by pack (null where it has none). */
+  packPhotos?: (Blob | null)[];
 }
 
 /**
@@ -30,6 +32,8 @@ export function Stubs({ o, paper, now = Date.now() }: { o: StubOrder; paper: Sti
   const s = o.stick;
   const photoUrl = useMemo(() => (o.photo ? URL.createObjectURL(o.photo) : ''), [o.photo]);
   useEffect(() => () => (photoUrl ? URL.revokeObjectURL(photoUrl) : undefined), [photoUrl]);
+  const packUrls = useMemo(() => (o.packPhotos ?? []).map((b) => (b ? URL.createObjectURL(b) : '')), [o.packPhotos]);
+  useEffect(() => () => packUrls.forEach((u) => u && URL.revokeObjectURL(u)), [packUrls]);
   const no = claimNo(o.number);
   const packs = new Set(s.packs.map((p) => p.pack));
   const singles = s.packs.some((p) => p.singles);
@@ -91,10 +95,23 @@ export function Stubs({ o, paper, now = Date.now() }: { o: StubOrder; paper: Sti
               <b>
                 {packLabel(p)} · {p.making === 'illustrating' ? 'Illustrating' : 'Printing'}
               </b>
-              <span>{designFileName(p.designNo, s.nickname)}.png</span>
+              {packPeople(p).some((x) => x.name.trim() || x.who.trim()) ? (
+                <span className="stub-people">
+                  {packPeople(p)
+                    .map((x, k) => `${k + 1}. ${x.name.trim() || '?'}${x.who.trim() ? ` (${x.who.trim()})` : ''}`)
+                    .join('  ')}
+                </span>
+              ) : null}
+              <span>{packFileName(p, s.nickname)}.png</span>
               {minisFor(p) ? <span>Minis: {p.minis.length ? p.minis.join(', ') : 'to pick'}</span> : null}
               {p.addOns?.length ? <span className="stub-addons">{p.addOns.map((a) => `+ ${a}`).join('  ')}</span> : null}
               {p.note ? <span>Note: {p.note}</span> : null}
+              {packUrls[i] ? (
+                <figure className="stub-photo">
+                  <img src={packUrls[i]} alt={`Pack ${i + 1} photo`} />
+                  <figcaption>Reference: {packFileName(p, s.nickname)}</figcaption>
+                </figure>
+              ) : null}
             </li>
           ))}
         </ol>

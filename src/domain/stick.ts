@@ -21,6 +21,20 @@ export const PACK_NAME: Record<PackCode, string> = { S: 'Solo Pack', C: 'Couple 
 export const PACK_MINIS: Record<PackCode, number> = { S: 3, C: 6, B3: 6, B4: 8, B5: 8 };
 /** The illustrated stickers in a pack. */
 export const PACK_STICKERS: Record<PackCode, number> = { S: 2, C: 2, B3: 3, B4: 4, B5: 5 };
+/** The people drawn on a pack's stickers. */
+export const PACK_PEOPLE: Record<PackCode, number> = { S: 1, C: 2, B3: 3, B4: 4, B5: 5 };
+
+/** A pack's people, one row per person its kind holds (blank rows for names not given yet). */
+export function packPeople(p: { pack: PackCode; people?: StickPerson[] }): StickPerson[] {
+  return Array.from({ length: PACK_PEOPLE[p.pack] }, (_, k) => ({ name: p.people?.[k]?.name ?? '', who: p.people?.[k]?.who ?? '' }));
+}
+
+/** "John", "Kaye & Mark", "Thea, Gretch & Dana": the names on a pack, or `fallback` when none are given. */
+export function packNames(p: { pack: PackCode; people?: StickPerson[] }, fallback = ''): string {
+  const names = packPeople(p).map((x) => x.name.trim()).filter(Boolean);
+  if (!names.length) return fallback;
+  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+}
 
 /** "2 illustrated stickers + 6 mini stickers": what a pack is, in the customer's words. */
 export function packWhat(p: { pack: PackCode; singles: boolean }): string {
@@ -59,6 +73,21 @@ export interface StickPack {
   note: string;
   /** Add-ons for this pack, from the Add-on category: "Keychain", "Pin", "Extra reprint". */
   addOns?: string[];
+  /**
+   * Who's on it, one per person (1 for Solo, 2 for Couple, 3 to 5 for Barkada):
+   * the name drawn on the sticker, and how to find them in the reference photo
+   * ("left, glasses"). Missing on older orders: the order's name stands in.
+   */
+  people?: StickPerson[];
+  /** This pack's own reference photo from our booth, when its people aren't in the order's photo. */
+  photoId?: string;
+  photoUrl?: string;
+}
+
+export interface StickPerson {
+  name: string;
+  /** Where they are in the photo, or what they look like: "left, white shirt". */
+  who: string;
 }
 
 /** The Couple-of-Stickers details of an order, filled in at the register after they pay. */
@@ -190,6 +219,15 @@ export function designFileName(designNo: string, nickname: string): string {
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join('');
   return who ? `${designNo}-${who}` : designNo;
+}
+
+/**
+ * A pack's design file (and its own reference photo): "CS03-Kaye-Mark", after
+ * the names on it; "CS03-Kaye", after the order's name, when it has none.
+ */
+export function packFileName(p: Pick<StickPack, 'designNo' | 'pack' | 'people'>, nickname: string): string {
+  const names = packPeople(p).map((x) => designFileName('', x.name).replace(/^-/, '')).filter(Boolean);
+  return names.length ? [p.designNo, ...names].join('-') : designFileName(p.designNo, nickname);
 }
 
 /** The number on the claim stub: "07" from QA-07. */

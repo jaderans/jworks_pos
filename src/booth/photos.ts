@@ -4,7 +4,7 @@ import { getLocal, setLocal, type DeviceInfo } from '../db/local';
 import { getSetting } from '../db/settings';
 import { uid } from '../lib/ids';
 import { boothExpired, boothFileName, boothNumber } from '../domain/booth';
-import { orderPhotoName } from '../domain/stick';
+import { orderPhotoName, packFileName, packNames } from '../domain/stick';
 import { saveToDrive, DriveError } from '../drive/drive';
 import { blobToAttachment, isEmail } from '../email/send';
 import { boothPhotoEmail } from '../email/templates';
@@ -51,9 +51,15 @@ export async function deleteBoothPhoto(id: string): Promise<void> {
   await audit('delete', 'boothPhoto', id, `Booth photo ${p.number} deleted`);
 }
 
-/** The file name: a Couple-of-Stickers order's photo is named after its number and the name ("07-Leanna.jpg"). */
+/**
+ * The file name: a Couple-of-Stickers order's photo is named after its number
+ * and the name ("07-Leanna.jpg"); one pack's photo after its design file
+ * ("CS03-Kaye-Mark.jpg"), so the illustrator matches them up.
+ */
 export function photoFileName(p: Pick<BoothPhoto, 'number' | 'name' | 'blob' | 'usedFor'>): string {
-  if (p.usedFor?.kind === 'order') return `${orderPhotoName(p.usedFor.number, p.name)}.${p.blob.type === 'image/png' ? 'png' : 'jpg'}`;
+  const ext = p.blob.type === 'image/png' ? 'png' : 'jpg';
+  if (p.usedFor?.kind === 'order' && p.usedFor.file) return `${p.usedFor.file}.${ext}`;
+  if (p.usedFor?.kind === 'order') return `${orderPhotoName(p.usedFor.number, p.name)}.${ext}`;
   return boothFileName(p);
 }
 
@@ -67,7 +73,11 @@ export async function sendBoothPhotoToDrive(id: string): Promise<'saved' | 'wait
     await db.boothPhotos.update(id, { drive: { state: 'saved', url } });
     if (p.usedFor.kind === 'order') {
       const o = await db.orders.get(p.usedFor.id);
-      if (url && o?.stick && o.deleted !== 1) await patch(db.orders, o.id, { stick: { ...o.stick, photoUrl: url } });
+      const k = p.usedFor.pack;
+      if (url && o?.stick && o.deleted !== 1)
+        await patch(db.orders, o.id, {
+          stick: k !== undefined && o.stick.packs[k] ? { ...o.stick, packs: o.stick.packs.map((x, n) => (n === k ? { ...x, photoUrl: url } : x)) } : { ...o.stick, photoUrl: url },
+        });
       return 'saved';
     }
     const order = await db.printOrders.get(p.usedFor.id);
@@ -89,11 +99,22 @@ export async function attachBoothPhoto(id: string, order: Pick<PrintOrder, 'id' 
   return sendBoothPhotoToDrive(id);
 }
 
-/** The photo is for this Couple-of-Stickers order: it stays with it, named after it, and goes to Drive. */
-export async function attachPhotoToOrder(id: string, order: Pick<Order, 'id' | 'number'>): Promise<'saved' | 'waiting'> {
+/**
+ * The photo is for this Couple-of-Stickers order (all of it, or one pack when
+ * `pack` is given): it stays with it, named after it, and goes to Drive.
+ */
+export async function attachPhotoToOrder(id: string, order: Pick<Order, 'id' | 'number'>, pack?: number): Promise<'saved' | 'waiting'> {
   const p = await db.boothPhotos.get(id);
   const o = await db.orders.get(order.id);
   if (!p || !o?.stick) return 'waiting';
+  const one = pack !== undefined ? o.stick.packs[pack] : undefined;
+  if (one && pack !== undefined) {
+    const file = packFileName(one, o.stick.nickname);
+    await db.boothPhotos.update(id, { usedFor: { kind: 'order', id: order.id, number: order.number, pack, file }, name: p.name || packNames(one, o.stick.nickname) });
+    await patch(db.orders, o.id, { stick: { ...o.stick, photo: 'booth', packs: o.stick.packs.map((x, n) => (n === pack ? { ...x, photoId: id } : x)) } });
+    await audit('update', 'boothPhoto', id, `Booth photo ${p.number} used for Couple-of-Stickers ${order.number}, pack ${pack + 1}`);
+    return sendBoothPhotoToDrive(id);
+  }
   await db.boothPhotos.update(id, { usedFor: { kind: 'order', id: order.id, number: order.number }, name: p.name || o.stick.nickname });
   await patch(db.orders, o.id, { stick: { ...o.stick, photoId: id, photo: 'booth' } });
   await audit('update', 'boothPhoto', id, `Booth photo ${p.number} used for Couple-of-Stickers ${order.number}`);
