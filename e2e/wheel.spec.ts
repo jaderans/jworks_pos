@@ -1,9 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { SHOTS, createEvent, offScreen, openRegister, payCash, setEventPrice, setupOwner, tapProduct, skipStickDetails } from './helpers';
+import { SHOTS, createEvent, offScreen, openRegister, payCash, setEventPrice, setupOwner, tapProduct } from './helpers';
 
 async function sellAndOpenReceipt(page: Page) {
   await tapProduct(page, 'Couple Pack (live)', 2);
   await payCash(page);
+  // The packs' Couple-of-Stickers details open after paying: not what this test is about.
+  await page.getByRole('dialog', { name: /^Couple-of-Stickers for/ }).getByRole('button', { name: 'Later' }).click();
   return page.getByRole('dialog', { name: /^Sale [A-Z]-\d{4}/ });
 }
 
@@ -11,7 +13,6 @@ test('the prize wheel: set it up, spin on a qualifying sale, see it land on the 
   test.setTimeout(150_000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await skipStickDetails(page);
   await setupOwner(page, 'Joshua Ranin', '1111');
   await createEvent(page, 'Hilway November 2026');
   await setEventPrice(page, 'Couple Pack (live)', 240);
@@ -30,7 +31,16 @@ test('the prize wheel: set it up, spin on a qualifying sale, see it land on the 
   await prize.getByLabel('Most a day').fill('1');
   await expect(page.getByText(/Try again:\s*0%/)).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/wheel-setup.png`, fullPage: true });
+  // Same-size slices: easier to read, the chances unchanged.
+  await page.getByRole('group', { name: 'Slices' }).getByRole('button', { name: 'All the same size' }).click();
+  await expect(page.getByText(/The chances you set still decide where it stops/)).toBeVisible();
   await page.getByRole('button', { name: 'Save the wheel' }).click();
+  // Kept for other events.
+  const saved = page.getByRole('group', { name: 'Saved wheels' });
+  await saved.getByLabel('Save it as').fill('Hilway wheel');
+  await saved.getByRole('button', { name: 'Save for other events' }).click();
+  await expect(saved.locator('.list-item', { hasText: 'Hilway wheel' })).toContainText('same-size slices');
+  await expect(saved.getByRole('button', { name: 'Use here' })).toBeVisible();
   await expect(page.getByText('Prize wheel saved. Qualifying sales can spin now.')).toBeVisible();
 
   await openRegister(page);
@@ -67,6 +77,10 @@ test('the prize wheel: set it up, spin on a qualifying sale, see it land on the 
   await screen.screenshot({ path: `${SHOTS}/wheel-portrait.png` });
   await screen.setViewportSize({ width: 1920, height: 1080 });
   await expect(receipt.getByText('They won: Free Couple Pack')).toBeVisible({ timeout: 5_000 });
+  // A Couple-of-Stickers pack won is made like a bought one: its details open (the test closes them with Later).
+  await expect(page.getByRole('dialog', { name: /^Couple-of-Stickers for [A-Z]-0002/ })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole('dialog', { name: /^Couple-of-Stickers for [A-Z]-0002/ })).toContainText('Wheel prize (free)');
+  await page.getByRole('dialog', { name: /^Couple-of-Stickers for [A-Z]-0002/ }).getByRole('button', { name: 'Later' }).click();
   await expect(receipt.getByRole('button', { name: 'Let them spin' })).toHaveCount(0);
   await receipt.getByRole('button', { name: 'New sale' }).click();
 

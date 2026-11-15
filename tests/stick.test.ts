@@ -4,6 +4,7 @@ import { db } from '../src/db/db';
 import { ensureDevice } from '../src/db/local';
 import { setWriterDevice } from '../src/db/write';
 import { saveStickOrder, stickOrderFor } from '../src/services/stick';
+import { voidSale } from '../src/services/sales';
 import type { Sale } from '../src/db/types';
 import { DEFAULT_STICK, claimNo, designFileName, estimateReady, guessPack, isAddOnCategory, minisFor, nextDesignNos, nextStubNumber, orderPhotoName, packOf, readyText, stubSeq } from '../src/domain/stick';
 
@@ -105,6 +106,16 @@ describe('saving a Couple-of-Stickers order', () => {
     const again = await saveStickOrder({ sale, stick: { ...stick('Leanna R'), email: 'l@jw.ph' }, existing: o, eventId: 'e1', device });
     expect(again).toMatchObject({ id: o.id, number: '01', contact: 'l@jw.ph' });
     expect((await stickOrderFor('s1'))?.id).toBe(o.id);
+  });
+
+  it('voiding the sale takes its order off Orders', async () => {
+    const device = await ensureDevice();
+    await db.sales.put({ ...sale, eventId: 'e1', status: 'completed', deleted: 0 } as Sale);
+    const o = await saveStickOrder({ sale: { ...sale, eventId: 'e1' } as Sale, stick: stick('Leanna'), eventId: 'e1', device });
+    const r = await voidSale('s1', 'Test sale', null);
+    expect(r.ordersRemoved).toEqual([o.number]);
+    expect((await db.orders.get(o.id))?.deleted).toBe(1);
+    expect(await stickOrderFor('s1')).toBeUndefined();
   });
 });
 

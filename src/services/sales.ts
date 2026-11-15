@@ -1,5 +1,5 @@
 import { db, alive } from '../db/db';
-import { audit, build, create, patch } from '../db/write';
+import { audit, build, create, patch, remove } from '../db/write';
 import { nextReceiptSeq, type DeviceInfo } from '../db/local';
 import { receiptNumber, uid } from '../lib/ids';
 import { peso, type Cents } from '../lib/money';
@@ -155,7 +155,7 @@ export async function completeSale(input: CompleteSaleInput): Promise<Sale> {
 }
 
 /** Void a whole sale: it drops out of every total and its items go back to stock. */
-export async function voidSale(saleId: string, reason: string, by: string | null): Promise<void> {
+export async function voidSale(saleId: string, reason: string, by: string | null): Promise<{ ordersRemoved: string[] }> {
   // A print order's payment taken as this sale comes off the order, so its balance is due again.
   const voiding = await db.sales.get(saleId);
   if (voiding?.printOrderId && voiding.status === 'completed') {
@@ -176,6 +176,17 @@ export async function voidSale(saleId: string, reason: string, by: string | null
   });
   // A coupon the sale earned goes with it, unless it was already used.
   await voidEarnedCoupons(saleId);
+  // A Couple-of-Stickers order paid with this sale (or won with it) goes too: there's nothing left to make.
+  const ordersRemoved: string[] = [];
+  if (voiding) {
+    const sticks = alive(await db.orders.where('eventId').equals(voiding.eventId).toArray()).filter((o) => o.stick?.saleId === saleId);
+    for (const o of sticks) {
+      await remove(db.orders, o.id);
+      await audit('delete', 'order', o.id, `Couple-of-Stickers ${o.number} taken off Orders with ${voiding.receiptNo}`);
+      ordersRemoved.push(o.number);
+    }
+  }
+  return { ordersRemoved };
 }
 
 /** Fix a payment recorded under the wrong method (e.g. Cash that was really GCash). */

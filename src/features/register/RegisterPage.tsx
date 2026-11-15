@@ -143,7 +143,7 @@ function Register({ ev }: { ev: JWEvent }) {
   const [spinning, setSpinning] = useState(false);
   /** The wheel is up on the customer screen, waiting for the customer to tap it. */
   const [invite, setInvite] = useState<{ id: string; saleId: string; sound: DisplayWheel['sound'] } | null>(null);
-  const [, setLandedTick] = useState(0);
+  const [landedTick, setLandedTick] = useState(0);
   const displaySaved = useLocal<Partial<DisplaySettings>>('display', DEFAULT_DISPLAY);
   const displaySettings: DisplaySettings = { ...DEFAULT_DISPLAY, ...(displaySaved ?? {}) };
   const [findOpen, setFindOpen] = useState(false);
@@ -315,6 +315,9 @@ function Register({ ev }: { ev: JWEvent }) {
     const who = customer
       ? { name: customer.name, loyalty: loyalty && loyaltyRules.enabled ? (loyalty.rewards ? `${rewardText(loyaltyRules)} ready to use` : `${loyalty.balance} stamp${loyalty.balance === 1 ? '' : 's'} · ${loyalty.toNext} more for ${rewardText(loyaltyRules)}`) : null }
       : null;
+    if (receipt && stickView && spin && Date.now() > spin.landsAt) {
+      return { ...base, mode: 'order', cart: cartView, customer: who, pay: null, thanks: null, stick: stickView };
+    }
     if (receipt && spin) {
       return {
         ...base,
@@ -368,7 +371,7 @@ function Register({ ev }: { ev: JWEvent }) {
       return { ...base, mode: 'paying', cart: cartView, customer: who, pay: { amount: priced.total, method: picked.map((m) => m.name).join(' + ') || 'Cash', qr: withQr?.qr ?? null }, thanks: null };
     }
     return { ...base, mode: 'cart', cart: cartView, customer: who, pay: null, thanks: null };
-  }, [business, ev.id, ev.name, ev.wheel, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, spin, invite, stickView, customers, customerSales, earned, paying, payWith, eventMethods]);
+  }, [business, ev.id, ev.name, ev.wheel, session, priced, activeRules, customer, loyalty, loyaltyRules, receipt, spin, invite, stickView, landedTick, customers, customerSales, earned, paying, payWith, eventMethods]);
 
   /**
    * Spin for a sale: the customer tapped the wheel on their screen, or the
@@ -388,6 +391,9 @@ function Register({ ev }: { ev: JWEvent }) {
       setSpin({ ...s, id: inviteRef.current?.id ?? uid(), sound, landsAt: Date.now() + SPIN_MS });
       setInvite(null);
       window.setTimeout(() => setLandedTick((n) => n + 1), SPIN_MS + 200);
+      // A Couple-of-Stickers pack won on the wheel is made like a bought one: its details open once it has landed.
+      const won = s.prizeSale;
+      if (won && hasPacks(won)) window.setTimeout(() => setStickFor(won), SPIN_MS + 1200);
       if (sound === 'register') {
         const c = await wheelSoundChoice(displaySettings);
         if (c) {

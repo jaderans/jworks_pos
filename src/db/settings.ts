@@ -3,6 +3,7 @@ import { save } from './write';
 import { toCents } from '../lib/money';
 import { DEFAULT_PRINT_RATES } from '../domain/print';
 import { DEFAULT_STICK } from '../domain/stick';
+import type { SavedWheel } from '../domain/wheel';
 import type { BusinessSettings, CalcSettings, LoyaltySettings, SecuritySettings, SettingRow } from './types';
 
 /** Settings shared by every device (they sync). */
@@ -59,9 +60,10 @@ const DEFAULTS: Record<string, unknown> = {
   loyalty: DEFAULT_LOYALTY,
   printRates: DEFAULT_PRINT_RATES,
   stick: DEFAULT_STICK,
+  wheels: { list: [] as SavedWheel[] },
 };
 
-export type SettingKey = 'business' | 'security' | 'calc' | 'loyalty' | 'printRates' | 'stick';
+export type SettingKey = 'business' | 'security' | 'calc' | 'loyalty' | 'printRates' | 'stick' | 'wheels';
 
 export async function getSetting<T>(key: SettingKey): Promise<T> {
   const row = await db.settings.get(key);

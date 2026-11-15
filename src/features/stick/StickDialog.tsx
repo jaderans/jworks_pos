@@ -96,7 +96,7 @@ export function StickDialog({
   // When they paid: the estimate holds still while the details are filled in.
   const [now] = useState(() => Date.now());
   const est = existing?.stick ? { from: existing.stick.readyFrom, to: existing.stick.readyTo, ahead: ahead.length } : estimateReady(packs ?? [], ahead.map((o) => ({ packs: o.stick!.packs, started: o.status === 'in-progress' })), settings, now);
-  const paidWith = sale.payments.map((p) => (p.ref ? `${p.name} (ref ${p.ref})` : p.name)).join(' + ') || 'Free';
+  const paidWith = sale.prizeFor ? 'Wheel prize (free)' : sale.payments.map((p) => (p.ref ? `${p.name} (ref ${p.ref})` : p.name)).join(' + ') || 'Free';
 
   // Keep the customer screen showing what's being filled in.
   // Their photo from our booth, when this laptop has it.

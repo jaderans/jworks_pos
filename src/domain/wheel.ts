@@ -33,9 +33,19 @@ export interface WheelConfig {
   /** Or at least this many items, of one category or any. null: no item rule. */
   minItems: { count: number; categoryId: string | null } | null;
   prizes: WheelPrize[];
+  /** How the slices are drawn: as wide as their chance (the real odds), or all the same size (easier to read). The chances are the same either way. */
+  look?: 'chance' | 'equal';
 }
 
 export const BLANK_WHEEL: WheelConfig = { on: false, minSpend: 25000, minItems: { count: 15, categoryId: null }, prizes: [] };
+
+/** A wheel saved to use again at another event (Settings, shared by every device). */
+export interface SavedWheel {
+  id: string;
+  name: string;
+  wheel: Omit<WheelConfig, 'on'>;
+  savedAt: number;
+}
 
 /** What a spin landed on, kept on the sale that spun. */
 export interface WheelResult {
@@ -125,11 +135,21 @@ export interface WheelSlice {
 }
 
 /** The wheel as drawn: each slice as wide as its chance, so what you see is what you get. */
-export function wheelSlices(c: Pick<WheelConfig, 'prizes'>): WheelSlice[] {
+export function wheelSlices(c: Pick<WheelConfig, 'prizes' | 'look'>): WheelSlice[] {
+  const prizes = c.prizes.filter((p) => p.chance > 0);
+  const total = prizes.reduce((a, p) => a + p.chance, 0);
+  const tryAgain = total < 99.999;
+  // All the same size: easier to read. Where it stops still follows the chances (see landingTurn).
+  if (c.look === 'equal') {
+    const n = prizes.length + (tryAgain ? 1 : 0);
+    const w = 360 / Math.max(1, n);
+    const out: WheelSlice[] = prizes.map((p, i) => ({ id: p.id, label: p.label, from: i * w, to: (i + 1) * w }));
+    if (tryAgain) out.push({ id: null, label: TRY_AGAIN, from: prizes.length * w, to: 360 });
+    return out;
+  }
   const out: WheelSlice[] = [];
   let at = 0;
-  for (const p of c.prizes) {
-    if (!(p.chance > 0)) continue;
+  for (const p of prizes) {
     out.push({ id: p.id, label: p.label, from: at, to: at + p.chance * 3.6 });
     at += p.chance * 3.6;
   }

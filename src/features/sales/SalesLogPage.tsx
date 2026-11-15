@@ -346,8 +346,8 @@ function SaleDialog({ sale, onClose, onReceipt, cashierName, note }: { sale: Sal
       return;
     }
     if (!(await app.askOwner(`Void ${sale.receiptNo}`))) return;
-    await voidSale(sale.id, reason, app.member?.id ?? null);
-    app.toast(`${sale.receiptNo} voided. Its items are back in stock.`, { tone: 'good' });
+    const { ordersRemoved } = await voidSale(sale.id, reason, app.member?.id ?? null);
+    app.toast(`${sale.receiptNo} voided. Its items are back in stock${ordersRemoved.length ? `, and Couple-of-Stickers ${ordersRemoved.join(', ')} is off Orders` : ''}.`, { tone: 'good' });
     onClose();
   };
 

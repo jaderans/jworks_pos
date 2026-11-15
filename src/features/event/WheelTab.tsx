@@ -8,7 +8,8 @@ import { Badge, Button, Callout, IconButton, Segmented, Toggle } from '../../com
 import { Field, MoneyInput, NumberInput, Select, TextInput } from '../../components/form';
 import { uid } from '../../lib/ids';
 import { updateEvent } from '../../services/events';
-import { BLANK_WHEEL, tryAgainChance, wheelProblem, wheelRuleText, wheelSlices, winsToday, type WheelConfig, type WheelPrize } from '../../domain/wheel';
+import { BLANK_WHEEL, tryAgainChance, wheelProblem, wheelRuleText, wheelSlices, winsToday, type SavedWheel, type WheelConfig, type WheelPrize } from '../../domain/wheel';
+import { setSetting } from '../../db/settings';
 import { WheelSvg } from '../display/WheelSvg';
 import type { JWEvent, PrintRates } from '../../db/types';
 
@@ -23,7 +24,29 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
   const products = useProducts();
   const categories = useCategories();
   const sales = useSales(ev.id);
-  const rates = settingValue<PrintRates>(useSettingRows(), 'printRates');
+  const settingRows = useSettingRows();
+  const rates = settingValue<PrintRates>(settingRows, 'printRates');
+  const saved = settingValue<{ list: SavedWheel[] }>(settingRows, 'wheels').list ?? [];
+  const [saveName, setSaveName] = useState('');
+  /** Keep this wheel to use at other events; the same name is replaced. */
+  const keep = async () => {
+    const name = saveName.trim() || ev.name;
+    const { on: _on, ...wheel } = w;
+    const old = saved.find((x) => x.name.toLowerCase() === name.toLowerCase());
+    const entry: SavedWheel = { id: old?.id ?? uid(), name, wheel, savedAt: Date.now() };
+    await setSetting('wheels', { list: [entry, ...saved.filter((x) => x.id !== entry.id)] });
+    setSaveName('');
+    app.toast(`“${name}” saved. Use it at any event from here.`, { tone: 'good' });
+  };
+  const useSaved = async (x: SavedWheel) => {
+    if (dirty && !(await app.confirm({ title: `Use “${x.name}”?`, message: 'The prizes and rules here are replaced by the saved wheel’s. Save the wheel after to keep it at this event.', confirmLabel: 'Use it' }))) return;
+    setW({ ...x.wheel, on: w.on });
+    app.toast(`“${x.name}” loaded. Check it, then Save the wheel.`, { tone: 'good' });
+  };
+  const forget = async (x: SavedWheel) => {
+    if (!(await app.confirm({ title: `Delete “${x.name}”?`, message: 'It comes off the saved wheels. Events already using it keep their wheel.', confirmLabel: 'Delete', tone: 'danger' }))) return;
+    await setSetting('wheels', { list: saved.filter((y) => y.id !== x.id) });
+  };
   // Services from the rate card to pick from; any other can be typed.
   const services = rates.illustration.tiers.map((t) => ({ label: `Sticker illustration, ${t.name.toLowerCase()} (1 design)`, value: t.price }));
   const [w, setW] = useState<WheelConfig>(ev.wheel ?? BLANK_WHEEL);
@@ -204,8 +227,57 @@ export default function WheelTab({ ev }: { ev: JWEvent }) {
         </div>
         <div className="card stack wheel-preview">
           <h3>How it looks</h3>
+          <Segmented<'chance' | 'equal'>
+            label="Slices"
+            value={w.look ?? 'chance'}
+            onChange={(look) => setW({ ...w, look })}
+            options={[
+              { value: 'chance', label: 'As wide as their chance' },
+              { value: 'equal', label: 'All the same size' },
+            ]}
+            full
+          />
           <WheelSvg slices={slices} className="wheel-svg" />
-          <p className="muted small">Each slice is as wide as its chance, so the wheel shows the real odds.</p>
+          <p className="muted small">
+            {w.look === 'equal'
+              ? 'Every slice the same size, so the names are easy to read. The chances you set still decide where it stops.'
+              : 'Each slice is as wide as its chance, so the wheel shows the real odds.'}
+          </p>
+        </div>
+        <div className="card stack" role="group" aria-label="Saved wheels">
+          <h3>Saved wheels</h3>
+          <p className="muted small">Keep this wheel (its prizes, chances, rules and look) to use again at another event.</p>
+          <div className="row wrap" style={{ alignItems: 'flex-end' }}>
+            <Field label="Save it as" htmlFor="wh-save-name" className="grow">
+              <TextInput id="wh-save-name" value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder={ev.name} />
+            </Field>
+            <Button onClick={() => void keep()} disabled={!w.prizes.length}>
+              Save for other events
+            </Button>
+          </div>
+          {saved.length ? (
+            <div className="list">
+              {saved.map((x) => (
+                <div key={x.id} className="list-item">
+                  <span className="main-text">
+                    <b>{x.name}</b>
+                    <span>
+                      {x.wheel.prizes.length} prize{x.wheel.prizes.length === 1 ? '' : 's'}
+                      {x.wheel.look === 'equal' ? ' · same-size slices' : ''}
+                    </span>
+                  </span>
+                  <Button size="sm" onClick={() => void useSaved(x)}>
+                    Use here
+                  </Button>
+                  <IconButton label={`Delete ${x.name}`} size="sm" plain onClick={() => void forget(x)}>
+                    <Trash2 size={15} />
+                  </IconButton>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted small">No saved wheels yet.</p>
+          )}
         </div>
       </div>
     </div>

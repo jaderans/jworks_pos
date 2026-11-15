@@ -30,3 +30,19 @@ describe('the wheel spin', () => {
     expect(spinAngle(1) - spinAngle(0.8)).toBeLessThan(0.002);
   });
 });
+
+describe('same-size slices', () => {
+  const equal = { ...cfg, look: 'equal' as const };
+  it('draws every slice the same size, Try again included', () => {
+    const slices = wheelSlices(equal);
+    expect(slices).toHaveLength(5);
+    for (const s of slices) expect(s.to - s.from).toBeCloseTo(72);
+  });
+
+  it('still stops on the prize the chances drew', () => {
+    const slices = wheelSlices(equal);
+    for (const id of ['solo', 'five', 'off', 'couple', null]) {
+      for (const r of [0, 0.5, 0.999]) expect(slices[sliceUnderPointer(slices, landingTurn(slices, id, r))].id, `${id} at ${r}`).toBe(id);
+    }
+  });
+});

@@ -171,5 +171,18 @@ test('Couple-of-Stickers: paid by GCash with a keychain add-on, checked on the c
   await expect(page.locator('tbody tr')).toHaveCount(1);
   await page.goto('/#/settings?section=stick');
   await expect(page.locator('#s-stick').getByRole('group', { name: 'Stub numbers' })).toContainText('the next stub is 02');
+
+  // Voided in the Sales log: its Couple-of-Stickers order comes off Orders, and the stubs start at 01 again.
+  await page.goto('/#/sales');
+  await page.locator('tbody tr').first().click();
+  const sale = page.getByRole('dialog', { name: /^Sale [A-Z]-0001/ });
+  await sale.getByRole('button', { name: 'Void sale' }).click();
+  await sale.getByLabel('Why is it voided?').fill('A test order');
+  await sale.getByRole('button', { name: /^Void ₱/ }).click();
+  await expect(page.getByText(/Couple-of-Stickers 01 is off Orders/)).toBeVisible();
+  await page.goto('/#/orders');
+  await expect(page.getByRole('article', { name: /Order 01/ })).toHaveCount(0);
+  await page.goto('/#/settings?section=stick');
+  await expect(page.locator('#s-stick').getByRole('group', { name: 'Stub numbers' })).toContainText('the next stub is 01');
   expect(errors).toEqual([]);
 });
