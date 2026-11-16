@@ -1,6 +1,6 @@
 import { roundUpTo, sum, toCents, type Cents } from '../lib/money';
 import { addDays } from '../lib/time';
-import type { IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../db/types';
+import type { CutArea, IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus, StickerPreset } from '../db/types';
 
 /**
  * The sticker printing service: prices from the rate card (per A4 sheet,
@@ -12,6 +12,7 @@ const P = toCents;
 
 /** JoshWorks Sticker Printing · Rates 2026. */
 export const DEFAULT_PRINT_RATES: PrintRates = {
+  ratesVersion: 2,
   materials: [
     { key: 'std-matte-glossy', group: 'Standard', name: 'Matte or Glossy', price: P(60), cost: null },
     { key: 'prem-matte-glossy', group: 'Premium', name: 'Matte or Glossy', price: P(80), cost: null },
@@ -44,19 +45,23 @@ export const DEFAULT_PRINT_RATES: PrintRates = {
     { key: 'full', name: 'Full pack: header + backing + sleeve', small: P(17), medium: P(19), large: P(23) },
     { key: 'full-lam', name: 'Full pack, laminated card', small: P(20), medium: P(23), large: P(27) },
   ],
+  // The rate sheet's size guide. Its inch column had two typos ("2 × 1.5" and "2.5 × 3"); the cm column and the
+  // counts are for 2 × 2.5 in and 2 × 3 in. Counts are worked out from the cut area, never typed.
   stickerSizes: [
-    { name: '1 × 1 in', perA4: 54 },
-    { name: '1.5 × 1.5 in', perA4: 24 },
-    { name: '2 × 2 in', perA4: 15 },
-    { name: '2.5 × 2.5 in', perA4: 8 },
-    { name: '3 × 3 in', perA4: 6 },
-    { name: '3.5 × 3.5 in', perA4: 4 },
-    { name: '4 × 4 in', perA4: 2 },
-    { name: '2 × 1.5 in', perA4: 12 },
-    { name: '2.5 × 3 in', perA4: 10 },
-    { name: '3 × 4 in', perA4: 4 },
-    { name: '1 × 3 in strip', perA4: 18 },
+    { name: '1 × 1 in', w: 1, h: 1 },
+    { name: '1.5 × 1.5 in', w: 1.5, h: 1.5 },
+    { name: '2 × 2 in', w: 2, h: 2 },
+    { name: '2.5 × 2.5 in', w: 2.5, h: 2.5 },
+    { name: '3 × 3 in', w: 3, h: 3 },
+    { name: '3.5 × 3.5 in', w: 3.5, h: 3.5 },
+    { name: '4 × 4 in', w: 4, h: 4 },
+    { name: '2 × 2.5 in', w: 2, h: 2.5 },
+    { name: '2 × 3 in', w: 2, h: 3 },
+    { name: '3 × 4 in', w: 3, h: 4 },
+    { name: '1 × 3 in strip', w: 1, h: 3 },
   ],
+  // Cricut Print Then Cut on A4: its largest design is 7.2 × 10.62 in, inside the registration marks.
+  cutArea: { w: 7.2, h: 10.62, gapMm: 3 },
   minSheets: 3,
   minPacks: 20,
   leadDays: { min: 4, max: 7 },
@@ -70,20 +75,113 @@ export const DEFAULT_PRINT_RATES: PrintRates = {
         key: 'simple',
         name: 'Small / simple',
         note: 'One subject, flat colours, light shading, little or no lettering. Mascots, icons and small doodles.',
-        price: P(100),
-        sets: [{ designs: 2, price: P(180) }, { designs: 5, price: P(450) }, { designs: 10, price: P(850) }],
+        price: P(130),
+        // Each set saves ₱20, ₱50 and ₱150 off ₱130 a design.
+        sets: [{ designs: 2, price: P(240) }, { designs: 5, price: P(600) }, { designs: 10, price: P(1150) }],
       },
       {
         key: 'detailed',
         name: 'Detailed',
         note: 'Full illustration with shading, texture, props, hand lettering or a character in a scene. Portraits and pet stickers.',
-        price: P(220),
-        // Each set saves what the rate sheet says (₱50, ₱150, ₱500) off ₱220 a design.
-        sets: [{ designs: 2, price: P(390) }, { designs: 5, price: P(950) }, { designs: 10, price: P(1700) }],
+        price: P(250),
+        // Each set saves what the rate sheet says (₱50, ₱150, ₱500) off ₱250 a design.
+        sets: [{ designs: 2, price: P(450) }, { designs: 5, price: P(1100) }, { designs: 10, price: P(2000) }],
       },
     ],
   },
 };
+
+/** November 2026 illustration prices: [tier, designs (1 = one design), old price, new price]. */
+const ILLUSTRATION_CHANGES: [string, number, number, number][] = [
+  ['simple', 1, 100, 130], ['simple', 2, 180, 240], ['simple', 5, 450, 600], ['simple', 10, 850, 1150],
+  ['detailed', 1, 220, 250], ['detailed', 2, 390, 450], ['detailed', 5, 950, 1100], ['detailed', 10, 1700, 2000],
+];
+/** The size guide before sizes had inches: the rate sheet's list, typos and all. */
+const OLD_SIZE_NAMES = ['1 × 1 in', '1.5 × 1.5 in', '2 × 2 in', '2.5 × 2.5 in', '3 × 3 in', '3.5 × 3.5 in', '4 × 4 in', '2 × 1.5 in', '2.5 × 3 in', '3 × 4 in', '1 × 3 in strip'];
+
+/** "2 × 1.5 in", "2x3", "1 × 3 in strip" → inches; null when it isn't a size. */
+export function parseSize(text: string): { w: number; h: number } | null {
+  const m = /(\d+(?:\.\d+)?)\s*[×x*]\s*(\d+(?:\.\d+)?)/i.exec(text);
+  if (!m) return null;
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  return w > 0 && h > 0 ? { w, h } : null;
+}
+
+/**
+ * A rate card saved before version 2: sizes get inches (the untouched rate-sheet
+ * list becomes the corrected one), the cut area is added, and illustration
+ * prices still at the old rate take the new ones. Prices the owner changed stay.
+ */
+export function upgradePrintRates<T extends Partial<PrintRates>>(stored: T): T {
+  if (!stored || typeof stored !== 'object' || (stored.ratesVersion ?? 1) >= 2) return stored;
+  const out: Partial<PrintRates> = { ...stored, ratesVersion: 2, cutArea: stored.cutArea ?? DEFAULT_PRINT_RATES.cutArea };
+  const sizes = stored.stickerSizes as ({ name: string } & Partial<StickerPreset>)[] | undefined;
+  if (Array.isArray(sizes)) {
+    const untouched = sizes.length === OLD_SIZE_NAMES.length && sizes.every((s, i) => s?.name === OLD_SIZE_NAMES[i]);
+    out.stickerSizes = untouched
+      ? DEFAULT_PRINT_RATES.stickerSizes
+      : sizes.flatMap((s) => {
+          const wh = s.w && s.h ? { w: s.w, h: s.h } : parseSize(s.name ?? '');
+          return wh ? [{ name: s.name, ...wh }] : [];
+        });
+  }
+  const tiers = stored.illustration?.tiers;
+  if (Array.isArray(tiers)) {
+    const was = (key: string, designs: number, price: Cents) => {
+      const c = ILLUSTRATION_CHANGES.find(([k, d, from]) => k === key && d === designs && P(from) === price);
+      return c ? P(c[3]) : price;
+    };
+    out.illustration = {
+      ...stored.illustration!,
+      tiers: tiers.map((t) => ({ ...t, price: was(t.key, 1, t.price), sets: (t.sets ?? []).map((s) => ({ ...s, price: was(t.key, s.designs, s.price) })) })),
+    };
+  }
+  return out as T;
+}
+
+const MM_PER_IN = 25.4;
+
+export interface StickerFit {
+  /** Stickers on one sheet. */
+  perA4: number;
+  /** How they're laid out: across × down, and whether the sticker is turned sideways to fit more. */
+  across: number;
+  down: number;
+  rotated: boolean;
+}
+
+/**
+ * How many stickers of w × h inches fit in the cut area, trying the sticker both
+ * ways round (the STICKER JOB tab's formula): ⌊(area + gap) ÷ (size + gap)⌋ each way.
+ */
+export function stickerFit(area: CutArea, w: number, h: number): StickerFit {
+  const none = { perA4: 0, across: 0, down: 0, rotated: false };
+  if (!(w > 0) || !(h > 0) || !(area?.w > 0) || !(area?.h > 0)) return none;
+  const g = Math.max(0, area.gapMm || 0);
+  const count = (len: number, size: number) => Math.max(0, Math.floor((len * MM_PER_IN + g) / (size * MM_PER_IN + g) + 1e-9));
+  const upright = { across: count(area.w, w), down: count(area.h, h), rotated: false };
+  const sideways = { across: count(area.w, h), down: count(area.h, w), rotated: true };
+  const best = sideways.across * sideways.down > upright.across * upright.down ? sideways : upright;
+  return { ...best, perA4: best.across * best.down };
+}
+
+/** Stickers of this size on one sheet of this rate card. */
+export const perSheet = (r: Pick<PrintRates, 'cutArea'>, w: number, h: number) => stickerFit(r.cutArea ?? DEFAULT_PRINT_RATES.cutArea, w, h).perA4;
+
+/** 2.25 → "2.25", 2 → "2" */
+const inches = (n: number) => String(Math.round(n * 100) / 100);
+export const sizeName = (w: number, h: number) => `${inches(w)} × ${inches(h)} in`;
+
+/** Sheets for this many stickers, and the spares those sheets make. */
+export function sheetsForStickers(stickers: number, fit: number): { sheets: number; made: number; spare: number } {
+  if (!(fit > 0) || !(stickers > 0)) return { sheets: 0, made: 0, spare: 0 };
+  const sheets = Math.ceil(stickers / fit);
+  return { sheets, made: sheets * fit, spare: sheets * fit - stickers };
+}
+
+/** The sticker size on a sheets line: a size-guide name, or the customer's own inches. */
+export type SheetSize = string | { w: number; h: number; name?: string };
 
 export const PACK_SIZE_LABEL: Record<PackSize, string> = { small: 'Small (3.5 × 5 | 2.5 × 7 in)', medium: 'Medium (4 × 6 in)', large: 'Large (5 × 7 in)' };
 
@@ -99,21 +197,41 @@ export const isOpenPrint = (o: Pick<PrintOrder, 'status'>) => o.status !== 'done
 
 const materialName = (m: PrintRates['materials'][number]) => `${m.group} ${m.name}`;
 
-/** A4 sheets of one material and cut; the size (optional) shows how many stickers that is. */
-export function sheetsLine(r: PrintRates, materialKey: string, cutKey: string, sheets: number, size?: string): PrintLine {
+/** A size-guide name or the customer's own inches, as a named size; undefined when there's none. */
+function resolveSize(r: PrintRates, size: SheetSize | undefined): StickerPreset | undefined {
+  if (!size) return undefined;
+  if (typeof size === 'string') {
+    const preset = r.stickerSizes.find((s) => s.name === size);
+    if (preset) return preset;
+    const wh = parseSize(size);
+    return wh ? { name: sizeName(wh.w, wh.h), ...wh } : undefined;
+  }
+  return size.w > 0 && size.h > 0 ? { name: size.name || sizeName(size.w, size.h), w: size.w, h: size.h } : undefined;
+}
+
+/**
+ * A4 sheets of one material and cut. With a sticker size it says about how many
+ * stickers that is; with a sticker count the sheets are worked out from it.
+ */
+export function sheetsLine(r: PrintRates, materialKey: string, cutKey: string, sheets: number, size?: SheetSize, stickers?: number): PrintLine {
   const m = r.materials.find((x) => x.key === materialKey) ?? r.materials[0];
   const c = r.cuts.find((x) => x.key === cutKey) ?? r.cuts[0];
-  const fit = size ? r.stickerSizes.find((s) => s.name === size) : undefined;
+  const s = resolveSize(r, size);
+  const fit = s ? perSheet(r, s.w, s.h) : 0;
+  const byCount = s && fit > 0 && stickers && stickers > 0 ? sheetsForStickers(stickers, fit) : null;
+  const n = byCount ? byCount.sheets : sheets;
+  const about = s ? (byCount ? ` · ${s.name}: ${stickers} stickers, ${byCount.made} fit on ${n} sheet${n === 1 ? '' : 's'}` : fit > 0 ? ` · ${s.name}, about ${fit * n} stickers` : ` · ${s.name}, too big for one sheet`) : '';
   return {
     kind: 'sheets',
-    label: `${materialName(m)}, ${c.name.toLowerCase()}${fit ? ` · ${fit.name}, about ${fit.perA4 * sheets} stickers` : ''}`,
-    qty: sheets,
+    label: `${materialName(m)}, ${c.name.toLowerCase()}${about}`,
+    qty: n,
     unitPrice: m.price + c.price,
     unitCost: m.cost,
-    a4: sheets,
+    a4: n,
     material: m.key,
     cut: c.key,
-    size: fit?.name,
+    ...(s ? { size: s.name, w: s.w, h: s.h } : {}),
+    ...(byCount ? { stickers } : {}),
   };
 }
 

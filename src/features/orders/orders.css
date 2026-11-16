@@ -26,3 +26,10 @@
 .po-photo-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: inherit; font: inherit; cursor: pointer; justify-self: start; }
 .po-photo-chip:hover { border-color: var(--teal); }
 .po-photo-thumb { width: 28px; height: 28px; object-fit: cover; border-radius: 50%; background: #172022; }
+
+/* Sticker sheets: how the stickers fit on one A4 inside the Cricut cut area. */
+.sheet-fit { display: flex; gap: 14px; align-items: center; padding: 10px; border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--sunk); }
+.sheet-fit .warn { color: var(--warn); }
+.sheet-preview { flex: none; display: block; }
+@media (max-width: 420px) { .sheet-fit { flex-direction: column; align-items: flex-start; } }
+.size-wh { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }

@@ -1,7 +1,7 @@
 import { db } from './db';
 import { save } from './write';
 import { toCents } from '../lib/money';
-import { DEFAULT_PRINT_RATES } from '../domain/print';
+import { DEFAULT_PRINT_RATES, upgradePrintRates } from '../domain/print';
 import { DEFAULT_STICK } from '../domain/stick';
 import type { SavedWheel } from '../domain/wheel';
 import type { BusinessSettings, CalcSettings, LoyaltySettings, SecuritySettings, SettingRow } from './types';
@@ -65,11 +65,17 @@ const DEFAULTS: Record<string, unknown> = {
 
 export type SettingKey = 'business' | 'security' | 'calc' | 'loyalty' | 'printRates' | 'stick' | 'wheels';
 
+/** Saved values from older versions, brought up to date as they're read (the stored row changes only when it's saved again). */
+const UPGRADES: Partial<Record<SettingKey, (stored: never) => unknown>> = {
+  printRates: upgradePrintRates,
+};
+const stored = (key: SettingKey, value: unknown): object => (UPGRADES[key] ? (UPGRADES[key]!(value as never) as object) : (value as object));
+
 export async function getSetting<T>(key: SettingKey): Promise<T> {
   const row = await db.settings.get(key);
   const fallback = DEFAULTS[key] as T;
   if (!row || row.deleted === 1) return fallback;
-  return { ...(fallback as object), ...(row.value as object) } as T;
+  return { ...(fallback as object), ...stored(key, row.value) } as T;
 }
 
 export async function setSetting(key: SettingKey, value: unknown): Promise<void> {
@@ -84,5 +90,5 @@ export async function setSetting(key: SettingKey, value: unknown): Promise<void>
 export function settingValue<T>(rows: readonly SettingRow[] | undefined, key: SettingKey): T {
   const row = rows?.find((r) => r.id === key && r.deleted !== 1);
   const fallback = DEFAULTS[key] as T;
-  return row ? ({ ...(fallback as object), ...(row.value as object) } as T) : fallback;
+  return row ? ({ ...(fallback as object), ...stored(key, row.value) } as T) : fallback;
 }

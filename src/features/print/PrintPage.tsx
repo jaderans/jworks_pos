@@ -13,7 +13,7 @@ import { peso, sum, type Cents } from '../../lib/money';
 import { fmtDateTime, fmtIsoDate } from '../../lib/time';
 import { safeFileName } from '../../lib/files';
 import {
-  DEFAULT_PRINT_RATES, PACK_SIZE_LABEL, PRINT_STATUS_LABEL, customLine, illustrationLine, illustrationPrice, isOpenPrint, lineTotal, packLine, peelLine, printTotals, printWarnings, sheetsLine,
+  DEFAULT_PRINT_RATES, PACK_SIZE_LABEL, PRINT_STATUS_LABEL, customLine, illustrationLine, illustrationPrice, isOpenPrint, lineTotal, packLine, peelLine, perSheet, printTotals, printWarnings, sheetsLine, sizeName,
 } from '../../domain/print';
 import {
   approvePrint, blankDelivery, cancelPrint, createPrintOrder, deletePrintOrder, markProofSent, printDeleteBlock, setPrintStatus, takePrintPayment, updatePrintOrder, type NewPrintOrder,
@@ -25,7 +25,8 @@ import { PhotoImg } from '../../booth/PhotoImg';
 import { attachBoothPhoto } from '../../booth/photos';
 import { CouponField, appliedFrom, useCouponCheck } from '../coupons/CouponField';
 import { claimId } from '../../domain/coupons';
-import type { BoothPhoto, BusinessSettings, Customer, IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../../db/types';
+import type { BoothPhoto, BusinessSettings, CutArea, Customer, IllustrationTier, PackSize, PrintLine, PrintOrder, PrintRates, PrintStatus } from '../../db/types';
+import { StickerSizeFields, blankSizePick, pickedSize, type SizePick } from './StickerSize';
 import '../orders/orders.css';
 
 const COLUMNS: { status: PrintStatus; hint: string }[] = [
@@ -283,6 +284,7 @@ function PrintCard(p: {
       <div className="row wrap" style={{ gap: 6 }}>
         {o.status === 'quote' ? <Badge tone={o.approvedAt ? 'good' : o.proofAt ? 'teal' : undefined}>{o.approvedAt ? 'Approved' : o.proofAt ? 'Proof sent' : 'Quote'}</Badge> : null}
         {o.dueDate ? <Badge tone={late ? 'warn' : undefined}>Ready by {fmtIsoDate(o.dueDate)}</Badge> : null}
+        {o.eventName ? <Badge>{o.eventName}</Badge> : null}
         {o.delivery.method === 'courier' ? <Badge>Courier{o.delivery.courier ? `: ${o.delivery.courier}` : ''}</Badge> : null}
         {p.printer ? <Badge tone="teal">{p.printer}</Badge> : null}
         {o.coupon ? <Badge tone="yellow">Coupon {o.coupon.code}</Badge> : null}
@@ -376,7 +378,7 @@ function PrintOrderDialog({
   const [kind, setKind] = useState<LineKind>('sheets');
   const [material, setMaterial] = useState(rates.materials[1]?.key ?? rates.materials[0]?.key ?? '');
   const [cut, setCut] = useState('kiss');
-  const [size, setSize] = useState('');
+  const [sizePick, setSizePick] = useState<SizePick>(blankSizePick());
   const [sheets, setSheets] = useState<number | null>(rates.minSheets);
   const [peelSize, setPeelSize] = useState(rates.peelSizes[0]?.key ?? '');
   const [peelCount, setPeelCount] = useState<number | null>(20);
@@ -410,7 +412,7 @@ function PrintOrderDialog({
     // Each time it opens, the line builder starts over on sticker sheets.
     setKind('sheets');
     setCut('kiss');
-    setSize('');
+    setSizePick(blankSizePick());
     setSheets(rates.minSheets);
     setPeelCount(20);
     setPacks(rates.minPacks);
@@ -436,8 +438,8 @@ function PrintOrderDialog({
   const t = printTotals(draft, rates.downPct);
   const warnings = printWarnings({ lines }, rates);
   const preview: PrintLine | null =
-    kind === 'sheets' && sheets
-      ? sheetsLine(rates, material, cut, sheets, size || undefined)
+    kind === 'sheets' && (sizePick.by === 'stickers' && pickedSize(rates, sizePick) ? (sizePick.stickers ?? 0) > 0 : !!sheets)
+      ? sheetsLine(rates, material, cut, sheets ?? 0, pickedSize(rates, sizePick) ?? undefined, sizePick.by === 'stickers' ? (sizePick.stickers ?? 0) : undefined)
       : kind === 'peel' && peelCount
         ? peelLine(rates, material, peelSize, peelCount)
         : kind === 'pack' && packs
@@ -454,7 +456,7 @@ function PrintOrderDialog({
   const save = async () => {
     setError('');
     setBusy(true);
-    const o: NewPrintOrder = { customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact: customer ? customer.phone || customer.email || contact : contact, lines, delivery, printerId: printerId || null, illustratorId: illustratorId || null, files, notes, couponCode, designNo };
+    const o: NewPrintOrder = { ...(isNew ? { eventId: app.activeEventId, eventName: app.activeEvent?.name ?? '' } : {}), customerId: customer?.id ?? null, customerName: customer?.name ?? customerName, contact: customer ? customer.phone || customer.email || contact : contact, lines, delivery, printerId: printerId || null, illustratorId: illustratorId || null, files, notes, couponCode, designNo };
     try {
       if (isNew) {
         const created = await createPrintOrder({ ...o, boothPhotoId: fromPhoto?.photo.id }, app.device);
@@ -592,19 +594,7 @@ function PrintOrderDialog({
                           ))}
                       </Select>
                     </Field>
-                    <Field label="Sticker size (optional)" htmlFor="po-size" hint="Shows about how many fit.">
-                      <Select id="po-size" value={size} onChange={(e) => setSize(e.target.value)}>
-                        <option value="">Mixed designs</option>
-                        {rates.stickerSizes.map((s) => (
-                          <option key={s.name} value={s.name}>
-                            {s.name} · {s.perA4} per sheet
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
-                    <Field label="A4 sheets" htmlFor="po-sheets">
-                      <NumberInput id="po-sheets" decimals={false} min={1} value={sheets} onChange={setSheets} />
-                    </Field>
+                    <StickerSizeFields rates={rates} pick={sizePick} onPick={setSizePick} sheets={sheets} onSheets={setSheets} />
                   </>
                 ) : kind === 'peel' ? (
                   <>
@@ -1126,6 +1116,7 @@ function RateCardDialog({ rates, onClose }: { rates: PrintRates; onClose: () => 
           </div>
         </div>
       </div>
+      <CutAreaFields rates={r} onChange={setR} />
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -1194,6 +1185,79 @@ function RateCardDialog({ rates, onClose }: { rates: PrintRates; onClose: () => 
         </table>
       </div>
     </Dialog>
+  );
+}
+
+/** The rate card's cut area and size guide; counts are worked out, never typed. */
+function CutAreaFields({ rates: r, onChange }: { rates: PrintRates; onChange: (r: PrintRates) => void }) {
+  const area = r.cutArea ?? DEFAULT_PRINT_RATES.cutArea;
+  const setArea = (ch: Partial<CutArea>) => onChange({ ...r, cutArea: { ...area, ...ch } });
+  const setSize = (i: number, ch: { w?: number; h?: number }) =>
+    onChange({
+      ...r,
+      stickerSizes: r.stickerSizes.map((s, k) => {
+        if (k !== i) return s;
+        const next = { ...s, ...ch };
+        // An edited size is named by its inches.
+        return { ...next, name: sizeName(next.w, next.h) };
+      }),
+    });
+  return (
+    <div className="grid-2">
+      <div className="stack tight">
+        <span className="label strong small">Where the cutter cuts</span>
+        <p className="muted small">Cricut Print Then Cut prints registration marks around the design, so stickers only fit inside this area of the A4. Cricut&rsquo;s A4 limit is 7.2 × 10.62 in.</p>
+        <div className="form-grid">
+          <Field label="Cut area width" htmlFor="rc-area-w">
+            <NumberInput id="rc-area-w" min={0} value={area.w} onChange={(n) => setArea({ w: Math.max(0, n ?? 0) })} suffix="in" />
+          </Field>
+          <Field label="Cut area height" htmlFor="rc-area-h">
+            <NumberInput id="rc-area-h" min={0} value={area.h} onChange={(n) => setArea({ h: Math.max(0, n ?? 0) })} suffix="in" />
+          </Field>
+          <Field label="Space between stickers" htmlFor="rc-gap" hint="3 mm for die cut, 5 mm when trimming by hand.">
+            <NumberInput id="rc-gap" min={0} value={area.gapMm} onChange={(n) => setArea({ gapMm: Math.max(0, n ?? 0) })} suffix="mm" />
+          </Field>
+        </div>
+      </div>
+      <div className="stack tight">
+        <span className="label strong small">Size guide</span>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Width</th>
+                <th>Height</th>
+                <th className="r">Per A4</th>
+                <th aria-label="Remove" />
+              </tr>
+            </thead>
+            <tbody>
+              {r.stickerSizes.map((s, i) => (
+                <tr key={i}>
+                  <td style={{ width: 110 }}>
+                    <NumberInput ariaLabel={`Width of ${s.name}`} min={0} value={s.w} onChange={(n) => setSize(i, { w: n ?? 0 })} suffix="in" />
+                  </td>
+                  <td style={{ width: 110 }}>
+                    <NumberInput ariaLabel={`Height of ${s.name}`} min={0} value={s.h} onChange={(n) => setSize(i, { h: n ?? 0 })} suffix="in" />
+                  </td>
+                  <td className="r">{perSheet({ cutArea: area }, s.w, s.h)}</td>
+                  <td className="r">
+                    <IconButton label={`Remove ${s.name}`} size="sm" plain onClick={() => onChange({ ...r, stickerSizes: r.stickerSizes.filter((_, k) => k !== i) })}>
+                      <Trash2 size={15} />
+                    </IconButton>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <Button size="sm" onClick={() => onChange({ ...r, stickerSizes: [...r.stickerSizes, { name: sizeName(2, 2), w: 2, h: 2 }] })}>
+            <Plus size={15} /> Add a size
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

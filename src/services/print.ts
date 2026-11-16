@@ -47,6 +47,9 @@ export interface NewPrintOrder {
   designNo?: string;
   /** Made from a photo booth picture. */
   boothPhotoId?: string;
+  /** The event it's taken at; set when the order is made. */
+  eventId?: string | null;
+  eventName?: string;
 }
 
 export const blankDelivery = (): PrintDelivery => ({ method: 'pickup', courier: '', address: '', fee: 0, tracking: '' });

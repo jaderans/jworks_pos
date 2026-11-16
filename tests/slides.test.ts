@@ -48,8 +48,8 @@ describe('the customer screen’s slides', () => {
     expect(slides.find((s) => s.kind === 'printing')).toMatchObject({ rows: [{ name: 'Standard', price: P(60) }, { name: 'Premium', price: P(80) }, expect.anything()] });
     const art = slides.find((s) => s.kind === 'illustration');
     expect(art?.kind === 'illustration' && art.tiers.map((t) => [t.name, t.price, t.sets.map((x) => x.price)])).toEqual([
-      ['Small / simple', P(100), [P(180), P(450), P(850)]],
-      ['Detailed', P(220), [P(390), P(950), P(1700)]],
+      ['Small / simple', P(130), [P(240), P(600), P(1150)]],
+      ['Detailed', P(250), [P(450), P(1100), P(2000)]],
     ]);
   });
 

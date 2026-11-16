@@ -867,6 +867,8 @@ export interface StudioPrintFeed {
   orderId: string;
   number: string;
   status: PrintStatus;
+  /** The event the order was taken at (from POS 1.15.0). */
+  eventName?: string;
   customer: { name: string; email: string; phone: string; handle: string };
   printer: { memberId: string; name: string; email: string } | null;
   printerPct: number;
@@ -987,13 +989,32 @@ export interface PackOption {
   medium: Cents;
   large: Cents;
 }
+/** A size on the size guide, in inches. How many fit on a sheet is worked out from the cut area. */
+export interface StickerPreset {
+  name: string;
+  w: number;
+  h: number;
+}
+/**
+ * Where the cutter can cut on one A4 sheet. Cricut's Print Then Cut prints
+ * registration marks around the design, so the stickers have to fit inside
+ * this area (inches), with gapMm between them.
+ */
+export interface CutArea {
+  w: number;
+  h: number;
+  gapMm: number;
+}
 export interface PrintRates {
+  /** 2 = sizes in inches with a cut area, and the November 2026 illustration prices. Saved rate cards without it are upgraded when read. */
+  ratesVersion?: number;
   materials: PrintMaterial[];
   cuts: PrintCut[];
   peelSizes: PeelSize[];
   packs: PackOption[];
-  /** The size guide: how many fit on one A4 sheet. */
-  stickerSizes: { name: string; perA4: number }[];
+  /** The size guide: sticker sizes to pick from. */
+  stickerSizes: StickerPreset[];
+  cutArea: CutArea;
   minSheets: number;
   minPacks: number;
   leadDays: { min: number; max: number };
@@ -1032,6 +1053,10 @@ export interface PrintLine {
   material?: string;
   cut?: string;
   size?: string;
+  /** Sticker sheets: the sticker size in inches (a preset's or the customer's own), and how many stickers they asked for. */
+  w?: number;
+  h?: number;
+  stickers?: number;
   pack?: string;
   packSize?: PackSize;
   /** Illustration: the tier and how many designs. */
@@ -1095,4 +1120,7 @@ export interface PrintOrder extends Syncable {
   designNo?: string;
   /** A photo booth picture it was made from (on the laptop that took it). */
   boothPhotoId?: string;
+  /** The event it was taken at (the POS takes service orders at every event); none for orders from before 1.15.0. */
+  eventId?: string | null;
+  eventName?: string;
 }

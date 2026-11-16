@@ -250,6 +250,7 @@ export function buildPrintFeed(o: { order: PrintOrder; downPct: number; customer
     orderId: order.id,
     number: order.number,
     status: order.status,
+    ...(order.eventName ? { eventName: order.eventName } : {}),
     customer: { name: c?.name || order.customerName, email: c?.email ?? '', phone: c?.phone || order.contact, handle: c?.handle ?? '' },
     printer: o.printer ? { memberId: o.printer.id, name: o.printer.name, email: o.printer.email } : null,
     printerPct: order.printerPct,

@@ -84,3 +84,38 @@ test('a sticker printing job: quote, proof, 50% down, print, ship with the balan
   await expect(d.getByLabel('Material').locator('option:checked')).toHaveText(/₱85\/sheet/);
   expect(errors).toEqual([]);
 });
+
+test('a customer’s own sticker size: how many fit inside the Cricut cut area, ordered by sticker count', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await setupOwner(page, 'Joshua Ranin', '1111');
+  await page.keyboard.press('Escape');
+
+  await page.goto('/#/print');
+  await page.getByRole('button', { name: 'New service order' }).click();
+  const d = page.getByRole('dialog', { name: 'New service order' });
+  await d.getByLabel('Name', { exact: true }).fill('Kaye Dela Cruz');
+  // The size guide counts from the cut area.
+  await expect(d.getByLabel('Sticker size (optional)').locator('option', { hasText: '2 × 2 in · 15 per sheet' })).toHaveCount(1);
+  await expect(d.getByText(/Cricut cut area: 7\.2 × 10\.62 in, 3 mm apart/)).toBeVisible();
+  // Their own 2.3 × 1.7 in: 16 a sheet, turned sideways.
+  await d.getByLabel('Sticker size (optional)').selectOption({ label: 'Custom size…' });
+  await d.getByLabel('Sticker width in inches').fill('2.3');
+  await d.getByLabel('Sticker height in inches').fill('1.7');
+  await expect(d.locator('.sheet-fit')).toContainText('16 stickers of 2.3 × 1.7 in on one A4');
+  await expect(d.locator('.sheet-fit')).toContainText('4 across × 4 down, turned sideways');
+  await expect(d.locator('.sheet-preview rect[rx]')).toHaveCount(17);
+  // 50 stickers: 4 sheets make 64.
+  await d.getByRole('button', { name: 'Sticker count' }).click();
+  await d.getByLabel('How many stickers').fill('50');
+  await expect(d.getByText('4 A4 sheets make 64, 14 spare.')).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/print-custom-size.png`, fullPage: true });
+  await d.getByRole('button', { name: 'Add to the order' }).click();
+  const line = d.locator('.list-item', { hasText: '2.3 × 1.7 in: 50 stickers, 64 fit on 4 sheets' });
+  await expect(line).toContainText('4 × ₱80.00 · 4 A4 sheets');
+  await expect(line).toContainText('₱320');
+  await d.getByRole('button', { name: 'Save service order' }).click();
+  await expect(page.getByRole('article', { name: /Service order P[A-Z]-001/ })).toContainText('2.3 × 1.7 in: 50 stickers');
+  expect(errors).toEqual([]);
+});

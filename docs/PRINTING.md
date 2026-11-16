@@ -7,12 +7,14 @@ JoshWorks services for customers (custom stickers, sticker sheets, peel-off pack
 The steps follow the rate sheet's *How to order* page.
 
 1. **Message.** The customer says what they want (material, cut, quantity, packaging). Tap **New service order**, add the customer, then add lines from the rate card:
-   - **Sticker sheets:** the material, the cut (kiss cut is included, die cut is +₱10 a sheet) and the number of A4 sheets. Optionally add the sticker size, so the line shows about how many stickers that is.
+   - **Sticker sheets:** the material, the cut (kiss cut is included, die cut is +₱10 a sheet) and the number of A4 sheets. Optionally add the sticker size, so the line shows about how many stickers that is: one from the size guide, or **Custom size…** for the customer's own width × height in inches. With a size, **Order by → Sticker count** takes how many stickers they want and works out the A4 sheets and the spares (50 stickers of 2.3 × 1.7 in: 16 a sheet, so 4 sheets make 64, 14 spare). A drawing shows the stickers on the sheet.
+     - **Why the counts are lower than a plain A4:** Cricut's Print Then Cut prints registration marks around the design, and the machine only cuts inside them. Cricut's A4 limit is 7.2 × 10.62 in, and the stickers are 3 mm apart, so a 1 × 1 in sticker fits 54 a sheet, not 70. Counts try the sticker both ways round (the STICKER JOB formula: ⌊(area + gap) ÷ (size + gap)⌋ across and down). The cut area, the gap and the size guide are on the **Rate card**; counts are worked out, never typed.
+     - The rate sheet PDF's size guide has two typos in its inch column: "2 × 1.5 inch" is 5.1 × 6.4 cm, so **2 × 2.5 in** (12 a sheet), and "2.5 × 3 inch" is 5.1 × 7.6 cm, so **2 × 3 in** (10 a sheet). The POS uses the corrected sizes.
    - **Peel-off sheets:** the material, the peel-off size and how many. One A4 is shared by the sheets cut from it: (material + ₱17 peel-off cut) ÷ sheets per A4.
    - **Packaging:** the type, the size and the number of packs.
    - **Illustration:** drawing the sticker art. Pick the tier and the number of designs; sets cost less, and the app takes the cheapest mix of sets and single designs. The price can be changed on the order.
-     - **Small / simple:** one subject, flat colours, light shading, little or no lettering (mascots, icons, small doodles). ₱100 a design; 2 for ₱180, 5 for ₱450, 10 for ₱850.
-     - **Detailed:** full illustration with shading, texture, props, hand lettering or a character in a scene (portraits, pet stickers). ₱220 a design; 2 for ₱390, 5 for ₱950, 10 for ₱1,700 (saving ₱50, ₱150 and ₱500).
+     - **Small / simple:** one subject, flat colours, light shading, little or no lettering (mascots, icons, small doodles). ₱130 a design; 2 for ₱240, 5 for ₱600, 10 for ₱1,150 (saving ₱20, ₱50 and ₱150).
+     - **Detailed:** full illustration with shading, texture, props, hand lettering or a character in a scene (portraits, pet stickers). ₱250 a design; 2 for ₱450, 5 for ₱1,100, 10 for ₱2,000 (saving ₱50, ₱150 and ₱500). These are the November 2026 prices (from ₱100 and ₱220); a rate card saved before still at the old prices takes them, and prices you changed stay.
      - Pick **Who draws it**: they earn the illustrator's share of the illustration, set on the rate card (0% until you set it).
    - **Other:** layout or design work, a rush fee, anything else.
 

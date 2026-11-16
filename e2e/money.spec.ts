@@ -40,9 +40,9 @@ test('money in: cash and GCash moves, a print order paid at the register, and th
   await d.getByRole('button', { name: 'Illustration', exact: true }).click();
   await d.getByLabel('Tier').selectOption('detailed');
   await d.getByLabel('Designs').fill('2');
-  await expect(d.getByText(/Rate card: ₱390, a set saving ₱50/)).toBeVisible();
+  await expect(d.getByText(/Rate card: ₱450, a set saving ₱50/)).toBeVisible();
   await d.getByRole('button', { name: 'Add to the order' }).click();
-  await expect(d.locator('.list-item', { hasText: 'Sticker illustration, detailed: 2 designs' })).toContainText('₱390');
+  await expect(d.locator('.list-item', { hasText: 'Sticker illustration, detailed: 2 designs' })).toContainText('₱450');
   await d.getByLabel('Who draws it').selectOption({ label: 'Joshua Ranin' });
   await d.getByLabel('Illustrator’s share').fill('50');
   await page.screenshot({ path: `${SHOTS}/money-print-illustration.png` });

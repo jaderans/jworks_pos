@@ -8,7 +8,7 @@ test('services: paid with no register open, it counts at the event; pins and key
   await setupOwner(page, 'Joshua Ranin', '1111');
   await createEvent(page, 'Hilway November 2026');
 
-  // A simple illustration, ₱100.
+  // A simple illustration, ₱130.
   await page.goto('/#/print');
   await expect(page.getByRole('heading', { name: 'Services', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'New service order' }).click();
@@ -19,10 +19,10 @@ test('services: paid with no register open, it counts at the event; pins and key
   await d.getByLabel('Designs').fill('1');
   await d.getByRole('button', { name: 'Add to the order' }).click();
   const design = 'Sticker illustration, small / simple: 1 design';
-  await expect(d.locator('.list-item', { hasText: design })).toContainText('₱100');
+  await expect(d.locator('.list-item', { hasText: design })).toContainText('₱130');
   // No "Make it into": a pin or a keychain is an add-on sold with a Couple-of-Stickers pack.
   await expect(d.getByLabel(`Make ${design} into`)).toHaveCount(0);
-  await expect(d.locator('.wf-row.total')).toContainText('₱100');
+  await expect(d.locator('.wf-row.total')).toContainText('₱130');
   await d.getByRole('button', { name: 'Save service order' }).click();
 
   // Paid in full by GCash with no register open: counted at the event, in no drawer.
@@ -31,7 +31,7 @@ test('services: paid with no register open, it counts at the event; pins and key
   const pay = page.getByRole('dialog', { name: /Payment for P[A-Z]-001/ });
   await expect(pay.getByLabel('Count it at').locator('option:checked')).toHaveText('Hilway November 2026');
   await expect(pay.getByText(/a sale under Services at Hilway November 2026/)).toBeVisible();
-  await pay.getByLabel('Amount').fill('100');
+  await pay.getByLabel('Amount').fill('130');
   await pay.getByLabel('Paid by').selectOption({ label: 'GCash' });
   await pay.getByLabel('Reference no.').fill('7781');
   await page.screenshot({ path: `${SHOTS}/services-pay-no-register.png` });
@@ -42,10 +42,10 @@ test('services: paid with no register open, it counts at the event; pins and key
   // In the Sales log and the revenue; the booth sales stay ₱0.
   await page.goto('/#/sales');
   await expect(page.getByRole('row', { name: /Service/ })).toContainText('service order');
-  await expect(page.getByRole('region', { name: 'Money in' })).toContainText(/Services\s*₱100/);
+  await expect(page.getByRole('region', { name: 'Money in' })).toContainText(/Services\s*₱130/);
   await page.goto('/#/event');
   await expect(page.locator('.stat', { hasText: 'Gross sales' })).toContainText('₱0');
-  await expect(page.locator('.stat', { hasText: 'Revenue' })).toContainText('₱100');
+  await expect(page.locator('.stat', { hasText: 'Revenue' })).toContainText('₱130');
 
   // The rate card has no make-into add-ons any more.
   await page.goto('/#/print');
